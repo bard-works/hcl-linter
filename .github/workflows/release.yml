@@ -93,7 +93,7 @@ jobs:
             ARCHIVE="${STAGE}.tar.gz"
             tar -czf "${ARCHIVE}" "${STAGE}"
           fi
-          shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          openssl dgst -sha256 -r "${ARCHIVE}" > "${ARCHIVE}.sha256"
           rm -rf "${STAGE}"
           echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
@@ -130,7 +130,7 @@ jobs:
           VERSION="${{ steps.version.outputs.VERSION }}"
           ARCHIVE="hcl-linter-${VERSION}-source.tar.gz"
           git archive --format=tar.gz --prefix="hcl-linter-${VERSION}/" -o "dist/${ARCHIVE}" HEAD
-          (cd dist && shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256")
+          (cd dist && openssl dgst -sha256 -r "${ARCHIVE}" > "${ARCHIVE}.sha256")
           echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
       - name: Attest source provenance
