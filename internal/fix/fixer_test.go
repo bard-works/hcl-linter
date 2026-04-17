@@ -377,9 +377,21 @@ func TestFixBlankLinesWithinBlocks(t *testing.T) {
 			checkContains: "repository = \"test\"",
 		},
 		{
-			name: "single blank line between attributes",
+			name: "single blank line between attributes - preserved",
 			input: `inputs = {
   repository = "test"
+
+  tags = "value"
+}
+`,
+			expectChange:  false,
+			checkContains: "tags = \"value\"",
+		},
+		{
+			name: "multiple blank lines reduced to one",
+			input: `inputs = {
+  repository = "test"
+
 
   tags = "value"
 }
@@ -849,6 +861,7 @@ include "root" {
 
 	lines := strings.Split(result.Content, "\n")
 	braceLevel := 0
+	prevWasBlank := false
 	for i, line := range lines {
 		for _, ch := range line {
 			switch ch {
@@ -858,9 +871,13 @@ include "root" {
 				braceLevel--
 			}
 		}
-		if line == "" && i > 0 && i < len(lines)-1 && braceLevel > 0 {
-			t.Errorf("unexpected blank line at index %d (inside block with depth %d)", i, braceLevel)
+		isBlank := strings.TrimSpace(line) == ""
+		if isBlank && i > 0 && i < len(lines)-1 && braceLevel > 0 {
+			if prevWasBlank {
+				t.Errorf("unexpected duplicate blank line at index %d (inside block with depth %d)", i, braceLevel)
+			}
 		}
+		prevWasBlank = isBlank
 	}
 }
 

@@ -718,6 +718,7 @@ func removeBlankLinesWithinBlock(lines []string) []string {
 		return lines
 	}
 	var result []string
+	var lastWasBlank bool
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		isLastLine := i == len(lines)-1
@@ -732,11 +733,16 @@ func removeBlankLinesWithinBlock(lines []string) []string {
 			if nextTrimmed == "}" || strings.HasPrefix(nextTrimmed, "}") {
 				continue
 			}
-			if isBlockHeader && len(result) == 0 {
+			if isBlockHeader {
 				continue
+			}
+			if !lastWasBlank {
+				result = append(result, line)
+				lastWasBlank = true
 			}
 		} else {
 			result = append(result, line)
+			lastWasBlank = false
 		}
 	}
 	return result

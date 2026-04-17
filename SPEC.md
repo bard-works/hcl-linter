@@ -126,7 +126,7 @@ actions = [
 
 ### 3. Blank Lines (`blank_lines`)
 
-**Purpose:** Remove unnecessary blank lines within blocks for cleaner formatting.
+**Purpose:** Clean up blank lines within blocks for consistent formatting.
 
 **Configuration:**
 ```json
@@ -139,7 +139,10 @@ actions = [
 ```
 
 **Behavior:**
-- `within_blocks: true` - Removes blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
+- `within_blocks: true` - Cleans blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
+- Removes blank lines at the beginning (after `{`) and end (before `}`) of blocks
+- Reduces consecutive duplicate blank lines to a single blank line
+- Single blank lines between attributes are preserved
 - Blank lines between top-level blocks are preserved
 - Nested blocks (e.g., `before_hook` inside `terraform`) are also cleaned
 
@@ -150,6 +153,7 @@ inputs = {
 
   repository = "test"
 
+
   tags = "value"
 
 }
@@ -157,6 +161,7 @@ inputs = {
 # After
 inputs = {
   repository = "test"
+
   tags = "value"
 }
 ```
