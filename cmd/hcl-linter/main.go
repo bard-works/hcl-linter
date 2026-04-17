@@ -16,12 +16,19 @@ var (
 	flagVerbose   bool
 	flagConfigSrc string
 	flagFilter    []string
+
+	Version   = "dev"
+	BuildDate = "unknown"
+	GitCommit = "unknown"
 )
 
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "hcl-linter",
 		Short: "A configurable linter for Terragrunt HCL files",
+		Run: func(cmd *cobra.Command, args []string) {
+			cmd.Help()
+		},
 	}
 
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Show detailed output")
@@ -46,8 +53,17 @@ func main() {
 		Args:  cobra.ExactArgs(1),
 		RunE:  runFix,
 	}
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("hcl-linter %s\n", Version)
+			fmt.Printf("Build date: %s\n", BuildDate)
+			fmt.Printf("Git commit: %s\n", GitCommit)
+		},
+	}
 
-	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd)
+	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd, versionCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
