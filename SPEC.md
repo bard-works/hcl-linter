@@ -4,7 +4,7 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 
 ## Goals
 
-- Enforce block ordering, formatting, naming, and required fields
+- Enforce block ordering, formatting, naming, required fields, and blank lines
 - Configurable rules per filename pattern (terragrunt.hcl, root.hcl, service.hcl)
 - Auto-fix capability for formatable issues
 - Extensible config system with user-defined configurations
@@ -51,6 +51,10 @@ If falling back to project defaults (no user config found), a warning is display
     "array_format": {
       "enabled": true,
       "multiline_threshold": 2
+    },
+    "blank_lines": {
+      "enabled": true,
+      "within_blocks": true
     },
     "name_validation": {
       "enabled": true,
@@ -111,7 +115,44 @@ actions = [
 - Arrays with non-quoted items (e.g., `dependency.x.outputs.y`) are left unchanged
 - Empty arrays remain unchanged
 
-### 3. Name Validation (`name_validation`)
+### 3. Blank Lines (`blank_lines`)
+
+**Purpose:** Remove unnecessary blank lines within blocks for cleaner formatting.
+
+**Configuration:**
+```json
+{
+  "blank_lines": {
+    "enabled": true,
+    "within_blocks": true
+  }
+}
+```
+
+**Behavior:**
+- `within_blocks: true` - Removes blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
+- Blank lines between top-level blocks are preserved
+- Nested blocks (e.g., `before_hook` inside `terraform`) are also cleaned
+
+**Example:**
+```hcl
+# Before
+inputs = {
+
+  repository = "test"
+
+  tags = "value"
+
+}
+
+# After
+inputs = {
+  repository = "test"
+  tags = "value"
+}
+```
+
+### 4. Name Validation (`name_validation`)
 
 **Purpose:** Ensure consistent naming conventions.
 
@@ -128,7 +169,7 @@ include "vault-azuread" {}
 include "vault_azuread" {}
 ```
 
-### 4. Duplicate Detection (`duplicates`)
+### 5. Duplicate Detection (`duplicates`)
 
 **Purpose:** Detect duplicate blocks.
 
@@ -143,7 +184,7 @@ dependency "vpc" {}
 dependency "vpc" {}  # ERROR: duplicate
 ```
 
-### 5. Required Fields (`required_fields`)
+### 6. Required Fields (`required_fields`)
 
 **Purpose:** Enforce required attributes per block type.
 
