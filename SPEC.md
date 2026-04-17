@@ -4,7 +4,7 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 
 ## Goals
 
-- Enforce block ordering, formatting, naming, required fields, and blank lines
+- Enforce block ordering, formatting, naming, required fields, blank lines, and required blocks
 - Configurable rules per filename pattern (terragrunt.hcl, root.hcl, service.hcl)
 - Auto-fix capability for formatable issues
 - Extensible config system with user-defined configurations
@@ -69,6 +69,15 @@ If falling back to project defaults (no user config found), a warning is display
       "include": {
         "expose": true
       }
+    },
+    "required_blocks": {
+      "required": [
+        {
+          "type": "terraform",
+          "count": "once",
+          "error": "missing terraform block"
+        }
+      ]
     }
   }
 }
@@ -202,6 +211,44 @@ dependency "vpc" {}  # ERROR: duplicate
 **Checks:**
 - When block exists, required attributes must be present
 - Boolean `true` means attribute must exist with any value
+
+### 7. Required Blocks (`required_blocks`)
+
+**Purpose:** Enforce that certain block types must exist in the file.
+
+**Configuration:**
+```json
+{
+  "required_blocks": {
+    "required": [
+      {
+        "type": "terraform",
+        "count": "once",
+        "error": "missing terraform block"
+      }
+    ]
+  }
+}
+```
+
+**Supported count values:**
+- `once` - Block must appear exactly once
+
+**Checks:**
+- Reports error if required block is missing or appears more than once
+- Error message is customizable per block type
+- File-pattern based (applies only to files matching the config)
+
+**Example:**
+```hcl
+# With config requiring terraform block:
+# OK
+terraform {}
+
+# ERROR: missing terraform block
+include "root" {}
+locals {}
+```
 
 ## CLI
 

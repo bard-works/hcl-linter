@@ -60,6 +60,7 @@ type Rules struct {
 	Duplicates     *DuplicatesConfig     `json:"duplicates,omitempty"`
 	RequiredFields *RequiredFieldsConfig `json:"required_fields,omitempty"`
 	BlankLines     *BlankLinesConfig     `json:"blank_lines,omitempty"`
+	RequiredBlocks *RequiredBlocksConfig `json:"required_blocks,omitempty"`
 }
 
 type BlockOrderConfig struct {
@@ -91,10 +92,20 @@ type IncludeRequired struct {
 	Expose bool `json:"expose"`
 }
 
+type RequiredBlocksConfig struct {
+	Required []RequiredBlockSpec `json:"required"`
+}
+
+type RequiredBlockSpec struct {
+	Type  string `json:"type"`
+	Count string `json:"count"`
+	Error string `json:"error"`
+}
+
 func (r *Rules) IsEnabled() bool {
 	return r.BlockOrder != nil || r.ArrayFormat != nil ||
 		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
-		r.BlankLines != nil
+		r.BlankLines != nil || r.RequiredBlocks != nil
 }
 
 type Loader struct {

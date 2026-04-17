@@ -465,3 +465,218 @@ func TestLintFileNoConfig(t *testing.T) {
 		t.Error("expected error for file without config")
 	}
 }
+
+func TestRequiredBlocksRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"required_blocks": {
+				"required": [
+					{
+						"type": "terraform",
+						"count": "once",
+						"error": "missing terraform block"
+					}
+				]
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name        string
+		content     string
+		expectIssue bool
+		issueCount  int
+	}{
+		{
+			name:        "has terraform block",
+			content:     "terraform {}\n",
+			expectIssue: false,
+			issueCount:  0,
+		},
+		{
+			name:        "missing terraform block",
+			content:     "locals {}\n",
+			expectIssue: true,
+			issueCount:  1,
+		},
+		{
+			name:        "empty file",
+			content:     "",
+			expectIssue: true,
+			issueCount:  1,
+		},
+		{
+			name:        "multiple blocks but no terraform",
+			content:     "include {}\nlocals {}\n",
+			expectIssue: true,
+			issueCount:  1,
+		},
+		{
+			name:        "multiple terraform blocks - also an issue",
+			content:     "terraform {}\nterraform {}\n",
+			expectIssue: true,
+			issueCount:  1,
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasRequiredBlocksIssue := false
+			requiredBlocksCount := 0
+			for _, issue := range result.Issues {
+				if issue.Rule == "required_blocks" {
+					hasRequiredBlocksIssue = true
+					requiredBlocksCount++
+				}
+			}
+
+			if tt.expectIssue && !hasRequiredBlocksIssue {
+				t.Error("expected required_blocks issue, got none")
+			}
+			if !tt.expectIssue && hasRequiredBlocksIssue {
+				t.Errorf("unexpected required_blocks issue: %v", result.Issues)
+			}
+			if requiredBlocksCount != tt.issueCount {
+				t.Errorf("expected %d required_blocks issues, got %d", tt.issueCount, requiredBlocksCount)
+			}
+		})
+	}
+}
+
+func TestRequiredBlocksRuleCustomMessage(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"required_blocks": {
+				"required": [
+					{
+						"type": "terraform",
+						"count": "once",
+						"error": "terragrunt files must have a terraform block"
+					}
+				]
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "config.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	file := filepath.Join(tmpDir, "config.hcl")
+	if err := os.WriteFile(file, []byte(`locals {}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	if len(result.Issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(result.Issues))
+	}
+
+	if result.Issues[0].Message != "terragrunt files must have a terraform block" {
+		t.Errorf("unexpected error message: %s", result.Issues[0].Message)
+	}
+}
+
+func TestRequiredBlocksRuleMultipleRequirements(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"required_blocks": {
+				"required": [
+					{
+						"type": "terraform",
+						"count": "once",
+						"error": "missing terraform"
+					},
+					{
+						"type": "include",
+						"count": "once",
+						"error": "missing include"
+					}
+				]
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	tests := []struct {
+		name       string
+		content    string
+		issueCount int
+		messages   []string
+	}{
+		{
+			name:       "has both blocks",
+			content:    "terraform {}\ninclude {}\n",
+			issueCount: 0,
+		},
+		{
+			name:       "missing terraform only",
+			content:    "include {}\n",
+			issueCount: 1,
+			messages:   []string{"missing terraform"},
+		},
+		{
+			name:       "missing include only",
+			content:    "terraform {}\n",
+			issueCount: 1,
+			messages:   []string{"missing include"},
+		},
+		{
+			name:       "missing both",
+			content:    "locals {}\n",
+			issueCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			requiredBlocksIssues := 0
+			for _, issue := range result.Issues {
+				if issue.Rule == "required_blocks" {
+					requiredBlocksIssues++
+				}
+			}
+
+			if requiredBlocksIssues != tt.issueCount {
+				t.Errorf("expected %d required_blocks issues, got %d", tt.issueCount, requiredBlocksIssues)
+			}
+		})
+	}
+}
