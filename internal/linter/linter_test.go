@@ -97,8 +97,100 @@ terraform {}
 			if tt.expectIssue && !hasBlockOrderIssue {
 				t.Error("expected block_order issue, got none")
 			}
-			if !tt.expectIssue && hasBlockOrderIssue {
+if !tt.expectIssue && hasBlockOrderIssue {
 				t.Errorf("unexpected block_order issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestNestedBlockOrderRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"block_order": {
+				"enabled": true,
+				"order": ["terraform"],
+				"nested_order": {
+					"terraform": ["before_hooks", "after_hooks"]
+				}
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name        string
+		content     string
+		expectIssue bool
+		issueRule   string
+	}{
+		{
+			name: "correct nested order - before_hooks before after_hooks",
+			content: `terraform {
+  before_hooks {
+    exec {
+      command = "echo before"
+    }
+  }
+  after_hooks {
+    exec {
+      command = "echo after"
+    }
+  }
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "wrong nested order - after_hooks before before_hooks",
+			content: `terraform {
+  after_hooks {
+    exec {
+      command = "echo after"
+    }
+  }
+  before_hooks {
+    exec {
+      command = "echo before"
+    }
+  }
+}
+`,
+			expectIssue: true,
+			issueRule:   "block_order",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasBlockOrderIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "block_order" && strings.Contains(issue.Message, "nested block") {
+					hasBlockOrderIssue = true
+					break
+				}
+			}
+
+			if tt.expectIssue && !hasBlockOrderIssue {
+				t.Error("expected nested block_order issue, got none")
+			}
+			if !tt.expectIssue && hasBlockOrderIssue {
+				t.Errorf("unexpected nested block_order issue: %v", result.Issues)
 			}
 		})
 	}

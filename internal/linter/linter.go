@@ -142,6 +142,57 @@ func (l *Linter) checkBlockOrder(result *Result, blocks []ast.BlockInfo, cfg *co
 			}
 		}
 	}
+
+	if len(cfg.NestedOrder) > 0 {
+		l.checkNestedBlockOrder(result, blocks, cfg.NestedOrder)
+	}
+}
+
+func (l *Linter) checkNestedBlockOrder(result *Result, blocks []ast.BlockInfo, nestedOrder map[string][]string) {
+	for _, block := range blocks {
+		if order, ok := nestedOrder[block.Type]; ok {
+			nestedBlocks := block.Block.Body.Blocks
+			if len(nestedBlocks) < 2 {
+				continue
+			}
+
+			orderMap := make(map[string]int)
+			for i, name := range order {
+				orderMap[name] = i
+			}
+
+			var orderedBlocks []*hclsyntax.Block
+			for _, nb := range nestedBlocks {
+				if _, ok := orderMap[nb.Type]; ok {
+					orderedBlocks = append(orderedBlocks, nb)
+				}
+			}
+
+			if len(orderedBlocks) > 1 {
+				reportedPairs := make(map[string]bool)
+				for i := 1; i < len(orderedBlocks); i++ {
+					currType := orderedBlocks[i].Type
+					prevType := orderedBlocks[i-1].Type
+
+					currIdx := orderMap[currType]
+					prevIdx := orderMap[prevType]
+
+					if currIdx < prevIdx {
+						pairKey := currType + ":" + prevType
+						if !reportedPairs[pairKey] {
+							result.Issues = append(result.Issues, Issue{
+								Severity: SeverityError,
+								Rule:     "block_order",
+								Message:  fmt.Sprintf("nested block %q should come before %q inside %q block", currType, prevType, block.Type),
+								Location: orderedBlocks[i].TypeRange,
+							})
+							reportedPairs[pairKey] = true
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 func (l *Linter) checkArrayFormat(result *Result, _ string, file *hcl.File) {

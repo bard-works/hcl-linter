@@ -113,6 +113,23 @@ If falling back to project defaults (no user config found), a warning is display
 - Order of listed blocks is enforced
 - Unlisted blocks (e.g., `outputs`, custom blocks) are placed after the last listed block
 
+**Configuration:**
+
+```json
+{
+  "block_order": {
+    "enabled": true,
+    "order": ["include", "locals", "terraform", "dependency", "inputs"],
+    "nested_order": {
+      "terraform": ["before_hooks", "after_hooks"]
+    }
+  }
+}
+```
+
+- `nested_order` (optional): Map of parent block types to their nested block ordering rules
+- Use dot notation in comments for documentation (e.g., `terraform.before_hooks`)
+
 **Example violation:**
 
 ```hcl
@@ -125,6 +142,38 @@ terraform {}
 include "root" {}
 locals {}
 terraform {}
+```
+
+**Nested block ordering example:**
+
+```hcl
+# Wrong nested order
+terraform {
+  after_hooks {
+    exec {
+      command = "echo after"
+    }
+  }
+  before_hooks {
+    exec {
+      command = "echo before"
+    }
+  }
+}
+
+# Correct nested order
+terraform {
+  before_hooks {
+    exec {
+      command = "echo before"
+    }
+  }
+  after_hooks {
+    exec {
+      command = "echo after"
+    }
+  }
+}
 ```
 
 ### 2. Array Format (`array_format`)

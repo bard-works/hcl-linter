@@ -87,8 +87,9 @@ func GetMaxConcurrency(cfg *Rules) int {
 }
 
 type BlockOrderConfig struct {
-	Enabled bool     `json:"enabled"`
-	Order   []string `json:"order"`
+	Enabled      bool              `json:"enabled"`
+	Order        []string          `json:"order"`
+	NestedOrder  map[string][]string `json:"nested_order,omitempty"`
 }
 
 type ArrayFormatConfig struct {
@@ -489,6 +490,9 @@ func parseHCLBlockOrder(body *hclsyntax.Body) *BlockOrderConfig {
 	if attr, ok := body.Attributes["order"]; ok {
 		cfg.Order = hclExprToStringSlice(attr.Expr)
 	}
+	if attr, ok := body.Attributes["nested_order"]; ok {
+		cfg.NestedOrder = parseNestedOrderAttribute(attr.Expr)
+	}
 	return cfg
 }
 
@@ -680,6 +684,25 @@ func hclExprToStringSlice(expr hclsyntax.Expression) []string {
 	result := make([]string, 0, len(arr))
 	for _, v := range arr {
 		result = append(result, v.AsString())
+	}
+	return result
+}
+
+func parseNestedOrderAttribute(expr hclsyntax.Expression) map[string][]string {
+	result := make(map[string][]string)
+	val, diags := expr.Value(nil)
+	if diags.HasErrors() {
+		return result
+	}
+	obj := val.AsValueMap()
+	for key, v := range obj {
+		arr := v.AsValueSlice()
+		var order []string
+		for _, item := range arr {
+			s := item.AsString()
+			order = append(order, s)
+		}
+		result[key] = order
 	}
 	return result
 }
