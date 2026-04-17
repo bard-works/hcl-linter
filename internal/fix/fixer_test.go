@@ -851,9 +851,10 @@ include "root" {
 	braceLevel := 0
 	for i, line := range lines {
 		for _, ch := range line {
-			if ch == '{' {
+			switch ch {
+			case '{':
 				braceLevel++
-			} else if ch == '}' {
+			case '}':
 				braceLevel--
 			}
 		}
