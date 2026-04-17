@@ -4,7 +4,7 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 
 ## Goals
 
-- Enforce block ordering, formatting, naming, required fields, blank lines, and required blocks
+- Enforce block ordering, formatting, naming, required fields, blank lines, required blocks, and Terragrunt-specific validations
 - Configurable rules per filename pattern (terragrunt.hcl, root.hcl, service.hcl)
 - Auto-fix capability for formatable issues
 - Extensible config system with user-defined configurations
@@ -79,6 +79,12 @@ If falling back to project defaults (no user config found), a warning is display
           "error": "missing terraform block"
         }
       ]
+    },
+    "terragrunt": {
+      "enabled": true,
+      "dependency_path_exists": true,
+      "include_path_exists": true,
+      "remote_state_config": true
     }
   }
 }
@@ -272,6 +278,53 @@ terraform {}
 # ERROR: missing terraform block
 include "root" {}
 locals {}
+```
+
+### 8. Terragrunt Validation (`terragrunt`)
+
+**Purpose:** Validate Terragrunt-specific configurations.
+
+**Configuration:**
+
+```json
+{
+  "terragrunt": {
+    "enabled": true,
+    "dependency_path_exists": true,
+    "include_path_exists": true,
+    "remote_state_config": true
+  }
+}
+```
+
+**Checks:**
+
+- `dependency_path_exists` - Validates `dependency.config_path` points to an existing directory
+- `include_path_exists` - Validates `include.path` exists (function calls like `find_in_parent_folders()` are skipped)
+- `remote_state_config` - Validates `terraform.remote_state` has a `backend` attribute
+
+**Example violations:**
+
+```hcl
+# dependency_path_exists violation
+dependency "vpc" {
+  config_path = "../non-existent-vpc"  # ERROR: directory does not exist
+}
+
+# include_path_exists violation
+include "root" {
+  path = "non-existent/parent.hcl"  # ERROR: file does not exist
+}
+
+# remote_state_config violation
+terraform {
+  remote_state {
+    # ERROR: missing required 'backend' attribute
+    config {
+      bucket = "my-bucket"
+    }
+  }
+}
 ```
 
 ## CLI

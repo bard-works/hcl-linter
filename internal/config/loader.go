@@ -66,6 +66,7 @@ type Rules struct {
 	RequiredFields *RequiredFieldsConfig `json:"required_fields,omitempty"`
 	BlankLines     *BlankLinesConfig     `json:"blank_lines,omitempty"`
 	RequiredBlocks *RequiredBlocksConfig `json:"required_blocks,omitempty"`
+	Terragrunt     *TerragruntConfig     `json:"terragrunt,omitempty"`
 	MaxConcurrency int                   `json:"max_concurrency,omitempty"`
 }
 
@@ -122,10 +123,33 @@ type RequiredBlockSpec struct {
 	Error string `json:"error"`
 }
 
+type TerragruntConfig struct {
+	Enabled              bool `json:"enabled"`
+	DependencyPathExists bool `json:"dependency_path_exists"`
+	IncludePathExists    bool `json:"include_path_exists"`
+	RemoteStateConfig    bool `json:"remote_state_config"`
+}
+
+type DependencyBlockSpec struct {
+	Label      string `json:"label"`
+	ConfigPath string `json:"config_path"`
+}
+
+type IncludeBlockSpec struct {
+	Path string `json:"path"`
+}
+
+type RemoteStateBlockSpec struct {
+	Backend string `json:"backend"`
+	Config  map[string]struct {
+		Required bool `json:"required"`
+	}
+}
+
 func (r *Rules) IsEnabled() bool {
 	return r.BlockOrder != nil || r.ArrayFormat != nil ||
 		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
-		r.BlankLines != nil || r.RequiredBlocks != nil
+		r.BlankLines != nil || r.RequiredBlocks != nil || r.Terragrunt != nil
 }
 
 type Loader struct {
@@ -415,6 +439,8 @@ func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {
 			rules.RequiredFields = parseHCLRequiredFields(block.Body)
 		case "required_blocks":
 			rules.RequiredBlocks = parseHCLRequiredBlocks(block.Body)
+		case "terragrunt":
+			rules.Terragrunt = parseHCLTerragrunt(block.Body)
 		}
 	}
 
@@ -539,6 +565,31 @@ func parseHCLRequiredBlocks(body *hclsyntax.Body) *RequiredBlocksConfig {
 			}
 		}
 		cfg.Required = append(cfg.Required, spec)
+	}
+	return cfg
+}
+
+func parseHCLTerragrunt(body *hclsyntax.Body) *TerragruntConfig {
+	cfg := &TerragruntConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["dependency_path_exists"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.DependencyPathExists = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["include_path_exists"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.IncludePathExists = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["remote_state_config"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.RemoteStateConfig = val.True()
+		}
 	}
 	return cfg
 }

@@ -96,4 +96,4 @@ See [SPEC.md](SPEC.md) for complete documentation including all rules and config
 
 ## License
 
-MIT
+Apache 2.0

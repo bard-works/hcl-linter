@@ -3,6 +3,7 @@ package linter
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bard-works/hcl-linter/internal/config"
@@ -851,5 +852,292 @@ inputs = {}
 
 	if !hasError {
 		t.Error("expected required_blocks error for missing terraform")
+	}
+}
+
+func TestDependencyPathExistsRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	existingDir := filepath.Join(tmpDir, "existing-module")
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	configContent := `{
+		"rules": {
+			"terragrunt": {
+				"enabled": true,
+				"dependency_path_exists": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name          string
+		content       string
+		expectIssue   bool
+		issueContains string
+	}{
+		{
+			name: "dependency with existing path",
+			content: `dependency "vpc" {
+  config_path = "existing-module"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "dependency with non-existing path",
+			content: `dependency "vpc" {
+  config_path = "non-existent-module"
+}
+`,
+			expectIssue:   true,
+			issueContains: "does not exist",
+		},
+		{
+			name: "dependency with parent path",
+			content: `dependency "vpc" {
+  config_path = "../vpc"
+}
+`,
+			expectIssue:   true,
+			issueContains: "does not exist",
+		},
+		{
+			name: "multiple dependencies - one missing",
+			content: `dependency "vpc" {
+  config_path = "existing-module"
+}
+
+dependency "db" {
+  config_path = "missing-db"
+}
+`,
+			expectIssue:   true,
+			issueContains: "missing-db",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "dependency_path_exists" {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected dependency_path_exists issue containing %q, got %v", tt.issueContains, result.Issues)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected dependency_path_exists issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestIncludePathExistsRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	existingDir := filepath.Join(tmpDir, "existing-parent")
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	configContent := `{
+		"rules": {
+			"terragrunt": {
+				"enabled": true,
+				"include_path_exists": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name          string
+		content       string
+		expectIssue   bool
+		issueContains string
+	}{
+		{
+			name: "include with existing path",
+			content: `include "root" {
+  path = "existing-parent"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "include with non-existing path",
+			content: `include "root" {
+  path = "non-existent"
+}
+`,
+			expectIssue:   true,
+			issueContains: "does not exist",
+		},
+		{
+			name: "include with function call - skipped",
+			content: `include "root" {
+  path = find_in_parent_folders()
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "include_path_exists" {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected include_path_exists issue containing %q, got %v", tt.issueContains, result.Issues)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected include_path_exists issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestRemoteStateConfigRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terragrunt": {
+				"enabled": true,
+				"remote_state_config": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name        string
+		content     string
+		expectIssue bool
+	}{
+		{
+			name: "remote_state with backend",
+			content: `terraform {
+  source = "./module"
+  remote_state {
+    backend = "s3"
+    config {
+      bucket = "my-bucket"
+      key    = "state"
+    }
+  }
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "remote_state without backend",
+			content: `terraform {
+  source = "./module"
+  remote_state {
+    config {
+      bucket = "my-bucket"
+    }
+  }
+}
+`,
+			expectIssue: true,
+		},
+		{
+			name: "terraform without remote_state",
+			content: `terraform {
+  source = "./module"
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "empty remote_state block",
+			content: `terraform {
+  source = "./module"
+  remote_state {}
+}
+`,
+			expectIssue: true,
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "remote_state_config" {
+					hasIssue = true
+					break
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected remote_state_config issue, got %v", result.Issues)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected remote_state_config issue: %v", result.Issues)
+			}
+		})
 	}
 }

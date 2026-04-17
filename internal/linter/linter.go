@@ -2,6 +2,8 @@ package linter
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -64,6 +66,10 @@ func (l *Linter) LintFile(path string) (*Result, error) {
 
 	if cfg.RequiredBlocks != nil && len(cfg.RequiredBlocks.Required) > 0 {
 		l.checkRequiredBlocks(result, blocks, cfg.RequiredBlocks)
+	}
+
+	if cfg.Terragrunt != nil && cfg.Terragrunt.Enabled {
+		l.checkTerragrunt(result, path, blocks, cfg.Terragrunt)
 	}
 
 	return result, nil
@@ -348,4 +354,125 @@ func (l *Linter) LintFiles(paths []string, maxConcurrency int) []*Result {
 		allResults = append(allResults, r)
 	}
 	return allResults
+}
+
+func (l *Linter) checkTerragrunt(result *Result, filePath string, blocks []ast.BlockInfo, cfg *config.TerragruntConfig) {
+	if cfg.DependencyPathExists {
+		l.checkDependencyPaths(result, filePath, blocks)
+	}
+	if cfg.IncludePathExists {
+		l.checkIncludePaths(result, filePath, blocks)
+	}
+	if cfg.RemoteStateConfig {
+		l.checkRemoteStateConfig(result, blocks)
+	}
+}
+
+func (l *Linter) checkDependencyPaths(result *Result, filePath string, blocks []ast.BlockInfo) {
+	fileDir := filepath.Dir(filePath)
+
+	for _, block := range blocks {
+		if block.Type != "dependency" {
+			continue
+		}
+
+		attrs := ast.GetBlockAttributes(block.Block.Body)
+		if configPath, ok := attrs["config_path"]; ok {
+			if pathStr := getStringValue(configPath); pathStr != "" {
+				resolvedPath := resolvePath(fileDir, pathStr)
+				if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+					result.Issues = append(result.Issues, Issue{
+						Severity: SeverityError,
+						Rule:     "dependency_path_exists",
+						Message:  fmt.Sprintf("dependency %q: config_path %q does not exist", block.Labels[0], pathStr),
+						Location: configPath.Range(),
+					})
+				}
+			}
+		}
+	}
+}
+
+func (l *Linter) checkIncludePaths(result *Result, filePath string, blocks []ast.BlockInfo) {
+	fileDir := filepath.Dir(filePath)
+
+	for _, block := range blocks {
+		if block.Type != "include" {
+			continue
+		}
+
+		attrs := ast.GetBlockAttributes(block.Block.Body)
+		if path, ok := attrs["path"]; ok {
+			if pathStr := getStringValue(path); pathStr != "" {
+				resolvedPath := resolvePath(fileDir, pathStr)
+				if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+					result.Issues = append(result.Issues, Issue{
+						Severity: SeverityError,
+						Rule:     "include_path_exists",
+						Message:  fmt.Sprintf("include path %q does not exist", pathStr),
+						Location: path.Range(),
+					})
+				}
+			}
+		}
+	}
+}
+
+func (l *Linter) checkRemoteStateConfig(result *Result, blocks []ast.BlockInfo) {
+	for _, block := range blocks {
+		if block.Type != "terraform" {
+			continue
+		}
+
+		nestedBlocks := block.Block.Body.Blocks
+		var hasRemoteState bool
+		var remoteStateBlock *hclsyntax.Block
+
+		for _, nested := range nestedBlocks {
+			if nested.Type == "remote_state" {
+				hasRemoteState = true
+				remoteStateBlock = nested
+				break
+			}
+		}
+
+		if !hasRemoteState {
+			continue
+		}
+
+		attrs := ast.GetBlockAttributes(remoteStateBlock.Body)
+		if backend, ok := attrs["backend"]; ok {
+			backendStr := getStringValue(backend)
+			if backendStr == "" {
+				result.Issues = append(result.Issues, Issue{
+					Severity: SeverityError,
+					Rule:     "remote_state_config",
+					Message:  "remote_state block missing required 'backend' attribute",
+					Location: remoteStateBlock.TypeRange,
+				})
+			}
+		} else {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityError,
+				Rule:     "remote_state_config",
+				Message:  "remote_state block missing required 'backend' attribute",
+				Location: remoteStateBlock.TypeRange,
+			})
+		}
+	}
+}
+
+func getStringValue(expr hcl.Expression) string {
+	val, diags := expr.Value(nil)
+	if diags.HasErrors() {
+		return ""
+	}
+	return val.AsString()
+}
+
+func resolvePath(baseDir, inputPath string) string {
+	if filepath.IsAbs(inputPath) {
+		return inputPath
+	}
+	return filepath.Join(baseDir, inputPath)
 }
