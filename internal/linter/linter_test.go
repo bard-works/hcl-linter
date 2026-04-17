@@ -1,6 +1,7 @@
 package linter
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1139,5 +1140,513 @@ func TestRemoteStateConfigRule(t *testing.T) {
 				t.Errorf("unexpected remote_state_config issue: %v", result.Issues)
 			}
 		})
+	}
+}
+
+func TestFindInParentFoldersRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	parentDir := filepath.Join(tmpDir, "parent")
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	configContent := `{
+		"rules": {
+			"terragrunt_functions": {
+				"enabled": true,
+				"find_in_parent_folders_exists": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	childDir := filepath.Join(parentDir, "child")
+	if err := os.MkdirAll(childDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	terragruntInParent := filepath.Join(parentDir, "terragrunt.hcl")
+	if err := os.WriteFile(terragruntInParent, []byte(`terraform {}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name          string
+		testFile      string
+		content       string
+		expectIssue   bool
+		issueContains string
+	}{
+		{
+			name:        "find_in_parent_folders with file in parent",
+			testFile:    filepath.Join(childDir, "terragrunt.hcl"),
+			content: `include "root" {
+  path = find_in_parent_folders()
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name:        "find_in_parent_folders with custom file in parent",
+			testFile:    filepath.Join(childDir, "terragrunt.hcl"),
+			content: `inputs = {
+  config = find_in_parent_folders("terragrunt.hcl")
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name:        "find_in_parent_folders with missing file",
+			testFile:    filepath.Join(tmpDir, "terragrunt.hcl"),
+			content: `include "root" {
+  path = find_in_parent_folders("missing.hcl")
+}
+`,
+			expectIssue:   true,
+			issueContains: "could not find file",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.WriteFile(tt.testFile, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(tt.testFile)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "find_in_parent_folders_exists" {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected find_in_parent_folders_exists issue containing %q, got %v", tt.issueContains, result.Issues)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected find_in_parent_folders_exists issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestGetEnvHasDefaultRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terragrunt_functions": {
+				"enabled": true,
+				"get_env_has_default": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name        string
+		content     string
+		expectIssue bool
+		severity    string
+	}{
+		{
+			name: "get_env with default value",
+			content: `locals {
+  env = get_env("ENV", "dev")
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "get_env with default and extra args",
+			content: `locals {
+  env = get_env("ENV", "dev", "extra")
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "get_env without default value",
+			content: `locals {
+  env = get_env("ENV")
+}
+`,
+			expectIssue: true,
+			severity:    "warning",
+		},
+		{
+			name: "multiple get_env mixed",
+			content: `locals {
+  env   = get_env("ENV", "dev")
+  region = get_env("REGION")
+}
+`,
+			expectIssue: true,
+			severity:    "warning",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "get_env_has_default" {
+					hasIssue = true
+					break
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected get_env_has_default issue, got %v", result.Issues)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected get_env_has_default issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestDependencyPathExistsWithAbsolutePath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configContent := `{
+		"rules": {
+			"terragrunt": {
+				"enabled": true,
+				"dependency_path_exists": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	existingDir := filepath.Join(tmpDir, "existing")
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	absPath := existingDir
+	content := fmt.Sprintf(`dependency "vpc" {
+  config_path = "%s"
+}
+`, absPath)
+
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	for _, issue := range result.Issues {
+		if issue.Rule == "dependency_path_exists" {
+			t.Errorf("unexpected dependency_path_exists issue: %v", issue.Message)
+		}
+	}
+}
+
+func TestIncludePathExistsWithAbsolutePath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configContent := `{
+		"rules": {
+			"terragrunt": {
+				"enabled": true,
+				"include_path_exists": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	existingDir := filepath.Join(tmpDir, "existing")
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	absPath := existingDir
+	content := fmt.Sprintf(`include "root" {
+  path = "%s"
+}
+`, absPath)
+
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	for _, issue := range result.Issues {
+		if issue.Rule == "include_path_exists" {
+			t.Errorf("unexpected include_path_exists issue: %v", issue.Message)
+		}
+	}
+}
+
+func TestFindInParentFoldersInTerraformBlock(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terragrunt_functions": {
+				"enabled": true,
+				"find_in_parent_folders_exists": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	content := `terraform {
+  source = find_in_parent_folders()
+}
+`
+
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	for _, issue := range result.Issues {
+		if issue.Rule == "find_in_parent_folders_exists" {
+			t.Errorf("unexpected find_in_parent_folders_exists issue in terraform block: %v", issue.Message)
+		}
+	}
+}
+
+func TestGetEnvInInputsBlock(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terragrunt_functions": {
+				"enabled": true,
+				"get_env_has_default": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	content := `inputs = {
+  env     = get_env("ENV", "dev")
+  region  = get_env("REGION")
+  timeout = 30
+}
+`
+
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	issueCount := 0
+	for _, issue := range result.Issues {
+		if issue.Rule == "get_env_has_default" {
+			issueCount++
+		}
+	}
+
+	if issueCount != 1 {
+		t.Errorf("expected 1 get_env_has_default issue for REGION, got %d", issueCount)
+	}
+}
+
+func TestMultipleDependenciesWithMixedPaths(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	vpcDir := filepath.Join(tmpDir, "vpc")
+	if err := os.MkdirAll(vpcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	configContent := `{
+		"rules": {
+			"terragrunt": {
+				"enabled": true,
+				"dependency_path_exists": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	content := `dependency "vpc" {
+  config_path = "vpc"
+}
+
+dependency "db" {
+  config_path = "non-existent-db"
+}
+`
+
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	issues := 0
+	for _, issue := range result.Issues {
+		if issue.Rule == "dependency_path_exists" {
+			issues++
+			if !strings.Contains(issue.Message, "non-existent-db") {
+				t.Errorf("issue should mention non-existent-db, got: %v", issue.Message)
+			}
+		}
+	}
+
+	if issues != 1 {
+		t.Errorf("expected 1 issue for non-existent-db, got %d", issues)
+	}
+}
+
+func TestRemoteStateConfigWithBackendAndEmptyString(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terragrunt": {
+				"enabled": true,
+				"remote_state_config": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	content := `terraform {
+  source = "./module"
+  remote_state {
+    backend = ""
+    config {
+      bucket = "my-bucket"
+    }
+  }
+}
+`
+
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	hasIssue := false
+	for _, issue := range result.Issues {
+		if issue.Rule == "remote_state_config" {
+			hasIssue = true
+		}
+	}
+
+	if !hasIssue {
+		t.Error("expected remote_state_config issue for empty backend string")
+	}
+}
+
+func TestFunctionNotEvaluatedWhenDisabled(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terragrunt_functions": {
+				"enabled": true,
+				"find_in_parent_folders_exists": false,
+				"get_env_has_default": false
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	content := `include "root" {
+  path = find_in_parent_folders("non-existent.hcl")
+}
+
+locals {
+  env = get_env("MISSING_DEFAULT")
+}
+`
+
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	for _, issue := range result.Issues {
+		if issue.Rule == "find_in_parent_folders_exists" || issue.Rule == "get_env_has_default" {
+			t.Errorf("unexpected issue when rule is disabled: %v", issue.Rule)
+		}
 	}
 }

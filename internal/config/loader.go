@@ -59,15 +59,16 @@ type BlankLinesConfig struct {
 }
 
 type Rules struct {
-	BlockOrder     *BlockOrderConfig     `json:"block_order,omitempty"`
-	ArrayFormat    *ArrayFormatConfig    `json:"array_format,omitempty"`
-	NameValidation *NameValidationConfig `json:"name_validation,omitempty"`
-	Duplicates     *DuplicatesConfig     `json:"duplicates,omitempty"`
-	RequiredFields *RequiredFieldsConfig `json:"required_fields,omitempty"`
-	BlankLines     *BlankLinesConfig     `json:"blank_lines,omitempty"`
-	RequiredBlocks *RequiredBlocksConfig `json:"required_blocks,omitempty"`
-	Terragrunt     *TerragruntConfig     `json:"terragrunt,omitempty"`
-	MaxConcurrency int                   `json:"max_concurrency,omitempty"`
+	BlockOrder           *BlockOrderConfig            `json:"block_order,omitempty"`
+	ArrayFormat          *ArrayFormatConfig           `json:"array_format,omitempty"`
+	NameValidation      *NameValidationConfig         `json:"name_validation,omitempty"`
+	Duplicates           *DuplicatesConfig           `json:"duplicates,omitempty"`
+	RequiredFields       *RequiredFieldsConfig        `json:"required_fields,omitempty"`
+	BlankLines           *BlankLinesConfig            `json:"blank_lines,omitempty"`
+	RequiredBlocks       *RequiredBlocksConfig        `json:"required_blocks,omitempty"`
+	Terragrunt           *TerragruntConfig           `json:"terragrunt,omitempty"`
+	TerragruntFunctions  *TerragruntFunctionsConfig  `json:"terragrunt_functions,omitempty"`
+	MaxConcurrency       int                          `json:"max_concurrency,omitempty"`
 }
 
 const EnvMaxConcurrency = "HCL_LINTER_MAX_CONCURRENCY"
@@ -146,10 +147,17 @@ type RemoteStateBlockSpec struct {
 	}
 }
 
+type TerragruntFunctionsConfig struct {
+	Enabled                      bool `json:"enabled"`
+	FindInParentFoldersExists    bool `json:"find_in_parent_folders_exists"`
+	GetEnvHasDefault            bool `json:"get_env_has_default"`
+}
+
 func (r *Rules) IsEnabled() bool {
 	return r.BlockOrder != nil || r.ArrayFormat != nil ||
 		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
-		r.BlankLines != nil || r.RequiredBlocks != nil || r.Terragrunt != nil
+		r.BlankLines != nil || r.RequiredBlocks != nil || r.Terragrunt != nil ||
+		r.TerragruntFunctions != nil
 }
 
 type Loader struct {
@@ -441,6 +449,8 @@ func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {
 			rules.RequiredBlocks = parseHCLRequiredBlocks(block.Body)
 		case "terragrunt":
 			rules.Terragrunt = parseHCLTerragrunt(block.Body)
+		case "terragrunt_functions":
+			rules.TerragruntFunctions = parseHCLTerragruntFunctions(block.Body)
 		}
 	}
 
@@ -565,6 +575,26 @@ func parseHCLRequiredBlocks(body *hclsyntax.Body) *RequiredBlocksConfig {
 			}
 		}
 		cfg.Required = append(cfg.Required, spec)
+	}
+	return cfg
+}
+
+func parseHCLTerragruntFunctions(body *hclsyntax.Body) *TerragruntFunctionsConfig {
+	cfg := &TerragruntFunctionsConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["find_in_parent_folders_exists"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.FindInParentFoldersExists = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["get_env_has_default"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.GetEnvHasDefault = val.True()
+		}
 	}
 	return cfg
 }

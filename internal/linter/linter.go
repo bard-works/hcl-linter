@@ -72,6 +72,10 @@ func (l *Linter) LintFile(path string) (*Result, error) {
 		l.checkTerragrunt(result, path, blocks, cfg.Terragrunt)
 	}
 
+	if cfg.TerragruntFunctions != nil && cfg.TerragruntFunctions.Enabled {
+		l.checkTerragruntFunctions(result, path, file, cfg.TerragruntFunctions)
+	}
+
 	return result, nil
 }
 
@@ -475,4 +479,118 @@ func resolvePath(baseDir, inputPath string) string {
 		return inputPath
 	}
 	return filepath.Join(baseDir, inputPath)
+}
+
+func (l *Linter) checkTerragruntFunctions(result *Result, filePath string, file *hcl.File, cfg *config.TerragruntFunctionsConfig) {
+	fileDir := filepath.Dir(filePath)
+
+	if cfg.FindInParentFoldersExists || cfg.GetEnvHasDefault {
+		l.walkAndCheckFunctions(result, fileDir, file, cfg)
+	}
+}
+
+func (l *Linter) walkAndCheckFunctions(result *Result, fileDir string, file *hcl.File, cfg *config.TerragruntFunctionsConfig) {
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return
+	}
+
+	var diags hcl.Diagnostics
+	hclsyntax.Walk(body, &functionCheckWalker{
+		result:   result,
+		fileDir:  fileDir,
+		cfg:      cfg,
+		diagsPtr: &diags,
+	})
+}
+
+type functionCheckWalker struct {
+	result   *Result
+	fileDir  string
+	cfg      *config.TerragruntFunctionsConfig
+	diagsPtr *hcl.Diagnostics
+}
+
+func (w *functionCheckWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
+	funcCall, ok := node.(*hclsyntax.FunctionCallExpr)
+	if !ok {
+		return nil
+	}
+
+	switch funcCall.Name {
+	case "find_in_parent_folders":
+		if w.cfg.FindInParentFoldersExists {
+			checkFindInParentFolders(w.result, w.fileDir, funcCall)
+		}
+	case "get_env":
+		if w.cfg.GetEnvHasDefault {
+			checkGetEnvHasDefault(w.result, funcCall)
+		}
+	}
+
+	return nil
+}
+
+func (w *functionCheckWalker) Exit(node hclsyntax.Node) hcl.Diagnostics {
+	return nil
+}
+
+func checkFindInParentFolders(result *Result, fileDir string, funcCall *hclsyntax.FunctionCallExpr) {
+	if len(funcCall.Args) == 0 {
+		defaultFile := "terragrunt.hcl"
+		path := findInParent(fileDir, defaultFile)
+		if path == "" {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityError,
+				Rule:     "find_in_parent_folders_exists",
+				Message:  "find_in_parent_folders() could not find terragrunt.hcl in parent directories",
+				Location: funcCall.Range(),
+			})
+		}
+		return
+	}
+
+	firstArg := funcCall.Args[0]
+	filename := getStringValue(firstArg)
+	if filename == "" {
+		return
+	}
+
+	path := findInParent(fileDir, filename)
+	if path == "" {
+		result.Issues = append(result.Issues, Issue{
+			Severity: SeverityError,
+			Rule:     "find_in_parent_folders_exists",
+			Message:  fmt.Sprintf("find_in_parent_folders(%q) could not find file in parent directories", filename),
+			Location: funcCall.Range(),
+		})
+	}
+}
+
+func checkGetEnvHasDefault(result *Result, funcCall *hclsyntax.FunctionCallExpr) {
+	if len(funcCall.Args) < 2 {
+		result.Issues = append(result.Issues, Issue{
+			Severity: SeverityWarning,
+			Rule:     "get_env_has_default",
+			Message:  "get_env() should have a default value as second argument",
+			Location: funcCall.Range(),
+		})
+	}
+}
+
+func findInParent(dir, filename string) string {
+	current := dir
+	for {
+		testPath := filepath.Join(current, filename)
+		if _, err := os.Stat(testPath); err == nil {
+			return testPath
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	return ""
 }

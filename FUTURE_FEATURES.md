@@ -4,16 +4,15 @@ Planned features for hcl-linter, in priority order.
 
 ## High Priority
 
-### 1. Terragrunt Function Embedding
-Embed Terragrunt's function library to enable expression linting.
+### 1. Terragrunt Function Embedding (IMPLEMENTED)
+Validate Terragrunt function calls in expressions.
 
-- Evaluate `find_in_parent_folders()`, `get_env()`, `get_aws_account_id()`, etc.
-- Warn when functions reference non-existent files/environment variables
-- Validate function argument counts and types
+- `find_in_parent_folders_exists` - Check that the file being searched for exists in parent directories
+- `get_env_has_default` - Warn when `get_env()` is called without a default value
 
-**Status:** Feasible - Terragrunt functions are available as Go packages.
+**Status:** ✅ Implemented
 
-### 1.1. Terragrunt Path Validation (IMPLEMENTED)
+### 1.1. Terragrunt Path Validation
 Validate that referenced paths in Terragrunt blocks actually exist.
 
 - `dependency_path_exists` - Check `dependency.config_path` exists

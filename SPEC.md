@@ -85,6 +85,11 @@ If falling back to project defaults (no user config found), a warning is display
       "dependency_path_exists": true,
       "include_path_exists": true,
       "remote_state_config": true
+    },
+    "terragrunt_functions": {
+      "enabled": true,
+      "find_in_parent_folders_exists": true,
+      "get_env_has_default": true
     }
   }
 }
@@ -324,6 +329,46 @@ terraform {
       bucket = "my-bucket"
     }
   }
+}
+```
+
+### 9. Terragrunt Functions (`terragrunt_functions`)
+
+**Purpose:** Validate Terragrunt function calls.
+
+**Configuration:**
+
+```json
+{
+  "terragrunt_functions": {
+    "enabled": true,
+    "find_in_parent_folders_exists": true,
+    "get_env_has_default": true
+  }
+}
+```
+
+**Checks:**
+
+- `find_in_parent_folders_exists` - Validates that the file being searched for exists in parent directories
+- `get_env_has_default` - Warns when `get_env()` is called without a default value
+
+**Example violations:**
+
+```hcl
+# find_in_parent_folders_exists violation
+inputs = {
+  config = find_in_parent_folders("missing-file.hcl")  # ERROR: file not found
+}
+
+# get_env_has_default violation
+locals {
+  env = get_env("ENVIRONMENT")  # WARNING: should have default
+}
+
+# Correct usage
+locals {
+  env = get_env("ENVIRONMENT", "dev")
 }
 ```
 

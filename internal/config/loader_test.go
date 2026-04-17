@@ -229,3 +229,126 @@ func TestConfigSourceString(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadTerragruntConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.json")
+	configContent := `{
+		"rules": {
+			"terragrunt": {
+				"enabled": true,
+				"dependency_path_exists": true,
+				"include_path_exists": true,
+				"remote_state_config": true
+			}
+		}
+	}`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.Terragrunt == nil {
+		t.Fatal("Terragrunt should not be nil")
+	}
+	if !rules.Terragrunt.Enabled {
+		t.Error("Terragrunt.Enabled should be true")
+	}
+	if !rules.Terragrunt.DependencyPathExists {
+		t.Error("Terragrunt.DependencyPathExists should be true")
+	}
+	if !rules.Terragrunt.IncludePathExists {
+		t.Error("Terragrunt.IncludePathExists should be true")
+	}
+	if !rules.Terragrunt.RemoteStateConfig {
+		t.Error("Terragrunt.RemoteStateConfig should be true")
+	}
+}
+
+func TestLoadTerragruntFunctionsConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.json")
+	configContent := `{
+		"rules": {
+			"terragrunt_functions": {
+				"enabled": true,
+				"find_in_parent_folders_exists": true,
+				"get_env_has_default": true
+			}
+		}
+	}`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.TerragruntFunctions == nil {
+		t.Fatal("TerragruntFunctions should not be nil")
+	}
+	if !rules.TerragruntFunctions.Enabled {
+		t.Error("TerragruntFunctions.Enabled should be true")
+	}
+	if !rules.TerragruntFunctions.FindInParentFoldersExists {
+		t.Error("TerragruntFunctions.FindInParentFoldersExists should be true")
+	}
+	if !rules.TerragruntFunctions.GetEnvHasDefault {
+		t.Error("TerragruntFunctions.GetEnvHasDefault should be true")
+	}
+}
+
+func TestLoadTerragruntHCLConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	configContent := `
+rules {
+  terragrunt {
+    enabled = true
+    dependency_path_exists = true
+    include_path_exists = true
+    remote_state_config = false
+  }
+
+  terragrunt_functions {
+    enabled = true
+    find_in_parent_folders_exists = true
+    get_env_has_default = false
+  }
+}
+`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.Terragrunt == nil {
+		t.Fatal("Terragrunt should not be nil")
+	}
+	if !rules.Terragrunt.Enabled {
+		t.Error("Terragrunt.Enabled should be true")
+	}
+	if rules.Terragrunt.RemoteStateConfig {
+		t.Error("Terragrunt.RemoteStateConfig should be false")
+	}
+
+	if rules.TerragruntFunctions == nil {
+		t.Fatal("TerragruntFunctions should not be nil")
+	}
+	if rules.TerragruntFunctions.GetEnvHasDefault {
+		t.Error("TerragruntFunctions.GetEnvHasDefault should be false")
+	}
+}
