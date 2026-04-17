@@ -519,25 +519,26 @@ func parseHCLRequiredFields(body *hclsyntax.Body) *RequiredFieldsConfig {
 func parseHCLRequiredBlocks(body *hclsyntax.Body) *RequiredBlocksConfig {
 	cfg := &RequiredBlocksConfig{}
 	for _, block := range body.Blocks {
-		if block.Type == "required" {
-			spec := RequiredBlockSpec{}
-			if attr, ok := block.Body.Attributes["type"]; ok {
-				if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
-					spec.Type = val.AsString()
-				}
-			}
-			if attr, ok := block.Body.Attributes["count"]; ok {
-				if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
-					spec.Count = val.AsString()
-				}
-			}
-			if attr, ok := block.Body.Attributes["error"]; ok {
-				if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
-					spec.Error = val.AsString()
-				}
-			}
-			cfg.Required = append(cfg.Required, spec)
+		if block.Type != "required" {
+			continue
 		}
+		spec := RequiredBlockSpec{}
+		if attr, ok := block.Body.Attributes["type"]; ok {
+			if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+				spec.Type = val.AsString()
+			}
+		}
+		if attr, ok := block.Body.Attributes["count"]; ok {
+			if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+				spec.Count = val.AsString()
+			}
+		}
+		if attr, ok := block.Body.Attributes["error"]; ok {
+			if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+				spec.Error = val.AsString()
+			}
+		}
+		cfg.Required = append(cfg.Required, spec)
 	}
 	return cfg
 }

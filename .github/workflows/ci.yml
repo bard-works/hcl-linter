@@ -32,7 +32,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
-          version: v2 # TODO: pin to exact v2.x version for full reproducibility
+          version: latest # TODO: pin to exact v2.x.y for reproducibility (format vX.Y or vX.Y.Z)
           args: --timeout 5m
 
   test:
