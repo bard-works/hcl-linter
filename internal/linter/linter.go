@@ -280,20 +280,17 @@ func (l *Linter) checkRequiredBlocks(result *Result, blocks []ast.BlockInfo, cfg
 	for _, req := range cfg.Required {
 		count := blockCounts[req.Type]
 
-		switch req.Count {
-		case "once":
-			if count != 1 {
-				result.Issues = append(result.Issues, Issue{
-					Severity: SeverityError,
-					Rule:     "required_blocks",
-					Message:  req.Error,
-					Location: hcl.Range{
-						Filename: result.File,
-						Start:    hcl.Pos{Line: 1, Column: 1},
-						End:      hcl.Pos{Line: 1, Column: 1},
-					},
-				})
-			}
+		if req.Count == "once" && count != 1 {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityError,
+				Rule:     "required_blocks",
+				Message:  req.Error,
+				Location: hcl.Range{
+					Filename: result.File,
+					Start:    hcl.Pos{Line: 1, Column: 1},
+					End:      hcl.Pos{Line: 1, Column: 1},
+				},
+			})
 		}
 	}
 }
