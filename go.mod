@@ -1,6 +1,6 @@
 module github.com/papaya/hcl-linter
 
-go 1.21
+go 1.26.2
 
 require (
 	github.com/hashicorp/hcl/v2 v2.19.0
