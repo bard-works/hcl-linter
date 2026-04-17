@@ -352,3 +352,82 @@ rules {
 		t.Error("TerragruntFunctions.GetEnvHasDefault should be false")
 	}
 }
+
+func TestLoadTerraformBlockConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.json")
+	configContent := `{
+		"rules": {
+			"terraform_block": {
+				"enabled": true,
+				"source_required": true,
+				"version_format": true,
+				"extra_arguments_valid": true,
+				"no_deprecated_fields": true
+			}
+		}
+	}`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.TerraformBlock == nil {
+		t.Fatal("TerraformBlock should not be nil")
+	}
+	if !rules.TerraformBlock.Enabled {
+		t.Error("TerraformBlock.Enabled should be true")
+	}
+	if !rules.TerraformBlock.SourceRequired {
+		t.Error("TerraformBlock.SourceRequired should be true")
+	}
+	if !rules.TerraformBlock.VersionFormat {
+		t.Error("TerraformBlock.VersionFormat should be true")
+	}
+	if !rules.TerraformBlock.ExtraArgumentsValid {
+		t.Error("TerraformBlock.ExtraArgumentsValid should be true")
+	}
+	if !rules.TerraformBlock.NoDeprecatedFields {
+		t.Error("TerraformBlock.NoDeprecatedFields should be true")
+	}
+}
+
+func TestLoadTerraformBlockHCLConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	configContent := `
+rules {
+  terraform_block {
+    enabled = true
+    source_required = true
+    version_format = false
+    extra_arguments_valid = true
+    no_deprecated_fields = false
+  }
+}
+`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.TerraformBlock == nil {
+		t.Fatal("TerraformBlock should not be nil")
+	}
+	if !rules.TerraformBlock.Enabled {
+		t.Error("TerraformBlock.Enabled should be true")
+	}
+	if rules.TerraformBlock.VersionFormat {
+		t.Error("TerraformBlock.VersionFormat should be false")
+	}
+}

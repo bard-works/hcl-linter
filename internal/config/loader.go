@@ -59,16 +59,17 @@ type BlankLinesConfig struct {
 }
 
 type Rules struct {
-	BlockOrder           *BlockOrderConfig            `json:"block_order,omitempty"`
-	ArrayFormat          *ArrayFormatConfig           `json:"array_format,omitempty"`
-	NameValidation      *NameValidationConfig         `json:"name_validation,omitempty"`
-	Duplicates           *DuplicatesConfig           `json:"duplicates,omitempty"`
-	RequiredFields       *RequiredFieldsConfig        `json:"required_fields,omitempty"`
-	BlankLines           *BlankLinesConfig            `json:"blank_lines,omitempty"`
-	RequiredBlocks       *RequiredBlocksConfig        `json:"required_blocks,omitempty"`
-	Terragrunt           *TerragruntConfig           `json:"terragrunt,omitempty"`
-	TerragruntFunctions  *TerragruntFunctionsConfig  `json:"terragrunt_functions,omitempty"`
-	MaxConcurrency       int                          `json:"max_concurrency,omitempty"`
+	BlockOrder          *BlockOrderConfig          `json:"block_order,omitempty"`
+	ArrayFormat         *ArrayFormatConfig         `json:"array_format,omitempty"`
+	NameValidation      *NameValidationConfig      `json:"name_validation,omitempty"`
+	Duplicates          *DuplicatesConfig          `json:"duplicates,omitempty"`
+	RequiredFields      *RequiredFieldsConfig      `json:"required_fields,omitempty"`
+	BlankLines          *BlankLinesConfig          `json:"blank_lines,omitempty"`
+	RequiredBlocks      *RequiredBlocksConfig      `json:"required_blocks,omitempty"`
+	Terragrunt          *TerragruntConfig          `json:"terragrunt,omitempty"`
+	TerragruntFunctions *TerragruntFunctionsConfig `json:"terragrunt_functions,omitempty"`
+	TerraformBlock      *TerraformBlockConfig      `json:"terraform_block,omitempty"`
+	MaxConcurrency      int                        `json:"max_concurrency,omitempty"`
 }
 
 const EnvMaxConcurrency = "HCL_LINTER_MAX_CONCURRENCY"
@@ -148,16 +149,30 @@ type RemoteStateBlockSpec struct {
 }
 
 type TerragruntFunctionsConfig struct {
-	Enabled                      bool `json:"enabled"`
-	FindInParentFoldersExists    bool `json:"find_in_parent_folders_exists"`
-	GetEnvHasDefault            bool `json:"get_env_has_default"`
+	Enabled                   bool `json:"enabled"`
+	FindInParentFoldersExists bool `json:"find_in_parent_folders_exists"`
+	GetEnvHasDefault          bool `json:"get_env_has_default"`
+}
+
+type TerraformBlockConfig struct {
+	Enabled             bool `json:"enabled"`
+	SourceRequired      bool `json:"source_required"`
+	VersionFormat       bool `json:"version_format"`
+	ExtraArgumentsValid bool `json:"extra_arguments_valid"`
+	NoDeprecatedFields  bool `json:"no_deprecated_fields"`
+}
+
+type DeprecatedField struct {
+	Name    string `json:"name"`
+	Block   string `json:"block"`
+	Message string `json:"message"`
 }
 
 func (r *Rules) IsEnabled() bool {
 	return r.BlockOrder != nil || r.ArrayFormat != nil ||
 		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
 		r.BlankLines != nil || r.RequiredBlocks != nil || r.Terragrunt != nil ||
-		r.TerragruntFunctions != nil
+		r.TerragruntFunctions != nil || r.TerraformBlock != nil
 }
 
 type Loader struct {
@@ -451,6 +466,8 @@ func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {
 			rules.Terragrunt = parseHCLTerragrunt(block.Body)
 		case "terragrunt_functions":
 			rules.TerragruntFunctions = parseHCLTerragruntFunctions(block.Body)
+		case "terraform_block":
+			rules.TerraformBlock = parseHCLTerraformBlock(block.Body)
 		}
 	}
 
@@ -594,6 +611,36 @@ func parseHCLTerragruntFunctions(body *hclsyntax.Body) *TerragruntFunctionsConfi
 	if attr, ok := body.Attributes["get_env_has_default"]; ok {
 		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
 			cfg.GetEnvHasDefault = val.True()
+		}
+	}
+	return cfg
+}
+
+func parseHCLTerraformBlock(body *hclsyntax.Body) *TerraformBlockConfig {
+	cfg := &TerraformBlockConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["source_required"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.SourceRequired = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["version_format"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.VersionFormat = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["extra_arguments_valid"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.ExtraArgumentsValid = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["no_deprecated_fields"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.NoDeprecatedFields = val.True()
 		}
 	}
 	return cfg

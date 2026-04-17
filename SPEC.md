@@ -90,6 +90,13 @@ If falling back to project defaults (no user config found), a warning is display
       "enabled": true,
       "find_in_parent_folders_exists": true,
       "get_env_has_default": true
+    },
+    "terraform_block": {
+      "enabled": true,
+      "source_required": true,
+      "version_format": true,
+      "extra_arguments_valid": true,
+      "no_deprecated_fields": true
     }
   }
 }
@@ -369,6 +376,85 @@ locals {
 # Correct usage
 locals {
   env = get_env("ENVIRONMENT", "dev")
+}
+```
+
+### 10. Terraform Block (`terraform_block`)
+
+**Purpose:** Validate Terragrunt's `terraform` block configuration.
+
+**Configuration:**
+
+```json
+{
+  "terraform_block": {
+    "enabled": true,
+    "source_required": true,
+    "version_format": true,
+    "extra_arguments_valid": true,
+    "no_deprecated_fields": true
+  }
+}
+```
+
+**Checks:**
+
+- `source_required` - Ensures the `terraform` block has a `source` attribute
+- `version_format` - Validates that the `version` attribute matches expected format (e.g., `>= 1.0.0`)
+- `extra_arguments_valid` - Validates that `extra_arguments` blocks have either a `name` attribute/label and contain `arguments` or nested blocks
+- `no_deprecated_fields` - Warns about deprecated block types: `before_hook`, `after_hook` (use plural form), and nested `terraform` (use `source`)
+
+**Example violations:**
+
+```hcl
+# source_required violation
+terraform {
+  # ERROR: missing required 'source' attribute
+}
+
+# version_format violation
+terraform {
+  version = "1.2.3"  # WARNING: may not match expected format
+}
+
+# extra_arguments_valid violations
+terraform {
+  extra_arguments {}  # ERROR: missing name attribute
+
+  extra_arguments "example" {}  # ERROR: missing arguments or nested blocks
+}
+
+# no_deprecated_fields violations
+terraform {
+  before_hook {  # ERROR: use 'before_hooks' instead
+    commands = ["echo hello"]
+  }
+
+  after_hook {  # ERROR: use 'after_hooks' instead
+    commands = ["echo hello"]
+  }
+
+  terraform {  # ERROR: use 'source' instead
+    source = "./module"
+  }
+}
+
+# Correct usage
+terraform {
+  source = "./module"
+  version = ">= 1.0.0"
+
+  before_hooks {
+    commands = ["echo hello"]
+  }
+
+  after_hooks {
+    commands = ["echo hello"]
+  }
+
+  extra_arguments "example" {
+    arguments = ["-var", "foo=bar"]
+  }
 }
 ```
 

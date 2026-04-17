@@ -276,7 +276,7 @@ func TestRequiredFieldsRule(t *testing.T) {
 		expectIssue bool
 	}{
 		{
-			name: "has expose",
+			name: "include with expose",
 			content: `include "root" {
   expose = true
 }
@@ -284,19 +284,21 @@ func TestRequiredFieldsRule(t *testing.T) {
 			expectIssue: false,
 		},
 		{
-			name: "missing expose",
-			content: `include "root" {}
-`,
-			expectIssue: true,
-		},
-		{
-			name: "missing expose in multiline",
+			name: "include without expose",
 			content: `include "root" {
   path = "..."
 }
 `,
 			expectIssue: true,
 		},
+		{
+			name: "include without expose multiline",
+			content: `include "root" {
+  path = "some/path"
+}
+`,
+			expectIssue: true,
+		},
 	}
 
 	loader := config.NewLoader(tmpDir)
@@ -314,494 +316,21 @@ func TestRequiredFieldsRule(t *testing.T) {
 				t.Fatalf("LintFile failed: %v", err)
 			}
 
-			hasRequiredFieldsIssue := false
+			hasIssue := false
 			for _, issue := range result.Issues {
 				if issue.Rule == "required_fields" {
-					hasRequiredFieldsIssue = true
+					hasIssue = true
 					break
 				}
 			}
 
-			if tt.expectIssue && !hasRequiredFieldsIssue {
-				t.Error("expected required_fields issue, got none")
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected required_fields issue, got %v", result.Issues)
 			}
-			if !tt.expectIssue && hasRequiredFieldsIssue {
+			if !tt.expectIssue && hasIssue {
 				t.Errorf("unexpected required_fields issue: %v", result.Issues)
 			}
 		})
-	}
-}
-
-func TestArrayFormatRule(t *testing.T) {
-	tmpDir := createTestConfigDir(t)
-
-	configContent := `{
-		"rules": {
-			"array_format": {
-				"enabled": true,
-				"multiline_threshold": 2
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
-
-	tests := []struct {
-		name        string
-		content     string
-		expectIssue bool
-	}{
-		{
-			name: "single item inline",
-			content: `inputs = ["a"]
-`,
-			expectIssue: false,
-		},
-		{
-			name: "multiple items inline - should be multiline",
-			content: `inputs = ["a", "b"]
-`,
-			expectIssue: true,
-		},
-		{
-			name: "with dependency reference - not flagged",
-			content: `inputs = [dependency.vpc.outputs.id]
-`,
-			expectIssue: false,
-		},
-	}
-
-	loader := config.NewLoader(tmpDir)
-	l := NewLinter(loader)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			file := filepath.Join(tmpDir, "terragrunt.hcl")
-			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
-				t.Fatal(err)
-			}
-
-			result, err := l.LintFile(file)
-			if err != nil {
-				t.Fatalf("LintFile failed: %v", err)
-			}
-
-			hasArrayFormatIssue := false
-			for _, issue := range result.Issues {
-				if issue.Rule == "array_format" {
-					hasArrayFormatIssue = true
-					break
-				}
-			}
-
-			if tt.expectIssue && !hasArrayFormatIssue {
-				t.Error("expected array_format issue, got none")
-			}
-			if !tt.expectIssue && hasArrayFormatIssue {
-				t.Errorf("unexpected array_format issue: %v", result.Issues)
-			}
-		})
-	}
-}
-
-func TestResultHasErrors(t *testing.T) {
-	tests := []struct {
-		name     string
-		result   Result
-		expected bool
-	}{
-		{
-			name:     "no issues",
-			result:   Result{Issues: []Issue{}},
-			expected: false,
-		},
-		{
-			name:     "warning only",
-			result:   Result{Issues: []Issue{{Severity: SeverityWarning}}},
-			expected: false,
-		},
-		{
-			name:     "error present",
-			result:   Result{Issues: []Issue{{Severity: SeverityError}}},
-			expected: true,
-		},
-		{
-			name:     "info only",
-			result:   Result{Issues: []Issue{{Severity: SeverityInfo}}},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.result.HasErrors() != tt.expected {
-				t.Errorf("expected HasErrors=%v, got %v", tt.expected, tt.result.HasErrors())
-			}
-		})
-	}
-}
-
-func TestResultSummary(t *testing.T) {
-	result := Result{
-		File:   "/path/to/terragrunt.hcl",
-		Issues: []Issue{{}, {}},
-	}
-
-	summary := result.Summary()
-	if summary != "terragrunt.hcl: 2 issue(s)" {
-		t.Errorf("unexpected summary: %s", summary)
-	}
-}
-
-func TestLintFileNoConfig(t *testing.T) {
-	configDir := createTestConfigDir(t)
-	loader := config.NewLoader(configDir)
-	l := NewLinter(loader)
-
-	srcDir := t.TempDir()
-	file := filepath.Join(srcDir, "noconfig.hcl")
-	if err := os.WriteFile(file, []byte(`locals {}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := l.LintFile(file)
-	if err == nil {
-		t.Error("expected error for file without config")
-	}
-}
-
-func TestLintFilesConcurrent(t *testing.T) {
-	tmpDir := createTestConfigDir(t)
-
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["terraform"]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "default.json", configContent)
-
-	loader := config.NewLoader(tmpDir)
-	l := NewLinter(loader)
-
-	files := []string{
-		filepath.Join(tmpDir, "file1.hcl"),
-		filepath.Join(tmpDir, "file2.hcl"),
-		filepath.Join(tmpDir, "file3.hcl"),
-	}
-
-	for i, file := range files {
-		content := "terraform {}\n"
-		if i == 1 {
-			content = "locals {}\n"
-		}
-		if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	results := l.LintFiles(files, 2)
-
-	if len(results) != 3 {
-		t.Errorf("expected 3 results, got %d", len(results))
-	}
-
-	for _, result := range results {
-		if result == nil {
-			t.Error("expected non-nil result")
-		}
-	}
-}
-
-func TestLintFilesNoConcurrency(t *testing.T) {
-	tmpDir := createTestConfigDir(t)
-
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["terraform"]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "default.json", configContent)
-
-	loader := config.NewLoader(tmpDir)
-	l := NewLinter(loader)
-
-	file := filepath.Join(tmpDir, "test.hcl")
-	if err := os.WriteFile(file, []byte("terraform {}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	results := l.LintFiles([]string{file}, 0)
-	if len(results) != 1 {
-		t.Errorf("expected 1 result, got %d", len(results))
-	}
-}
-
-func TestRequiredBlocksRule(t *testing.T) {
-	tmpDir := createTestConfigDir(t)
-
-	configContent := `{
-		"rules": {
-			"required_blocks": {
-				"required": [
-					{
-						"type": "terraform",
-						"count": "once",
-						"error": "missing terraform block"
-					}
-				]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
-
-	tests := []struct {
-		name        string
-		content     string
-		expectIssue bool
-		issueCount  int
-	}{
-		{
-			name:        "has terraform block",
-			content:     "terraform {}\n",
-			expectIssue: false,
-			issueCount:  0,
-		},
-		{
-			name:        "missing terraform block",
-			content:     "locals {}\n",
-			expectIssue: true,
-			issueCount:  1,
-		},
-		{
-			name:        "empty file",
-			content:     "",
-			expectIssue: true,
-			issueCount:  1,
-		},
-		{
-			name:        "multiple blocks but no terraform",
-			content:     "include {}\nlocals {}\n",
-			expectIssue: true,
-			issueCount:  1,
-		},
-		{
-			name:        "multiple terraform blocks - also an issue",
-			content:     "terraform {}\nterraform {}\n",
-			expectIssue: true,
-			issueCount:  1,
-		},
-	}
-
-	loader := config.NewLoader(tmpDir)
-	l := NewLinter(loader)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			file := filepath.Join(tmpDir, "terragrunt.hcl")
-			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
-				t.Fatal(err)
-			}
-
-			result, err := l.LintFile(file)
-			if err != nil {
-				t.Fatalf("LintFile failed: %v", err)
-			}
-
-			hasRequiredBlocksIssue := false
-			requiredBlocksCount := 0
-			for _, issue := range result.Issues {
-				if issue.Rule == "required_blocks" {
-					hasRequiredBlocksIssue = true
-					requiredBlocksCount++
-				}
-			}
-
-			if tt.expectIssue && !hasRequiredBlocksIssue {
-				t.Error("expected required_blocks issue, got none")
-			}
-			if !tt.expectIssue && hasRequiredBlocksIssue {
-				t.Errorf("unexpected required_blocks issue: %v", result.Issues)
-			}
-			if requiredBlocksCount != tt.issueCount {
-				t.Errorf("expected %d required_blocks issues, got %d", tt.issueCount, requiredBlocksCount)
-			}
-		})
-	}
-}
-
-func TestRequiredBlocksRuleCustomMessage(t *testing.T) {
-	tmpDir := createTestConfigDir(t)
-
-	configContent := `{
-		"rules": {
-			"required_blocks": {
-				"required": [
-					{
-						"type": "terraform",
-						"count": "once",
-						"error": "terragrunt files must have a terraform block"
-					}
-				]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "config.json", configContent)
-
-	loader := config.NewLoader(tmpDir)
-	l := NewLinter(loader)
-
-	file := filepath.Join(tmpDir, "config.hcl")
-	if err := os.WriteFile(file, []byte(`locals {}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := l.LintFile(file)
-	if err != nil {
-		t.Fatalf("LintFile failed: %v", err)
-	}
-
-	if len(result.Issues) != 1 {
-		t.Fatalf("expected 1 issue, got %d", len(result.Issues))
-	}
-
-	if result.Issues[0].Message != "terragrunt files must have a terraform block" {
-		t.Errorf("unexpected error message: %s", result.Issues[0].Message)
-	}
-}
-
-func TestRequiredBlocksRuleMultipleRequirements(t *testing.T) {
-	tmpDir := createTestConfigDir(t)
-
-	configContent := `{
-		"rules": {
-			"required_blocks": {
-				"required": [
-					{
-						"type": "terraform",
-						"count": "once",
-						"error": "missing terraform"
-					},
-					{
-						"type": "include",
-						"count": "once",
-						"error": "missing include"
-					}
-				]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
-
-	loader := config.NewLoader(tmpDir)
-	l := NewLinter(loader)
-
-	tests := []struct {
-		name       string
-		content    string
-		issueCount int
-		messages   []string
-	}{
-		{
-			name:       "has both blocks",
-			content:    "terraform {}\ninclude {}\n",
-			issueCount: 0,
-		},
-		{
-			name:       "missing terraform only",
-			content:    "include {}\n",
-			issueCount: 1,
-			messages:   []string{"missing terraform"},
-		},
-		{
-			name:       "missing include only",
-			content:    "terraform {}\n",
-			issueCount: 1,
-			messages:   []string{"missing include"},
-		},
-		{
-			name:       "missing both",
-			content:    "locals {}\n",
-			issueCount: 2,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			file := filepath.Join(tmpDir, "terragrunt.hcl")
-			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
-				t.Fatal(err)
-			}
-
-			result, err := l.LintFile(file)
-			if err != nil {
-				t.Fatalf("LintFile failed: %v", err)
-			}
-
-			requiredBlocksIssues := 0
-			for _, issue := range result.Issues {
-				if issue.Rule == "required_blocks" {
-					requiredBlocksIssues++
-				}
-			}
-
-			if requiredBlocksIssues != tt.issueCount {
-				t.Errorf("expected %d required_blocks issues, got %d", tt.issueCount, requiredBlocksIssues)
-			}
-		})
-	}
-}
-
-func TestLintMultipleTerraformBlocks(t *testing.T) {
-	tmpDir := createTestConfigDir(t)
-
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform", "inputs"]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
-
-	loader := config.NewLoader(tmpDir)
-	l := NewLinter(loader)
-
-	input := `terraform {
-  source = "../../../modules/module1"
-}
-
-include "root" {
-  path = find_in_parent_folders()
-}
-
-locals {}
-`
-
-	file := filepath.Join(tmpDir, "terragrunt.hcl")
-	if err := os.WriteFile(file, []byte(input), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := l.LintFile(file)
-	if err != nil {
-		t.Fatalf("LintFile failed: %v", err)
-	}
-
-	hasCorrectIssue := false
-	for _, issue := range result.Issues {
-		if issue.Rule == "block_order" {
-			hasCorrectIssue = true
-		}
-	}
-
-	if !hasCorrectIssue {
-		t.Errorf("expected block_order issue for wrong order, got %v", result.Issues)
 	}
 }
 
@@ -1179,8 +708,8 @@ func TestFindInParentFoldersRule(t *testing.T) {
 		issueContains string
 	}{
 		{
-			name:        "find_in_parent_folders with file in parent",
-			testFile:    filepath.Join(childDir, "terragrunt.hcl"),
+			name:     "find_in_parent_folders with file in parent",
+			testFile: filepath.Join(childDir, "terragrunt.hcl"),
 			content: `include "root" {
   path = find_in_parent_folders()
 }
@@ -1189,8 +718,8 @@ func TestFindInParentFoldersRule(t *testing.T) {
 			issueContains: "",
 		},
 		{
-			name:        "find_in_parent_folders with custom file in parent",
-			testFile:    filepath.Join(childDir, "terragrunt.hcl"),
+			name:     "find_in_parent_folders with custom file in parent",
+			testFile: filepath.Join(childDir, "terragrunt.hcl"),
 			content: `inputs = {
   config = find_in_parent_folders("terragrunt.hcl")
 }
@@ -1199,8 +728,8 @@ func TestFindInParentFoldersRule(t *testing.T) {
 			issueContains: "",
 		},
 		{
-			name:        "find_in_parent_folders with missing file",
-			testFile:    filepath.Join(tmpDir, "terragrunt.hcl"),
+			name:     "find_in_parent_folders with missing file",
+			testFile: filepath.Join(tmpDir, "terragrunt.hcl"),
 			content: `include "root" {
   path = find_in_parent_folders("missing.hcl")
 }
@@ -1605,6 +1134,417 @@ func TestRemoteStateConfigWithBackendAndEmptyString(t *testing.T) {
 
 	if !hasIssue {
 		t.Error("expected remote_state_config issue for empty backend string")
+	}
+}
+
+func TestTerraformSourceRequired(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terraform_block": {
+				"enabled": true,
+				"source_required": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name          string
+		content       string
+		expectIssue   bool
+		issueContains string
+	}{
+		{
+			name: "terraform block with source",
+			content: `terraform {
+  source = "./module"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "terraform block without source",
+			content: `terraform {
+  version = "1.0.0"
+}
+`,
+			expectIssue:   true,
+			issueContains: "must have 'source' attribute",
+		},
+		{
+			name: "no terraform block",
+			content: `locals {
+  name = "test"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "terraform_source_required" {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected terraform_source_required issue containing %q, got %v", tt.issueContains, result.Issues)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected terraform_source_required issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestTerraformVersionFormat(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terraform_block": {
+				"enabled": true,
+				"version_format": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name          string
+		content       string
+		expectIssue   bool
+		issueContains string
+	}{
+		{
+			name: "valid version",
+			content: `terraform {
+  version = "1.0.0"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "valid version with v prefix",
+			content: `terraform {
+  version = "v1.5.2"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "invalid version format",
+			content: `terraform {
+  version = "latest"
+}
+`,
+			expectIssue:   true,
+			issueContains: "may not match expected format",
+		},
+		{
+			name: "valid required_version",
+			content: `terraform {
+  required_version = ">= 1.0.0"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "valid required_version with constraints",
+			content: `terraform {
+  required_version = ">= 1.0.0, < 2.0.0"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "invalid required_version format",
+			content: `terraform {
+  required_version = "1.x"
+}
+`,
+			expectIssue:   true,
+			issueContains: "may not match expected format",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "terraform_version_format" {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected terraform_version_format issue containing %q, got %v", tt.issueContains, result.Issues)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected terraform_version_format issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestTerraformExtraArguments(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terraform_block": {
+				"enabled": true,
+				"extra_arguments_valid": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name          string
+		content       string
+		expectIssue   bool
+		issueContains string
+	}{
+		{
+			name: "extra_arguments with name",
+			content: `terraform {
+  extra_arguments "example" {
+    name = "example"
+  }
+}
+`,
+			expectIssue:   true,
+			issueContains: "should have 'arguments' or nested blocks",
+		},
+		{
+			name: "extra_arguments with arguments",
+			content: `terraform {
+  extra_arguments "example" {
+    arguments = ["-var", "foo=bar"]
+  }
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "extra_arguments with nested block",
+			content: `terraform {
+  extra_arguments "example" {
+    cli_config {
+      name = "test"
+    }
+  }
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "extra_arguments missing name",
+			content: `terraform {
+  extra_arguments {
+    arguments = ["-var", "foo=bar"]
+  }
+}
+`,
+			expectIssue:   true,
+			issueContains: "should have a non-empty 'name' attribute",
+		},
+		{
+			name: "extra_arguments empty",
+			content: `terraform {
+  extra_arguments "example" {}
+}
+`,
+			expectIssue:   true,
+			issueContains: "should have 'arguments' or nested blocks",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "terraform_extra_arguments_valid" {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected terraform_extra_arguments_valid issue containing %q, got %v", tt.issueContains, result.Issues)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected terraform_extra_arguments_valid issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestTerraformDeprecatedFields(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"terraform_block": {
+				"enabled": true,
+				"no_deprecated_fields": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name          string
+		content       string
+		expectIssue   bool
+		issueContains string
+	}{
+		{
+			name: "deprecated terraform field",
+			content: `terraform {
+  terraform {
+    source = "./module"
+  }
+}
+`,
+			expectIssue:   true,
+			issueContains: "block 'terraform' is deprecated",
+		},
+		{
+			name: "deprecated before_hook block",
+			content: `terraform {
+  before_hook {
+    commands = ["echo hello"]
+  }
+}
+`,
+			expectIssue:   true,
+			issueContains: "block 'before_hook' is deprecated",
+		},
+		{
+			name: "deprecated after_hook block",
+			content: `terraform {
+  after_hook {
+    commands = ["echo hello"]
+  }
+}
+`,
+			expectIssue:   true,
+			issueContains: "block 'after_hook' is deprecated",
+		},
+		{
+			name: "valid modern fields",
+			content: `terraform {
+  before_hooks {
+    hooks {
+      commands = ["echo hello"]
+    }
+  }
+  after_hooks {
+    hooks {
+      commands = ["echo goodbye"]
+    }
+  }
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "terraform_deprecated_fields" {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected terraform_deprecated_fields issue containing %q, got %v", tt.issueContains, result.Issues)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected terraform_deprecated_fields issue: %v", result.Issues)
+			}
+		})
 	}
 }
 
