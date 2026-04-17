@@ -48,12 +48,18 @@ type Config struct {
 	Rules Rules `json:"rules"`
 }
 
+type BlankLinesConfig struct {
+	Enabled      bool `json:"enabled"`
+	WithinBlocks bool `json:"within_blocks"`
+}
+
 type Rules struct {
 	BlockOrder     *BlockOrderConfig     `json:"block_order,omitempty"`
 	ArrayFormat    *ArrayFormatConfig    `json:"array_format,omitempty"`
 	NameValidation *NameValidationConfig `json:"name_validation,omitempty"`
 	Duplicates     *DuplicatesConfig     `json:"duplicates,omitempty"`
 	RequiredFields *RequiredFieldsConfig `json:"required_fields,omitempty"`
+	BlankLines     *BlankLinesConfig     `json:"blank_lines,omitempty"`
 }
 
 type BlockOrderConfig struct {
@@ -87,7 +93,8 @@ type IncludeRequired struct {
 
 func (r *Rules) IsEnabled() bool {
 	return r.BlockOrder != nil || r.ArrayFormat != nil ||
-		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil
+		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
+		r.BlankLines != nil
 }
 
 type Loader struct {
