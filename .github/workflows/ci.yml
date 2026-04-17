@@ -46,7 +46,8 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'
