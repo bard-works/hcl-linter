@@ -181,7 +181,9 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 	if !flagVerbose {
 		for _, result := range allResults {
 			if len(result.Issues) > 0 {
-				fmt.Println(result.Summary())
+				for _, issue := range result.Issues {
+					fmt.Printf("  [%s] %s: %s\n", issue.Severity, issue.Rule, issue.Message)
+				}
 			}
 		}
 	}
