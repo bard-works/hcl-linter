@@ -340,3 +340,570 @@ terraform {}
 		t.Error("expected expose to be added")
 	}
 }
+
+func TestFixBlankLinesWithinBlocks(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	tests := []struct {
+		name          string
+		input         string
+		expectChange  bool
+		checkContains string
+	}{
+		{
+			name: "remove blank lines in object attribute",
+			input: `inputs = {
+
+  repository = "test"
+
+  tags = "value"
+
+}
+`,
+			expectChange:  true,
+			checkContains: "repository = \"test\"",
+		},
+		{
+			name: "single blank line between attributes",
+			input: `inputs = {
+  repository = "test"
+
+  tags = "value"
+}
+`,
+			expectChange:  true,
+			checkContains: "tags = \"value\"",
+		},
+		{
+			name: "multiple blank lines between attributes",
+			input: `inputs = {
+
+
+
+  repository = "test"
+
+
+
+  tags = "value"
+
+
+
+}
+`,
+			expectChange:  true,
+			checkContains: "tags = \"value\"",
+		},
+		{
+			name: "no blank lines - no change",
+			input: `inputs = {
+  repository = "test"
+  tags = "value"
+}
+`,
+			expectChange: false,
+		},
+		{
+			name: "block ends properly",
+			input: `inputs = {
+
+  repository = "test"
+
+}
+`,
+			expectChange:  true,
+			checkContains: "repository = \"test\"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.input)
+
+			result, err := fixer.FixFile(file)
+			if err != nil {
+				t.Fatalf("FixFile failed: %v", err)
+			}
+
+			if tt.expectChange && result.Changes == 0 {
+				t.Error("expected changes, got 0")
+			}
+
+			if !tt.expectChange && result.Changes > 0 {
+				t.Errorf("expected no changes, got %d", result.Changes)
+			}
+
+			if tt.checkContains != "" && !strings.Contains(result.Content, tt.checkContains) {
+				t.Errorf("expected content to contain %q, got:\n%s", tt.checkContains, result.Content)
+			}
+		})
+	}
+}
+
+func TestFixBlankLinesNestedBlocks(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	tests := []struct {
+		name         string
+		input        string
+		expectChange bool
+	}{
+		{
+			name: "terraform with nested before_hook - should remove blank lines",
+			input: `terraform {
+
+  source = "."
+
+  before_hook "test" {
+
+    commands = ["apply"]
+
+  }
+
+}
+`,
+			expectChange: true,
+		},
+		{
+			name: "no nested blocks",
+			input: `terraform {
+
+  source = "."
+
+}
+`,
+			expectChange: true,
+		},
+		{
+			name: "deeply nested",
+			input: `terraform {
+
+  before_hook "test" {
+
+    before_hook "nested" {
+
+      commands = ["plan"]
+
+    }
+
+  }
+
+}
+`,
+			expectChange: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.input)
+
+			result, err := fixer.FixFile(file)
+			if err != nil {
+				t.Fatalf("FixFile failed: %v", err)
+			}
+
+			if tt.expectChange && result.Changes == 0 {
+				t.Error("expected changes, got 0")
+			}
+
+			if !tt.expectChange && result.Changes > 0 {
+				t.Errorf("expected no changes, got %d", result.Changes)
+			}
+		})
+	}
+}
+
+func TestFixBlankLinesDisabled(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": false,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `inputs = {
+
+  repository = "test"
+
+}
+`
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes > 0 {
+		t.Errorf("expected no changes when disabled, got %d", result.Changes)
+	}
+}
+
+func TestFixBlockOrderWithBlankLines(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"block_order": {
+				"enabled": true,
+				"order": ["include", "locals", "terraform", "inputs"]
+			},
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	tests := []struct {
+		name         string
+		input        string
+		expectChange bool
+	}{
+		{
+			name: "reorder and remove blank lines",
+			input: `terraform {}
+
+include "root" {
+
+  path = "..."
+
+}
+
+
+
+inputs = {
+
+
+
+  value = "test"
+
+
+
+}
+`,
+			expectChange: true,
+		},
+		{
+			name: "multiple blocks with blank lines",
+			input: `inputs {}
+terraform {}
+
+locals {}
+`,
+			expectChange: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.input)
+
+			result, err := fixer.FixFile(file)
+			if err != nil {
+				t.Fatalf("FixFile failed: %v", err)
+			}
+
+			if tt.expectChange && result.Changes == 0 {
+				t.Error("expected changes, got 0")
+			}
+		})
+	}
+}
+
+func TestFixPreservesComplexExpressions(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"block_order": {
+				"enabled": true,
+				"order": ["include", "locals", "terraform", "dependency", "inputs"]
+			},
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `terraform {
+  source = "."
+}
+
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+inputs = {
+  service_details = { for k, v in local.service : k => v if !contains(["sd_helper", "common_tags"], k) }
+}
+`
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if !strings.Contains(result.Content, "service_details = { for k, v in local.service : k => v if !contains([\"sd_helper\", \"common_tags\"], k) }") {
+		t.Error("complex expression was corrupted")
+	}
+
+	if strings.Contains(result.Content, "= =") {
+		t.Error("double equals sign appeared in output")
+	}
+}
+
+func TestFixMultipleObjectAttributes(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `inputs = {
+
+  repo = "a"
+
+}
+
+terraform {
+
+  source = "."
+
+  before_hook "test" {
+
+    commands = ["apply"]
+
+  }
+
+}
+
+other = {
+
+  value = "test"
+
+}
+`
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes == 0 {
+		t.Error("expected changes")
+	}
+
+	if strings.Count(result.Content, "inputs = {") != 1 {
+		t.Error("duplicate blocks detected")
+	}
+}
+
+func TestFixTrailingNewline(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `inputs = {
+
+  value = "test"
+
+}
+`
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if !strings.HasSuffix(result.Content, "\n") {
+		t.Error("output should end with newline")
+	}
+}
+
+func TestFixNoHangOnComplexFile(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			},
+			"block_order": {
+				"enabled": true,
+				"order": ["include", "locals", "terraform", "dependency", "inputs"]
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `inputs = {
+
+  repository = "test"
+
+  tags = local.service.common_tags
+
+}
+
+terraform {
+
+  source = "."
+
+  before_hook "test" {
+
+    commands = ["apply"]
+
+  }
+
+}
+
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+`
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes == 0 {
+		t.Error("expected changes")
+	}
+
+	lines := strings.Split(result.Content, "\n")
+	braceLevel := 0
+	for i, line := range lines {
+		for _, ch := range line {
+			if ch == '{' {
+				braceLevel++
+			} else if ch == '}' {
+				braceLevel--
+			}
+		}
+		if line == "" && i > 0 && i < len(lines)-1 && braceLevel > 0 {
+			t.Errorf("unexpected blank line at index %d (inside block with depth %d)", i, braceLevel)
+		}
+	}
+}
+
+func TestFixRegressionDuplicateBlocks(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"block_order": {
+				"enabled": true,
+				"order": ["include", "locals", "terraform", "inputs"]
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `terraform {}
+
+include "root" {}
+
+inputs = {}
+`
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes == 0 {
+		t.Error("expected changes")
+	}
+
+	includeCount := strings.Count(result.Content, "include \"root\"")
+	if includeCount != 1 {
+		t.Errorf("expected 1 include block, got %d", includeCount)
+	}
+
+	terraformCount := strings.Count(result.Content, "terraform {")
+	if terraformCount != 1 {
+		t.Errorf("expected 1 terraform block, got %d", terraformCount)
+	}
+}
