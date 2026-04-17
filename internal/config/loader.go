@@ -9,6 +9,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
 type ConfigSource int
@@ -358,7 +361,198 @@ func (l *Loader) loadConfigFile(path string) (*Rules, error) {
 		return &cfg.Rules, nil
 	}
 
+	if strings.HasSuffix(path, ".hcl") {
+		return l.loadHCLConfig(path)
+	}
+
 	return nil, fmt.Errorf("unsupported config format: %s", path)
+}
+
+func (l *Loader) loadHCLConfig(path string) (*Rules, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config %s: %w", path, err)
+	}
+
+	parser := hclparse.NewParser()
+	file, diags := parser.ParseHCL(data, path)
+	if diags.HasErrors() {
+		return nil, fmt.Errorf("failed to parse HCL config %s: %w", path, diags)
+	}
+
+	syntaxBody, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return &Rules{}, nil
+	}
+
+	rules := &Rules{}
+
+	for _, block := range syntaxBody.Blocks {
+		if block.Type != "rules" {
+			continue
+		}
+
+		parseHCLRulesBlock(block.Body, rules)
+	}
+
+	return rules, nil
+}
+
+func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {
+	for _, block := range body.Blocks {
+		switch block.Type {
+		case "block_order":
+			rules.BlockOrder = parseHCLBlockOrder(block.Body)
+		case "array_format":
+			rules.ArrayFormat = parseHCLArrayFormat(block.Body)
+		case "blank_lines":
+			rules.BlankLines = parseHCLBlankLines(block.Body)
+		case "name_validation":
+			rules.NameValidation = parseHCLNameValidation(block.Body)
+		case "duplicates":
+			rules.Duplicates = parseHCLDuplicates(block.Body)
+		case "required_fields":
+			rules.RequiredFields = parseHCLRequiredFields(block.Body)
+		case "required_blocks":
+			rules.RequiredBlocks = parseHCLRequiredBlocks(block.Body)
+		}
+	}
+
+	if attr, ok := body.Attributes["max_concurrency"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			f, _ := val.AsBigFloat().Float64()
+			rules.MaxConcurrency = int(f)
+		}
+	}
+}
+
+func parseHCLBlockOrder(body *hclsyntax.Body) *BlockOrderConfig {
+	cfg := &BlockOrderConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["order"]; ok {
+		cfg.Order = hclExprToStringSlice(attr.Expr)
+	}
+	return cfg
+}
+
+func parseHCLArrayFormat(body *hclsyntax.Body) *ArrayFormatConfig {
+	cfg := &ArrayFormatConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["multiline_threshold"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			f, _ := val.AsBigFloat().Float64()
+			cfg.MultilineThreshold = int(f)
+		}
+	}
+	return cfg
+}
+
+func parseHCLBlankLines(body *hclsyntax.Body) *BlankLinesConfig {
+	cfg := &BlankLinesConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["within_blocks"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.WithinBlocks = val.True()
+		}
+	}
+	return cfg
+}
+
+func parseHCLNameValidation(body *hclsyntax.Body) *NameValidationConfig {
+	cfg := &NameValidationConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["pattern"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Pattern = val.AsString()
+		}
+	}
+	if attr, ok := body.Attributes["blocks"]; ok {
+		cfg.Blocks = hclExprToStringSlice(attr.Expr)
+	}
+	return cfg
+}
+
+func parseHCLDuplicates(body *hclsyntax.Body) *DuplicatesConfig {
+	cfg := &DuplicatesConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["blocks"]; ok {
+		cfg.Blocks = hclExprToStringSlice(attr.Expr)
+	}
+	return cfg
+}
+
+func parseHCLRequiredFields(body *hclsyntax.Body) *RequiredFieldsConfig {
+	cfg := &RequiredFieldsConfig{}
+	for _, block := range body.Blocks {
+		if block.Type == "include" {
+			cfg.Include = &IncludeRequired{}
+			if attr, ok := block.Body.Attributes["expose"]; ok {
+				if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+					cfg.Include.Expose = val.True()
+				}
+			}
+		}
+	}
+	return cfg
+}
+
+func parseHCLRequiredBlocks(body *hclsyntax.Body) *RequiredBlocksConfig {
+	cfg := &RequiredBlocksConfig{}
+	for _, block := range body.Blocks {
+		if block.Type == "required" {
+			spec := RequiredBlockSpec{}
+			if attr, ok := block.Body.Attributes["type"]; ok {
+				if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+					spec.Type = val.AsString()
+				}
+			}
+			if attr, ok := block.Body.Attributes["count"]; ok {
+				if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+					spec.Count = val.AsString()
+				}
+			}
+			if attr, ok := block.Body.Attributes["error"]; ok {
+				if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+					spec.Error = val.AsString()
+				}
+			}
+			cfg.Required = append(cfg.Required, spec)
+		}
+	}
+	return cfg
+}
+
+func hclExprToStringSlice(expr hclsyntax.Expression) []string {
+	val, diags := expr.Value(nil)
+	if diags.HasErrors() {
+		return nil
+	}
+	arr := val.AsValueSlice()
+	result := make([]string, 0, len(arr))
+	for _, v := range arr {
+		result = append(result, v.AsString())
+	}
+	return result
 }
 
 func LoadConfigDir(configDir string) (*Loader, error) {

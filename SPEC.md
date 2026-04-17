@@ -160,18 +160,18 @@ actions = [
 # Before
 inputs = {
 
-  repository = "test"
+  name = "test"
 
 
-  tags = "value"
+  options = "none"
 
 }
 
 # After
 inputs = {
-  repository = "test"
+  name = "test"
 
-  tags = "value"
+  options = "none"
 }
 ```
 
@@ -188,10 +188,10 @@ inputs = {
 
 ```hcl
 # Wrong
-include "vault-azuread" {}
+include "my-vpc" {}
 
 # Correct
-include "vault_azuread" {}
+include "my_vpc" {}
 ```
 
 ### 5. Duplicate Detection (`duplicates`)
