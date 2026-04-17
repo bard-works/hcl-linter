@@ -30,6 +30,7 @@ jobs:
 
   test:
     name: Test (Go ${{ matrix.go }})
+    needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -56,6 +57,7 @@ jobs:
 
   security:
     name: Security
+    needs: coverage
     runs-on: ubuntu-latest
     permissions:
       actions: read
