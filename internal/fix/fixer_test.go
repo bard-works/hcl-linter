@@ -586,6 +586,65 @@ func TestFixBlankLinesDisabled(t *testing.T) {
 	}
 }
 
+func TestFixFilesConcurrent(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	files := []string{
+		createHCLFile(t, tmpDir, "file1.hcl", "inputs = {\n\n  a = \"b\"\n\n}\n"),
+		createHCLFile(t, tmpDir, "file2.hcl", "inputs = {\n\n  c = \"d\"\n\n}\n"),
+		createHCLFile(t, tmpDir, "file3.hcl", "inputs = {\n\n  e = \"f\"\n\n}\n"),
+	}
+
+	results := fixer.FixFiles(files, 2)
+
+	if len(results) != 3 {
+		t.Errorf("expected 3 results, got %d", len(results))
+	}
+
+	for _, result := range results {
+		if result == nil {
+			t.Error("expected non-nil result")
+		}
+	}
+}
+
+func TestFixFilesNoConcurrency(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	file := createHCLFile(t, tmpDir, "test.hcl", "inputs = {\n\n  a = \"b\"\n\n}\n")
+
+	results := fixer.FixFiles([]string{file}, 0)
+	if len(results) != 1 {
+		t.Errorf("expected 1 result, got %d", len(results))
+	}
+}
+
 func TestFixBlockOrderWithBlankLines(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 

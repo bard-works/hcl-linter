@@ -466,6 +466,78 @@ func TestLintFileNoConfig(t *testing.T) {
 	}
 }
 
+func TestLintFilesConcurrent(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"block_order": {
+				"enabled": true,
+				"order": ["terraform"]
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "default.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	files := []string{
+		filepath.Join(tmpDir, "file1.hcl"),
+		filepath.Join(tmpDir, "file2.hcl"),
+		filepath.Join(tmpDir, "file3.hcl"),
+	}
+
+	for i, file := range files {
+		content := "terraform {}\n"
+		if i == 1 {
+			content = "locals {}\n"
+		}
+		if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	results := l.LintFiles(files, 2)
+
+	if len(results) != 3 {
+		t.Errorf("expected 3 results, got %d", len(results))
+	}
+
+	for _, result := range results {
+		if result == nil {
+			t.Error("expected non-nil result")
+		}
+	}
+}
+
+func TestLintFilesNoConcurrency(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"block_order": {
+				"enabled": true,
+				"order": ["terraform"]
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "default.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	file := filepath.Join(tmpDir, "test.hcl")
+	if err := os.WriteFile(file, []byte("terraform {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	results := l.LintFiles([]string{file}, 0)
+	if len(results) != 1 {
+		t.Errorf("expected 1 result, got %d", len(results))
+	}
+}
+
 func TestRequiredBlocksRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 

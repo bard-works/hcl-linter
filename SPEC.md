@@ -8,6 +8,7 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 - Configurable rules per filename pattern (terragrunt.hcl, root.hcl, service.hcl)
 - Auto-fix capability for formatable issues
 - Extensible config system with user-defined configurations
+- Fast processing with configurable concurrency
 
 ## Configuration
 
@@ -280,6 +281,9 @@ hcl-linter --verbose lint ./
 # Use custom config directory
 hcl-linter --config-source /path/to/custom-config lint ./
 
+# Set concurrency (number of concurrent workers)
+hcl-linter --concurrency 4 lint ./
+
 # Print version information
 hcl-linter version
 ```
@@ -289,6 +293,17 @@ hcl-linter version
 ### Environment Variables
 
 - `HCL_LINTER_CONFIG_DIR`: Path to custom config directory
+- `HCL_LINTER_MAX_CONCURRENCY`: Max number of concurrent workers (overrides `--concurrency` flag)
+
+### Concurrency
+
+By default, the linter automatically detects the optimal concurrency level based on CPU count. You can override this:
+
+- CLI flag: `--concurrency <number>`
+- Environment variable: `HCL_LINTER_MAX_CONCURRENCY`
+- Config: `{"max_concurrency": <number>}` in rules (lowest priority)
+
+Higher concurrency speeds up processing of large file sets but uses more memory.
 
 ## Exit Codes
 

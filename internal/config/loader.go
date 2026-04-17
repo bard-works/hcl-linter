@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -61,6 +63,21 @@ type Rules struct {
 	RequiredFields *RequiredFieldsConfig `json:"required_fields,omitempty"`
 	BlankLines     *BlankLinesConfig     `json:"blank_lines,omitempty"`
 	RequiredBlocks *RequiredBlocksConfig `json:"required_blocks,omitempty"`
+	MaxConcurrency int                   `json:"max_concurrency,omitempty"`
+}
+
+const EnvMaxConcurrency = "HCL_LINTER_MAX_CONCURRENCY"
+
+func GetMaxConcurrency(cfg *Rules) int {
+	if envVal := os.Getenv(EnvMaxConcurrency); envVal != "" {
+		if val, err := strconv.Atoi(envVal); err == nil && val > 0 {
+			return val
+		}
+	}
+	if cfg != nil && cfg.MaxConcurrency > 0 {
+		return cfg.MaxConcurrency
+	}
+	return runtime.NumCPU()
 }
 
 type BlockOrderConfig struct {
