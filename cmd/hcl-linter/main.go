@@ -98,7 +98,7 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 	if configResult.Source == config.ConfigSourceNone {
 		fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
 	} else {
-		fmt.Printf("Using config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
+		fmt.Printf("Config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
 		if configResult.WarningMsg != "" {
 			fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
 		}
@@ -120,10 +120,6 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 		files = []string{path}
 	}
 
-	if flagVerbose {
-		fmt.Printf("Found %d files to lint\n", len(files))
-	}
-
 	if len(flagFilter) > 0 {
 		files = filterFiles(files)
 	}
@@ -134,8 +130,8 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 	for _, file := range files {
 		hasSpecificConfig := loader.HasSpecificConfigForFile(file)
 		if !hasSpecificConfig {
-			relPath, _ := filepath.Rel(".", file)
-			if relPath == "" {
+			relPath, err := filepath.Rel(".", file)
+			if err != nil {
 				relPath = file
 			}
 			if !loader.HasConfigForFile(file) {
@@ -151,38 +147,30 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 	if maxConcurrency <= 0 {
 		maxConcurrency = config.GetMaxConcurrency(nil)
 	}
-	if flagVerbose && len(filesToLint) > 1 {
-		fmt.Printf("Linting %d files with concurrency %d\n", len(filesToLint), maxConcurrency)
-	}
+
+	fmt.Printf("\nChecking %d file(s)...\n", len(filesToLint))
 
 	allResults := l.LintFiles(filesToLint, maxConcurrency)
 
 	hasErrors := false
+	errorFiles := 0
 	for _, result := range allResults {
-		if flagVerbose || len(result.Issues) > 0 {
-			relPath, err := filepath.Rel(".", result.File)
-			if err != nil {
-				relPath = result.File
-			}
-			fmt.Printf("\n%s:\n", relPath)
-			for _, issue := range result.Issues {
-				severity := issue.Severity
-				if issue.Severity == linter.SeverityError {
-					hasErrors = true
+		if len(result.Issues) > 0 {
+			errorFiles++
+			if flagVerbose || len(result.Issues) > 0 {
+				relPath, err := filepath.Rel(".", result.File)
+				if err != nil {
+					relPath = result.File
 				}
-				fmt.Printf("  [%s] %s: %s\n", severity, issue.Rule, issue.Message)
-				if flagVerbose && issue.Location.Filename != "" {
-					fmt.Printf("    at %s:%d\n", issue.Location.Filename, issue.Location.Start.Line)
-				}
-			}
-		}
-	}
-
-	if !flagVerbose {
-		for _, result := range allResults {
-			if len(result.Issues) > 0 {
+				fmt.Printf("\n%s:\n", relPath)
 				for _, issue := range result.Issues {
+					if issue.Severity == linter.SeverityError {
+						hasErrors = true
+					}
 					fmt.Printf("  [%s] %s: %s\n", issue.Severity, issue.Rule, issue.Message)
+					if flagVerbose && issue.Location.Filename != "" {
+						fmt.Printf("    at %s:%d\n", issue.Location.Filename, issue.Location.Start.Line)
+					}
 				}
 			}
 		}
@@ -193,14 +181,14 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 		totalIssues += len(r.Issues)
 	}
 
+	fmt.Println(strings.Repeat("-", 40))
 	if totalIssues > 0 {
-		fmt.Printf("\nTotal: %d issue(s) in %d file(s)\n", totalIssues, len(allResults))
+		fmt.Printf("Total: %d issue(s) in %d file(s)\n", totalIssues, errorFiles)
 	} else {
 		fmt.Println("All files pass!")
 	}
 
 	if hasErrors {
-		fmt.Println("lint check failed")
 		os.Exit(1)
 	}
 
