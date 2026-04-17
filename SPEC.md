@@ -26,13 +26,13 @@ Configuration files in `.hcl-linter/` directory, named after the file pattern th
 
 Configs are loaded in the following order (first match wins):
 
-| Priority | Source | Description |
-|----------|--------|-------------|
-| 1 | CLI `--config-source` | Explicit path via flag |
-| 2 | Env `HCL_LINTER_CONFIG_DIR` | Environment variable |
-| 3 | `.hcl-linter/` in cwd | User config in current directory |
-| 4 | `.hcl-linter/` in home | User config in home directory |
-| 5 | Project's `.hcl-linter/` | Built-in defaults (fallback) |
+| Priority | Source                      | Description                      |
+| -------- | --------------------------- | -------------------------------- |
+| 1        | CLI `--config-source`       | Explicit path via flag           |
+| 2        | Env `HCL_LINTER_CONFIG_DIR` | Environment variable             |
+| 3        | `.hcl-linter/` in cwd       | User config in current directory |
+| 4        | `.hcl-linter/` in home      | User config in home directory    |
+| 5        | Project's `.hcl-linter/`    | Built-in defaults (fallback)     |
 
 **Full override**: User config completely replaces project configs - no merging.
 
@@ -91,10 +91,12 @@ If falling back to project defaults (no user config found), a warning is display
 **Purpose:** Enforce consistent ordering of top-level blocks.
 
 **Behavior:**
+
 - Order of listed blocks is enforced
 - Unlisted blocks (e.g., `outputs`, custom blocks) are placed after the last listed block
 
 **Example violation:**
+
 ```hcl
 # Wrong order
 locals {}
@@ -112,8 +114,10 @@ terraform {}
 **Purpose:** Normalize array formatting.
 
 **Rules:**
+
 - 1 item: inline `actions = ["a"]`
 - 2+ items: multiline with trailing comma
+
 ```hcl
 actions = [
   "a",
@@ -122,6 +126,7 @@ actions = [
 ```
 
 **Edge cases:**
+
 - Arrays with non-quoted items (e.g., `dependency.x.outputs.y`) are left unchanged
 - Empty arrays remain unchanged
 
@@ -130,6 +135,7 @@ actions = [
 **Purpose:** Clean up blank lines within blocks for consistent formatting.
 
 **Configuration:**
+
 ```json
 {
   "blank_lines": {
@@ -140,6 +146,7 @@ actions = [
 ```
 
 **Behavior:**
+
 - `within_blocks: true` - Cleans blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
 - Removes blank lines at the beginning (after `{`) and end (before `}`) of blocks
 - Reduces consecutive duplicate blank lines to a single blank line
@@ -148,6 +155,7 @@ actions = [
 - Nested blocks (e.g., `before_hook` inside `terraform`) are also cleaned
 
 **Example:**
+
 ```hcl
 # Before
 inputs = {
@@ -172,10 +180,12 @@ inputs = {
 **Purpose:** Ensure consistent naming conventions.
 
 **Checks:**
+
 - Include/dependency block labels must match regex pattern
 - Default: `^[a-z][a-z0-9_]*$` (no hyphens)
 
 **Example violation:**
+
 ```hcl
 # Wrong
 include "vault-azuread" {}
@@ -189,10 +199,12 @@ include "vault_azuread" {}
 **Purpose:** Detect duplicate blocks.
 
 **Checks:**
+
 - Duplicate `dependency` block labels
 - Duplicate `include` block labels
 
 **Example violation:**
+
 ```hcl
 # Duplicate dependencies
 dependency "vpc" {}
@@ -204,6 +216,7 @@ dependency "vpc" {}  # ERROR: duplicate
 **Purpose:** Enforce required attributes per block type.
 
 **Configuration:**
+
 ```json
 {
   "required_fields": {
@@ -215,6 +228,7 @@ dependency "vpc" {}  # ERROR: duplicate
 ```
 
 **Checks:**
+
 - When block exists, required attributes must be present
 - Boolean `true` means attribute must exist with any value
 
@@ -223,6 +237,7 @@ dependency "vpc" {}  # ERROR: duplicate
 **Purpose:** Enforce that certain block types must exist in the file.
 
 **Configuration:**
+
 ```json
 {
   "required_blocks": {
@@ -238,14 +253,17 @@ dependency "vpc" {}  # ERROR: duplicate
 ```
 
 **Supported count values:**
+
 - `once` - Block must appear exactly once
 
 **Checks:**
+
 - Reports error if required block is missing or appears more than once
 - Error message is customizable per block type
 - File-pattern based (applies only to files matching the config)
 
 **Example:**
+
 ```hcl
 # With config requiring terraform block:
 # OK
@@ -316,6 +334,7 @@ Higher concurrency speeds up processing of large file sets but uses more memory.
 ### Config File Matching
 
 Config files are matched by filename:
+
 1. Exact match: `terragrunt.hcl` → `configs/terragrunt.json`
 2. Fallback: use `default.json` if exists
 3. No config: file is skipped with a warning
@@ -323,12 +342,14 @@ Config files are matched by filename:
 ### Target File Filtering
 
 When `--filter` is specified:
+
 - Filters are matched as glob patterns against the filename (not full path)
 - Multiple `--filter` flags are combined with OR logic
 - Matching files are printed before processing
 - Non-matching files are silently skipped
 
 Example:
+
 ```
 $ hcl-linter lint ./infra --filter "*.hcl" --filter "*.tf"
 Matched files:
@@ -395,11 +416,13 @@ make install
 ### Versioning
 
 Version is managed via the `VERSION` file:
+
 ```
 0.1.0
 ```
 
 Version info is injected at build time via ldflags:
+
 - `main.Version` - from VERSION file
 - `main.BuildDate` - build timestamp
 - `main.GitCommit` - git SHA
@@ -415,6 +438,7 @@ make release VERSION=0.1.0
 ```
 
 This creates:
+
 - `dist/hcl-linter-darwin-amd64`
 - `dist/hcl-linter-darwin-arm64`
 - `dist/hcl-linter-linux-amd64`

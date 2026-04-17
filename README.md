@@ -79,7 +79,7 @@ Example `default.json`:
 ## CLI Options
 
 ```bash
---config-source, -c   Config source path
+--config-source, -c  Config source path
 --filter             Filter files by name pattern (glob supported)
 --concurrency        Max concurrent workers (default: CPU count)
 --verbose, -v        Show detailed output
