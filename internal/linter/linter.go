@@ -107,6 +107,7 @@ func (l *Linter) checkBlockOrder(result *Result, blocks []ast.BlockInfo, cfg *co
 	}
 
 	if len(ordered) > 1 {
+		reportedPairs := make(map[string]bool)
 		for i := 1; i < len(ordered); i++ {
 			curr := ordered[i]
 			prev := ordered[i-1]
@@ -115,11 +116,15 @@ func (l *Linter) checkBlockOrder(result *Result, blocks []ast.BlockInfo, cfg *co
 			prevName := strings.Split(prev, "[")[0]
 
 			if orderMap[currName] < orderMap[prevName] {
-				result.Issues = append(result.Issues, Issue{
-					Severity: SeverityError,
-					Rule:     "block_order",
-					Message:  fmt.Sprintf("block %q should come before %q", currName, prevName),
-				})
+				pairKey := currName + ":" + prevName
+				if !reportedPairs[pairKey] {
+					result.Issues = append(result.Issues, Issue{
+						Severity: SeverityError,
+						Rule:     "block_order",
+						Message:  fmt.Sprintf("block %q should come before %q", currName, prevName),
+					})
+					reportedPairs[pairKey] = true
+				}
 			}
 		}
 	}
