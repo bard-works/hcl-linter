@@ -752,3 +752,103 @@ func TestRequiredBlocksRuleMultipleRequirements(t *testing.T) {
 		})
 	}
 }
+
+func TestLintMultipleTerraformBlocks(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"block_order": {
+				"enabled": true,
+				"order": ["include", "locals", "terraform", "inputs"]
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	input := `terraform {
+  source = "../../../modules/module1"
+}
+
+include "root" {
+  path = find_in_parent_folders()
+}
+
+locals {}
+`
+
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(file, []byte(input), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	hasCorrectIssue := false
+	for _, issue := range result.Issues {
+		if issue.Rule == "block_order" {
+			hasCorrectIssue = true
+		}
+	}
+
+	if !hasCorrectIssue {
+		t.Errorf("expected block_order issue for wrong order, got %v", result.Issues)
+	}
+}
+
+func TestLintTerraformMissingSource(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"required_blocks": {
+				"required": [
+					{
+						"type": "terraform",
+						"count": "once",
+						"error": "missing terraform block"
+					}
+				]
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	input := `include "root" {
+  path = find_in_parent_folders()
+}
+
+inputs = {}
+`
+
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(file, []byte(input), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := l.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	hasError := false
+	for _, issue := range result.Issues {
+		if issue.Rule == "required_blocks" && issue.Message == "missing terraform block" {
+			hasError = true
+			break
+		}
+	}
+
+	if !hasError {
+		t.Error("expected required_blocks error for missing terraform")
+	}
+}
