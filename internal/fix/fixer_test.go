@@ -278,11 +278,12 @@ func TestFixRequiredFields(t *testing.T) {
 }
 
 func TestFixFileNoConfig(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
-	loader := config.NewLoader(tmpDir)
+	configDir := createFixTestConfigDir(t)
+	loader := config.NewLoader(configDir)
 	fixer := NewFixer(loader)
 
-	file := createHCLFile(t, tmpDir, "noconfig.hcl", "locals {}")
+	srcDir := t.TempDir()
+	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
 
 	_, err := fixer.FixFile(file)
 	if err == nil {

@@ -451,11 +451,12 @@ func TestResultSummary(t *testing.T) {
 }
 
 func TestLintFileNoConfig(t *testing.T) {
-	tmpDir := createTestConfigDir(t)
-	loader := config.NewLoader(tmpDir)
+	configDir := createTestConfigDir(t)
+	loader := config.NewLoader(configDir)
 	l := NewLinter(loader)
 
-	file := filepath.Join(tmpDir, "noconfig.hcl")
+	srcDir := t.TempDir()
+	file := filepath.Join(srcDir, "noconfig.hcl")
 	if err := os.WriteFile(file, []byte(`locals {}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
