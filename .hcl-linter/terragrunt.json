@@ -5,7 +5,7 @@
       "order": ["include", "locals", "terraform", "dependency", "inputs"]
     },
     "array_format": {
-      "enabled": true,
+      "enabled": false,
       "multiline_threshold": 2
     },
     "name_validation": {
@@ -19,7 +19,7 @@
     },
     "required_fields": {
       "include": {
-        "expose": true
+        "expose": false
       }
     }
   }

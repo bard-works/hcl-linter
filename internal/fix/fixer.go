@@ -500,24 +500,31 @@ func (f *Fixer) fixBlockOrder(content string, blocks []ast.BlockInfo, cfg *confi
 		orderMap[name] = i
 	}
 
-	sortedBlocks := make([]ast.BlockInfo, len(blocks))
-	copy(sortedBlocks, blocks)
-
-	for i := 0; i < len(sortedBlocks); i++ {
-		for j := i + 1; j < len(sortedBlocks); j++ {
-			posI := len(cfg.Order)
-			posJ := len(cfg.Order)
-			if idx, ok := orderMap[sortedBlocks[i].Type]; ok {
-				posI = idx
-			}
-			if idx, ok := orderMap[sortedBlocks[j].Type]; ok {
-				posJ = idx
-			}
-			if posI > posJ {
-				sortedBlocks[i], sortedBlocks[j] = sortedBlocks[j], sortedBlocks[i]
-			}
-		}
+	type blockWithContent struct {
+		info    ast.BlockInfo
+		content []string
 	}
+
+	blockContents := make([]blockWithContent, len(blocks))
+	for i, block := range blocks {
+		var blockLines []string
+		for l := block.StartLine; l <= block.EndLine && l < len(lines); l++ {
+			blockLines = append(blockLines, lines[l])
+		}
+		blockContents[i] = blockWithContent{block, blockLines}
+	}
+
+	sort.SliceStable(blockContents, func(i, j int) bool {
+		posI := orderMap[blockContents[i].info.Type]
+		posJ := orderMap[blockContents[j].info.Type]
+		if posI == 0 && blockContents[i].info.Type != cfg.Order[0] {
+			posI = len(cfg.Order)
+		}
+		if posJ == 0 && blockContents[j].info.Type != cfg.Order[0] {
+			posJ = len(cfg.Order)
+		}
+		return posI < posJ
+	})
 
 	usedLines := make(map[int]bool)
 	for _, block := range blocks {
@@ -532,25 +539,55 @@ func (f *Fixer) fixBlockOrder(content string, blocks []ast.BlockInfo, cfg *confi
 			nonBlockLines = append(nonBlockLines, line)
 		}
 	}
+	nonBlockLines = trimTrailingEmptyLines(nonBlockLines)
 
 	var resultLines []string
-	for _, block := range sortedBlocks {
-		for l := block.StartLine; l <= block.EndLine; l++ {
-			resultLines = append(resultLines, lines[l])
+	for i, bc := range blockContents {
+		resultLines = append(resultLines, bc.content...)
+		if i < len(blockContents)-1 {
+			resultLines = append(resultLines, "")
 		}
-		resultLines = append(resultLines, "")
 	}
 
-	if len(nonBlockLines) > 0 && strings.TrimSpace(nonBlockLines[len(nonBlockLines)-1]) != "" {
-		nonBlockLines = nonBlockLines[:len(nonBlockLines)-1]
+	if len(nonBlockLines) > 0 {
+		if len(resultLines) > 0 && strings.TrimSpace(resultLines[len(resultLines)-1]) != "" {
+			resultLines = append(resultLines, "")
+		}
+		resultLines = append(resultLines, nonBlockLines...)
 	}
-	resultLines = append(resultLines, nonBlockLines...)
 
-	for len(resultLines) > 0 && resultLines[len(resultLines)-1] == "" {
+	resultLines = normalizeBlankLines(resultLines)
+
+	for len(resultLines) > 0 && strings.TrimSpace(resultLines[len(resultLines)-1]) == "" {
 		resultLines = resultLines[:len(resultLines)-1]
 	}
 
-	return strings.Join(resultLines, "\n")
+	return strings.Join(resultLines, "\n") + "\n"
+}
+
+func normalizeBlankLines(lines []string) []string {
+	var result []string
+	prevWasBlank := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			if !prevWasBlank {
+				result = append(result, line)
+				prevWasBlank = true
+			}
+		} else {
+			result = append(result, line)
+			prevWasBlank = false
+		}
+	}
+	return result
+}
+
+func trimTrailingEmptyLines(lines []string) []string {
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
 
 var _ = hclsyntax.TupleConsExpr{}
