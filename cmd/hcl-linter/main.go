@@ -90,7 +90,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runLintModeWithExitCode(cmd *cobra.Command, args []string) error {
+func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 	path := args[0]
 
 	loader, configResult := getLoader()
