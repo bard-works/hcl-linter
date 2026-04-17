@@ -9,8 +9,8 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/papaya/hcl-linter/internal/ast"
-	"github.com/papaya/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/ast"
+	"github.com/bard-works/hcl-linter/internal/config"
 )
 
 type Linter struct {

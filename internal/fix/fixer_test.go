@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/papaya/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/config"
 )
 
 func createFixTestConfigDir(t *testing.T) string {

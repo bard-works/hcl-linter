@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/papaya/hcl-linter/internal/config"
-	"github.com/papaya/hcl-linter/internal/fix"
-	"github.com/papaya/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/fix"
+	"github.com/bard-works/hcl-linter/internal/linter"
 	"github.com/spf13/cobra"
 )
 

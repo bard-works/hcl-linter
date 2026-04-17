@@ -1,4 +1,4 @@
-module github.com/papaya/hcl-linter
+module github.com/bard-works/hcl-linter
 
 go 1.26.2
 
