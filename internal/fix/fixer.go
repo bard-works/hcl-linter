@@ -87,7 +87,7 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 			for _, label := range block.Labels {
 				if !regex.MatchString(label) && strings.Contains(label, "-") {
 					newLabel := strings.ReplaceAll(label, "-", "_")
-					contentStr = strings.ReplaceAll(contentStr, fmt.Sprintf(`"%s"`, label), fmt.Sprintf(`"%s"`, newLabel))
+					contentStr = strings.ReplaceAll(contentStr, fmt.Sprintf("%q", label), fmt.Sprintf("%q", newLabel))
 					hasChanges = true
 				}
 			}
@@ -108,8 +108,7 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 					contentStr = f.addAttributeToBlockStr(contentStr, block, "expose = true")
 					result.Changes++
 					parser = ast.NewParser()
-					file, _ = parser.ParseContent([]byte(contentStr), path)
-					blocks = ast.GetTopLevelBlocks(file)
+					_, _ = parser.ParseContent([]byte(contentStr), path)
 				}
 			}
 		}
@@ -124,7 +123,7 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 	}
 
 	if result.Changes > 0 {
-		if err := os.WriteFile(path, []byte(contentStr), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(contentStr), 0o644); err != nil {
 			return nil, err
 		}
 	}
@@ -132,18 +131,6 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 	result.Content = contentStr
 	result.Success = true
 	return result, nil
-}
-
-func blocksMatchOrder(a, b []ast.BlockInfo) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].Type != b[i].Type || len(a[i].Labels) != len(b[i].Labels) {
-			return false
-		}
-	}
-	return true
 }
 
 func (f *Fixer) addAttributeToBlockStr(content string, block ast.BlockInfo, attr string) string {
@@ -158,13 +145,14 @@ func (f *Fixer) addAttributeToBlockStr(content string, block ast.BlockInfo, attr
 
 	indent := ""
 	if startLine < len(lines) {
+		var indentSb161 strings.Builder
 		for _, ch := range lines[startLine] {
-			if ch == ' ' || ch == '\t' {
-				indent += string(ch)
-			} else {
+			if ch != ' ' && ch != '\t' {
 				break
 			}
+			indentSb161.WriteString(string(ch))
 		}
+		indent += indentSb161.String()
 	}
 
 	if startLine == endLine {
@@ -212,13 +200,14 @@ func (f *Fixer) addAttributeToBlockStr(content string, block ast.BlockInfo, attr
 		if trimmed != "" {
 			line := lines[i]
 			existingIndent := ""
+			var existingIndentSb215 strings.Builder
 			for _, ch := range line {
-				if ch == ' ' || ch == '\t' {
-					existingIndent += string(ch)
-				} else {
+				if ch != ' ' && ch != '\t' {
 					break
 				}
+				existingIndentSb215.WriteString(string(ch))
 			}
+			existingIndent += existingIndentSb215.String()
 			if len(existingIndent) >= 2 {
 				contentIndent = indent + existingIndent[:2]
 			}
@@ -330,16 +319,17 @@ func extractAndFormatArray(line string) []string {
 	var current strings.Builder
 
 	for _, ch := range inner {
-		if ch == '"' {
+		switch {
+		case ch == '"':
 			inQuote = !inQuote
 			current.WriteRune(ch)
-		} else if ch == ',' && !inQuote {
+		case ch == ',' && !inQuote:
 			item := strings.TrimSpace(current.String())
 			if item != "" {
 				items = append(items, item)
 			}
 			current.Reset()
-		} else {
+		default:
 			current.WriteRune(ch)
 		}
 	}
@@ -354,15 +344,20 @@ func extractAndFormatArray(line string) []string {
 
 func formatMultilineArray(line string, items []string) string {
 	indent := ""
+	var indentSb357 strings.Builder
 	for _, ch := range line {
-		if ch == ' ' || ch == '\t' {
-			indent += string(ch)
-		} else {
+		if ch != ' ' && ch != '\t' {
 			break
 		}
+		indentSb357.WriteString(string(ch))
 	}
+	indent += indentSb357.String()
 
-	key := strings.TrimSpace(line[:strings.Index(line, "[")])
+	idx := strings.Index(line, "[")
+	if idx == -1 {
+		return ""
+	}
+	key := strings.TrimSpace(line[:idx])
 
 	var sb strings.Builder
 	sb.WriteString(indent)
@@ -404,15 +399,20 @@ func needsMultilineFix(lines []string) bool {
 
 func fixMultilineArray(lines []string, firstLine string) string {
 	indent := ""
+	var indentSb407 strings.Builder
 	for _, ch := range firstLine {
-		if ch == ' ' || ch == '\t' {
-			indent += string(ch)
-		} else {
+		if ch != ' ' && ch != '\t' {
 			break
 		}
+		indentSb407.WriteString(string(ch))
 	}
+	indent += indentSb407.String()
 
-	key := strings.TrimSpace(firstLine[:strings.Index(firstLine, "[")])
+	idx := strings.Index(firstLine, "[")
+	if idx == -1 {
+		return ""
+	}
+	key := strings.TrimSpace(firstLine[:idx])
 
 	var items []string
 	for _, line := range lines[1 : len(lines)-1] {
@@ -478,7 +478,7 @@ func (f *Fixer) PreviewFix(path string) (string, error) {
 				parts := re.FindStringSubmatch(match)
 				if len(parts) == 3 && strings.Contains(parts[2], "-") && !regex.MatchString(parts[2]) {
 					newLabel := strings.ReplaceAll(parts[2], "-", "_")
-					return fmt.Sprintf(`%s "%s"`, parts[1], newLabel)
+					return fmt.Sprintf("%s %q", parts[1], newLabel)
 				}
 				return match
 			})

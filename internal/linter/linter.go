@@ -13,7 +13,6 @@ import (
 
 type Linter struct {
 	configLoader *config.Loader
-	rules        *config.Rules
 }
 
 func NewLinter(configLoader *config.Loader) *Linter {
@@ -79,9 +78,7 @@ func (l *Linter) checkBlockOrder(result *Result, blocks []ast.BlockInfo, cfg *co
 	}
 
 	expectedOrder := make([]string, 0, len(cfg.Order))
-	for _, name := range cfg.Order {
-		expectedOrder = append(expectedOrder, name)
-	}
+	expectedOrder = append(expectedOrder, cfg.Order...)
 
 	seen := make(map[string]int)
 	for _, block := range blocks {
@@ -122,7 +119,7 @@ func (l *Linter) checkBlockOrder(result *Result, blocks []ast.BlockInfo, cfg *co
 	}
 }
 
-func (l *Linter) checkArrayFormat(result *Result, path string, file *hcl.File) {
+func (l *Linter) checkArrayFormat(result *Result, _ string, file *hcl.File) {
 	attrs, diags := file.Body.JustAttributes()
 	if diags.HasErrors() {
 		return
@@ -130,7 +127,7 @@ func (l *Linter) checkArrayFormat(result *Result, path string, file *hcl.File) {
 
 	for _, attr := range attrs {
 		if expr := attr.Expr; expr != nil {
-			l.checkExpressionArrayFormat(result, path, attr.Name, expr)
+			l.checkExpressionArrayFormat(result, attr.Name, expr)
 		}
 	}
 
@@ -138,18 +135,18 @@ func (l *Linter) checkArrayFormat(result *Result, path string, file *hcl.File) {
 		blockBody := block.Block.Body
 		blockAttrs, _ := blockBody.JustAttributes()
 		for name, attr := range blockAttrs {
-			l.checkExpressionArrayFormat(result, path, fmt.Sprintf("%s.%s", block.Type, name), attr.Expr)
+			l.checkExpressionArrayFormat(result, fmt.Sprintf("%s.%s", block.Type, name), attr.Expr)
 		}
 	}
 }
 
-func (l *Linter) checkExpressionArrayFormat(result *Result, path string, name string, expr hcl.Expression) {
+func (l *Linter) checkExpressionArrayFormat(result *Result, name string, expr hcl.Expression) {
 	switch e := expr.(type) {
 	case *hclsyntax.TupleConsExpr:
 		l.checkTupleConsExpr(result, name, e)
 	case *hclsyntax.ObjectConsExpr:
 		for _, item := range e.Items {
-			l.checkExpressionArrayFormat(result, path, name, item.ValueExpr)
+			l.checkExpressionArrayFormat(result, name, item.ValueExpr)
 		}
 	}
 }
@@ -253,8 +250,7 @@ func (l *Linter) checkDuplicates(result *Result, blocks []ast.BlockInfo, cfg *co
 
 func (l *Linter) checkRequiredFields(result *Result, blocks []ast.BlockInfo, cfg *config.RequiredFieldsConfig) {
 	for _, block := range blocks {
-		switch block.Type {
-		case "include":
+		if block.Type == "include" {
 			if cfg.Include != nil && cfg.Include.Expose {
 				attrs := ast.GetBlockAttributes(block.Block.Body)
 				if _, ok := attrs["expose"]; !ok {

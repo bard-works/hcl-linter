@@ -9,13 +9,15 @@ import (
 )
 
 func createTestConfigDir(t *testing.T) string {
+	t.Helper()
 	tmpDir := t.TempDir()
 	return tmpDir
 }
 
 func setupTestConfig(t *testing.T, tmpDir string, name string, content string) {
+	t.Helper()
 	configFile := filepath.Join(tmpDir, name)
-	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -73,7 +75,7 @@ terraform {}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			file := filepath.Join(tmpDir, "terragrunt.hcl")
-			if err := os.WriteFile(file, []byte(tt.content), 0644); err != nil {
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
 				t.Fatal(err)
 			}
 
@@ -151,7 +153,7 @@ func TestNameValidationRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			file := filepath.Join(tmpDir, "terragrunt.hcl")
-			if err := os.WriteFile(file, []byte(tt.content), 0644); err != nil {
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
 				t.Fatal(err)
 			}
 
@@ -225,7 +227,7 @@ include "root" {}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			file := filepath.Join(tmpDir, "terragrunt.hcl")
-			if err := os.WriteFile(file, []byte(tt.content), 0644); err != nil {
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
 				t.Fatal(err)
 			}
 
@@ -301,7 +303,7 @@ func TestRequiredFieldsRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			file := filepath.Join(tmpDir, "terragrunt.hcl")
-			if err := os.WriteFile(file, []byte(tt.content), 0644); err != nil {
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
 				t.Fatal(err)
 			}
 
@@ -372,7 +374,7 @@ func TestArrayFormatRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			file := filepath.Join(tmpDir, "terragrunt.hcl")
-			if err := os.WriteFile(file, []byte(tt.content), 0644); err != nil {
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
 				t.Fatal(err)
 			}
 
@@ -454,7 +456,7 @@ func TestLintFileNoConfig(t *testing.T) {
 	l := NewLinter(loader)
 
 	file := filepath.Join(tmpDir, "noconfig.hcl")
-	if err := os.WriteFile(file, []byte(`locals {}`), 0644); err != nil {
+	if err := os.WriteFile(file, []byte(`locals {}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

@@ -19,7 +19,7 @@ func TestNewLoader(t *testing.T) {
 func TestHasSpecificConfigForFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "terragrunt.json")
-	if err := os.WriteFile(configFile, []byte(`{"rules":{}}`), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(`{"rules":{}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -37,7 +37,7 @@ func TestHasSpecificConfigForFile(t *testing.T) {
 func TestHasConfigForFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	defaultFile := filepath.Join(tmpDir, "default.json")
-	if err := os.WriteFile(defaultFile, []byte(`{"rules":{}}`), 0644); err != nil {
+	if err := os.WriteFile(defaultFile, []byte(`{"rules":{}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,7 +66,7 @@ func TestLoadForFile(t *testing.T) {
 			}
 		}
 	}`
-	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -98,7 +98,7 @@ func TestLoadForFileFallsBackToDefault(t *testing.T) {
 			}
 		}
 	}`
-	if err := os.WriteFile(defaultFile, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(defaultFile, []byte(configContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -127,7 +127,7 @@ func TestConfigSourcePrecedence(t *testing.T) {
 			setup: func() (string, func()) {
 				tmpDir := t.TempDir()
 				cliFile := filepath.Join(tmpDir, "test.json")
-				os.WriteFile(cliFile, []byte(`{"rules":{}}`), 0644)
+				_ = os.WriteFile(cliFile, []byte(`{"rules":{}}`), 0o644)
 				return cliFile, func() {}
 			},
 			expect: ConfigSourceCLI,

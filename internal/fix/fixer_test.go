@@ -10,20 +10,23 @@ import (
 )
 
 func createFixTestConfigDir(t *testing.T) string {
+	t.Helper()
 	tmpDir := t.TempDir()
 	return tmpDir
 }
 
 func setupFixTestConfig(t *testing.T, tmpDir string, content string) {
+	t.Helper()
 	configFile := filepath.Join(tmpDir, "terragrunt.json")
-	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func createHCLFile(t *testing.T, tmpDir string, filename string, content string) string {
+	t.Helper()
 	file := filepath.Join(tmpDir, filename)
-	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return file
@@ -79,7 +82,7 @@ func TestFixerFixFile(t *testing.T) {
 				}
 			}
 
-			if result.Success != true {
+			if !result.Success {
 				t.Error("expected Success=true")
 			}
 		})

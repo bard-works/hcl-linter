@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,8 +27,8 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "hcl-linter",
 		Short: "A configurable linter for Terragrunt HCL files",
-		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
+		Run: func(cmd *cobra.Command, _ []string) {
+			_ = cmd.Help()
 		},
 	}
 
@@ -56,7 +57,7 @@ func main() {
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
 			fmt.Printf("hcl-linter %s\n", Version)
 			fmt.Printf("Build date: %s\n", BuildDate)
 			fmt.Printf("Git commit: %s\n", GitCommit)
@@ -87,7 +88,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 	return run(cmd, args, false, true)
 }
 
-func run(cmd *cobra.Command, args []string, checkMode, fixMode bool) error {
+func run(_ *cobra.Command, args []string, checkMode, fixMode bool) error {
 	path := args[0]
 
 	loader, configResult := getLoader()
@@ -258,7 +259,7 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 	}
 
 	if checkMode && hasErrors {
-		return fmt.Errorf("lint check failed")
+		return errors.New("lint check failed")
 	}
 
 	return nil
@@ -328,6 +329,6 @@ func findHCLFiles(root string) []string {
 		return nil
 	}
 
-	filepath.Walk(root, walkFn)
+	_ = filepath.Walk(root, walkFn)
 	return files
 }
