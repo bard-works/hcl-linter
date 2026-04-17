@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "block_order": {
+      "enabled": true,
+      "order": ["locals", "include"]
+    },
+    "array_format": {
+      "enabled": true,
+      "multiline_threshold": 2
+    },
+    "duplicates": {
+      "enabled": true,
+      "blocks": ["locals", "include"]
+    }
+  }
+}

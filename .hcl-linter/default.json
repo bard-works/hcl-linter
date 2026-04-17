@@ -1,0 +1,26 @@
+{
+  "rules": {
+    "block_order": {
+      "enabled": true,
+      "order": ["include", "locals", "terraform", "dependency", "inputs"]
+    },
+    "array_format": {
+      "enabled": true,
+      "multiline_threshold": 2
+    },
+    "name_validation": {
+      "enabled": true,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "blocks": ["include", "dependency"]
+    },
+    "duplicates": {
+      "enabled": true,
+      "blocks": ["locals", "dependency", "include"]
+    },
+    "required_fields": {
+      "include": {
+        "expose": true
+      }
+    }
+  }
+}

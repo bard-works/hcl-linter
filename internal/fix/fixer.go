@@ -46,8 +46,6 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 		Changes: 0,
 	}
 
-	modified := false
-
 	parser := ast.NewParser()
 	file, diags := parser.ParseFile(path)
 	if diags.HasErrors() {
@@ -55,14 +53,16 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 	}
 
 	blocks := ast.GetTopLevelBlocks(file)
+	contentStr := string(content)
 
 	if cfg.BlockOrder != nil && cfg.BlockOrder.Enabled {
-		contentStr := string(content)
 		newContent := f.fixBlockOrder(contentStr, blocks, cfg.BlockOrder)
 		if newContent != contentStr {
-			content = []byte(newContent)
-			modified = true
+			contentStr = newContent
 			result.Changes++
+			parser = ast.NewParser()
+			file, _ = parser.ParseContent([]byte(contentStr), path)
+			blocks = ast.GetTopLevelBlocks(file)
 		}
 	}
 
@@ -78,6 +78,7 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 			blockSet[b] = true
 		}
 
+		hasChanges := false
 		for _, block := range blocks {
 			if !blockSet[block.Type] {
 				continue
@@ -86,11 +87,16 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 			for _, label := range block.Labels {
 				if !regex.MatchString(label) && strings.Contains(label, "-") {
 					newLabel := strings.ReplaceAll(label, "-", "_")
-					modified = true
-					result.Changes++
-					content = []byte(strings.ReplaceAll(string(content), fmt.Sprintf(`"%s"`, label), fmt.Sprintf(`"%s"`, newLabel)))
+					contentStr = strings.ReplaceAll(contentStr, fmt.Sprintf(`"%s"`, label), fmt.Sprintf(`"%s"`, newLabel))
+					hasChanges = true
 				}
 			}
+		}
+		if hasChanges {
+			result.Changes++
+			parser = ast.NewParser()
+			file, _ = parser.ParseContent([]byte(contentStr), path)
+			blocks = ast.GetTopLevelBlocks(file)
 		}
 	}
 
@@ -99,30 +105,31 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 			if block.Type == "include" && len(block.Labels) > 0 {
 				attrs := ast.GetBlockAttributes(block.Block.Body)
 				if _, ok := attrs["expose"]; !ok {
-					modified = true
+					contentStr = f.addAttributeToBlockStr(contentStr, block, "expose = true")
 					result.Changes++
-					content = f.addAttributeToBlock(content, block, "expose = true")
+					parser = ast.NewParser()
+					file, _ = parser.ParseContent([]byte(contentStr), path)
+					blocks = ast.GetTopLevelBlocks(file)
 				}
 			}
 		}
 	}
 
 	if cfg.ArrayFormat != nil && cfg.ArrayFormat.Enabled {
-		newContent, changes := f.fixArrays(string(content))
+		newContent, changes := f.fixArrays(contentStr)
 		if changes > 0 {
-			modified = true
+			contentStr = newContent
 			result.Changes += changes
-			content = []byte(newContent)
 		}
 	}
 
-	if modified {
-		if err := os.WriteFile(path, content, 0644); err != nil {
+	if result.Changes > 0 {
+		if err := os.WriteFile(path, []byte(contentStr), 0644); err != nil {
 			return nil, err
 		}
 	}
 
-	result.Content = string(content)
+	result.Content = contentStr
 	result.Success = true
 	return result, nil
 }
@@ -139,24 +146,94 @@ func blocksMatchOrder(a, b []ast.BlockInfo) bool {
 	return true
 }
 
-func (f *Fixer) addAttributeToBlock(content []byte, block ast.BlockInfo, attr string) []byte {
-	blockRange := block.Block.TypeRange
-	start := blockRange.Start.Byte
-	end := blockRange.End.Byte
+func (f *Fixer) addAttributeToBlockStr(content string, block ast.BlockInfo, attr string) string {
+	startLine := block.StartLine
+	endLine := block.EndLine
 
-	blockContent := string(content)[start:end]
+	lines := strings.Split(content, "\n")
+
+	if endLine >= len(lines) {
+		endLine = len(lines) - 1
+	}
+
 	indent := ""
-	for _, ch := range blockContent {
-		if ch == ' ' || ch == '\t' {
-			indent += string(ch)
-		} else {
+	if startLine < len(lines) {
+		for _, ch := range lines[startLine] {
+			if ch == ' ' || ch == '\t' {
+				indent += string(ch)
+			} else {
+				break
+			}
+		}
+	}
+
+	if startLine == endLine {
+		line := lines[startLine]
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "{") && strings.Contains(trimmed, "}") {
+			braceIdx := -1
+			for i, ch := range line {
+				if ch == '{' {
+					braceIdx = i
+					break
+				}
+			}
+			if braceIdx >= 0 {
+				beforeBrace := strings.TrimRight(line[:braceIdx], " \t")
+				contentIndent := "  "
+				if indent != "" {
+					contentIndent = indent + "  "
+				}
+				var newLines []string
+				newLines = append(newLines, beforeBrace+" {")
+				newLines = append(newLines, contentIndent+attr)
+				newLines = append(newLines, "}")
+				newContent := strings.Join(newLines, "\n")
+				if startLine < len(lines) {
+					lines[startLine] = newContent
+				}
+				return strings.Join(lines, "\n")
+			}
+		}
+	}
+
+	insertIdx := startLine + 1
+	for i := startLine + 1; i <= endLine && i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "}" || strings.HasPrefix(trimmed, "}") {
+			insertIdx = i
 			break
 		}
 	}
 
-	newContent := strings.Replace(string(content), string(content[start:end]),
-		blockContent+indent+attr+"\n", 1)
-	return []byte(newContent)
+	contentIndent := indent + "  "
+	for i := startLine + 1; i < insertIdx && i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed != "" {
+			line := lines[i]
+			existingIndent := ""
+			for _, ch := range line {
+				if ch == ' ' || ch == '\t' {
+					existingIndent += string(ch)
+				} else {
+					break
+				}
+			}
+			if len(existingIndent) >= 2 {
+				contentIndent = indent + existingIndent[:2]
+			}
+			break
+		}
+	}
+
+	var newLines []string
+	newLines = append(newLines, lines[:insertIdx]...)
+	newLines = append(newLines, contentIndent+attr)
+	if insertIdx < len(lines) {
+		newLines = append(newLines, lines[insertIdx:]...)
+	}
+
+	return strings.Join(newLines, "\n")
 }
 
 func (f *Fixer) fixArrays(content string) (string, int) {
@@ -444,9 +521,7 @@ func (f *Fixer) fixBlockOrder(content string, blocks []ast.BlockInfo, cfg *confi
 
 	usedLines := make(map[int]bool)
 	for _, block := range blocks {
-		startLine := block.Block.TypeRange.Start.Line - 1
-		endLine := block.Block.TypeRange.End.Line - 1
-		for l := startLine; l <= endLine; l++ {
+		for l := block.StartLine; l <= block.EndLine; l++ {
 			usedLines[l] = true
 		}
 	}
@@ -460,9 +535,7 @@ func (f *Fixer) fixBlockOrder(content string, blocks []ast.BlockInfo, cfg *confi
 
 	var resultLines []string
 	for _, block := range sortedBlocks {
-		startLine := block.Block.TypeRange.Start.Line - 1
-		endLine := block.Block.TypeRange.End.Line - 1
-		for l := startLine; l <= endLine; l++ {
+		for l := block.StartLine; l <= block.EndLine; l++ {
 			resultLines = append(resultLines, lines[l])
 		}
 		resultLines = append(resultLines, "")

@@ -29,9 +29,11 @@ func (p *Parser) ParseJSON(content []byte, filename string) (*hcl.File, hcl.Diag
 }
 
 type BlockInfo struct {
-	Type   string
-	Labels []string
-	Block  *hclsyntax.Block
+	Type      string
+	Labels    []string
+	Block     *hclsyntax.Block
+	StartLine int
+	EndLine   int
 }
 
 func GetTopLevelBlocks(file *hcl.File) []BlockInfo {
@@ -39,10 +41,14 @@ func GetTopLevelBlocks(file *hcl.File) []BlockInfo {
 
 	if syntaxBody, ok := file.Body.(*hclsyntax.Body); ok {
 		for _, block := range syntaxBody.Blocks {
+			startLine := block.TypeRange.Start.Line - 1
+			endLine := block.Body.Range().End.Line - 1
 			blocks = append(blocks, BlockInfo{
-				Type:   block.Type,
-				Labels: block.Labels,
-				Block:  block,
+				Type:      block.Type,
+				Labels:    block.Labels,
+				Block:     block,
+				StartLine: startLine,
+				EndLine:   endLine,
 			})
 		}
 	}
