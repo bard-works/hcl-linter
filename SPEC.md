@@ -234,11 +234,12 @@ internal/
 ├── config/
 │   └── loader.go                # Load configs (multiple sources)
 ├── linter/
-│   └── linter.go                # Linting logic and results
+│   ├── linter.go                 # Linting logic
+│   └── result.go                 # Result types
 ├── fix/
-│   └── fixer.go                 # Auto-fix logic
+│   └── fixer.go                  # Auto-fix logic
 └── ast/
-    └── parser.go                # HCL AST utilities
+    └── parser.go                 # HCL AST utilities
 ```
 
 ## Implementation Notes
