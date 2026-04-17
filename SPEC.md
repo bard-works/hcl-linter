@@ -186,6 +186,9 @@ hcl-linter --verbose lint ./
 
 # Use custom config directory
 hcl-linter --config-source /path/to/custom-config lint ./
+
+# Print version information
+hcl-linter version
 ```
 
 **Note:** Files without a matching config (e.g., `something-special.hcl` without `something-special.json`) are warned and skipped.
@@ -246,3 +249,67 @@ internal/
 
 - Uses `github.com/hashicorp/hcl/v2` for parsing
 - Configuration format: JSON for simplicity and portability
+
+## Build & Release
+
+### Makefile Targets
+
+```bash
+# Build binary to dist/
+make build
+
+# Build for all platforms (darwin/linux/windows)
+make build-all
+
+# Run tests
+make test
+
+# Run tests with coverage report
+make test-coverage
+
+# Run linter
+make lint
+
+# Format and vet code
+make fmt
+make vet
+
+# Tidy dependencies
+make tidy
+
+# Clean build artifacts
+make clean
+
+# Install to GOPATH/bin
+make install
+```
+
+### Versioning
+
+Version is managed via the `VERSION` file:
+```
+0.1.0
+```
+
+Version info is injected at build time via ldflags:
+- `main.Version` - from VERSION file
+- `main.BuildDate` - build timestamp
+- `main.GitCommit` - git SHA
+
+### Release Workflow
+
+```bash
+# Tag a release
+make tag VERSION=0.1.0
+
+# Build all platforms and generate checksums
+make release VERSION=0.1.0
+```
+
+This creates:
+- `dist/hcl-linter-darwin-amd64`
+- `dist/hcl-linter-darwin-arm64`
+- `dist/hcl-linter-linux-amd64`
+- `dist/hcl-linter-linux-arm64`
+- `dist/hcl-linter-windows-amd64.exe`
+- `dist/*sha256` checksum files
