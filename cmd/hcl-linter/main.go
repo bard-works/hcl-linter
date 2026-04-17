@@ -160,8 +160,8 @@ func runLintModeWithExitCode(cmd *cobra.Command, args []string) error {
 	hasErrors := false
 	for _, result := range allResults {
 		if flagVerbose || len(result.Issues) > 0 {
-			relPath, _ := filepath.Rel(".", result.File)
-			if relPath == "" {
+			relPath, err := filepath.Rel(".", result.File)
+			if err != nil {
 				relPath = result.File
 			}
 			fmt.Printf("\n%s:\n", relPath)
@@ -344,8 +344,8 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 	hasErrors := false
 	for _, result := range allResults {
 		if flagVerbose || len(result.Issues) > 0 {
-			relPath, _ := filepath.Rel(".", result.File)
-			if relPath == "" {
+			relPath, err := filepath.Rel(".", result.File)
+			if err != nil {
 				relPath = result.File
 			}
 			fmt.Printf("\n%s:\n", relPath)
