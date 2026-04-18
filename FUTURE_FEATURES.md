@@ -43,6 +43,8 @@ Validate `terraform` blocks for completeness and correctness.
 - Check `extra_arguments` block structure
 - Warn about deprecated fields
 
+**Status:** ✅ Implemented
+
 ### 3. Key-Value Validation Rules
 Add configurable attribute-level linting.
 
@@ -63,6 +65,8 @@ Extend `block_order` to support nested blocks.
 - Example: enforce `before_hook` ordering inside `terraform` blocks
 - Support dot notation: `terraform.before_hook`
 - Configurable per block type
+
+**Status:** ✅ Implemented
 
 ## Medium Priority
 
