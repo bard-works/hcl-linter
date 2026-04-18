@@ -51,7 +51,7 @@ hcl-linter lint ./
 # Check and exit 1 if issues found
 hcl-linter check ./
 
-# Auto-fix issues
+# Auto-fix formatting issues
 hcl-linter fix ./
 ```
 
@@ -84,6 +84,97 @@ Example `default.json`:
         }
       ]
     }
+  }
+}
+```
+
+## Formatting
+
+The `fix` command auto-fixes formatting issues:
+
+- **Blank lines** - Removes extra blank lines within blocks, trims excess newlines
+- **Array format** - Converts inline arrays to multiline when threshold exceeded
+- **Block order** - Reorders blocks to match configured order
+
+Enable rules in your config:
+
+```json
+{
+  "rules": {
+    "blank_lines": {
+      "enabled": true,
+      "within_blocks": true
+    },
+    "array_format": {
+      "enabled": true,
+      "multiline_threshold": 2
+    },
+    "block_order": {
+      "enabled": true,
+      "order": ["include", "locals", "terraform"]
+    }
+  }
+}
+```
+
+Enable in HCL config:
+
+```hcl
+rules {
+  blank_lines {
+    enabled        = true
+    within_blocks = true
+  }
+
+  array_format {
+    enabled            = true
+    multiline_threshold = 2
+  }
+
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+}
+```
+
+Example - fix extra blank lines:
+
+```hcl
+# Before fix
+inputs = {
+
+  name = "test"
+
+
+  options = "none"
+
+}
+
+# After fix
+inputs = {
+  name = "test"
+
+  options = "none"
+}
+```
+
+```json
+{
+  "rules": {
+    "blank_lines": {
+      "enabled": true,
+      "within_blocks": true
+    }
+  }
+}
+```
+
+```hcl
+rules {
+  blank_lines {
+    enabled        = true
+    within_blocks = true
   }
 }
 ```
