@@ -599,8 +599,13 @@ internal/
 ├── config/
 │   └── loader.go                # Load configs (multiple sources)
 ├── linter/
-│   ├── linter.go                 # Linting logic
-│   └── result.go                 # Result types
+│   ├── linter.go                 # Main linting logic
+│   ├── result.go                 # Result types
+│   ├── block_order.go            # Block ordering checks
+│   ├── array_format.go            # Array format checks
+│   ├── validation.go              # Name validation, duplicates, required fields/blocks
+│   ├── terragrunt.go               # Terragrunt path and function validation
+│   └── terraform.go               # Terraform block validation
 ├── fix/
 │   └── fixer.go                  # Auto-fix logic
 └── ast/
