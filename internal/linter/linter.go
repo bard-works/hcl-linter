@@ -79,6 +79,10 @@ func (l *Linter) LintFile(path string) (*Result, error) {
 		checkKeyValueImpl(result, blocks, cfg.KeyValue)
 	}
 
+	if cfg.CountForEach != nil && cfg.CountForEach.Enabled {
+		checkCountForEachImpl(result, blocks, cfg.CountForEach)
+	}
+
 	return result, nil
 }
 

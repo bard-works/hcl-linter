@@ -70,6 +70,7 @@ type Rules struct {
 	TerragruntFunctions *TerragruntFunctionsConfig `json:"terragrunt_functions,omitempty"`
 	TerraformBlock      *TerraformBlockConfig      `json:"terraform_block,omitempty"`
 	KeyValue            *KeyValueConfig            `json:"key_value,omitempty"`
+	CountForEach        *CountForEachConfig        `json:"count_for_each,omitempty"`
 	MaxConcurrency      int                        `json:"max_concurrency,omitempty"`
 }
 
@@ -171,6 +172,13 @@ type KeyValueConfig struct {
 	Disallowed   []string          `json:"disallowed,omitempty"`
 }
 
+type CountForEachConfig struct {
+	Enabled            bool `json:"enabled"`
+	WarnOnCountZero    bool `json:"warn_on_count_zero"`
+	WarnOnEmptyForEach bool `json:"warn_on_empty_for_each"`
+	WarnOnConflict     bool `json:"warn_on_conflict"`
+}
+
 type DeprecatedField struct {
 	Name    string `json:"name"`
 	Block   string `json:"block"`
@@ -181,7 +189,8 @@ func (r *Rules) IsEnabled() bool {
 	return r.BlockOrder != nil || r.ArrayFormat != nil ||
 		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
 		r.BlankLines != nil || r.RequiredBlocks != nil || r.Terragrunt != nil ||
-		r.TerragruntFunctions != nil || r.TerraformBlock != nil || r.KeyValue != nil
+		r.TerragruntFunctions != nil || r.TerraformBlock != nil || r.KeyValue != nil ||
+		r.CountForEach != nil
 }
 
 type Loader struct {
@@ -479,6 +488,8 @@ func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {
 			rules.TerraformBlock = parseHCLTerraformBlock(block.Body)
 		case "key_value":
 			rules.KeyValue = parseHCLKeyValue(block.Body)
+		case "count_for_each":
+			rules.CountForEach = parseHCLCountForEach(block.Body)
 		}
 	}
 
@@ -717,6 +728,31 @@ func parseValuePatternAttribute(expr hclsyntax.Expression) map[string]string {
 		result[key] = v.AsString()
 	}
 	return result
+}
+
+func parseHCLCountForEach(body *hclsyntax.Body) *CountForEachConfig {
+	cfg := &CountForEachConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["warn_on_count_zero"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.WarnOnCountZero = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["warn_on_empty_for_each"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.WarnOnEmptyForEach = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["warn_on_conflict"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.WarnOnConflict = val.True()
+		}
+	}
+	return cfg
 }
 
 func hclExprToStringSlice(expr hclsyntax.Expression) []string {

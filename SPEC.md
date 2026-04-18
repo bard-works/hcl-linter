@@ -105,6 +105,12 @@ If falling back to project defaults (no user config found), a warning is display
         "region": "^us-[a-z]+-[0-9]+$"
       },
       "disallowed": ["secret", "password"]
+    },
+    "count_for_each": {
+      "enabled": true,
+      "warn_on_count_zero": true,
+      "warn_on_empty_for_each": true,
+      "warn_on_conflict": true
     }
   }
 }
@@ -570,6 +576,49 @@ locals {
   my_var = "test"  # snake_case ✓
   region = "us-east-1"  # matches pattern ✓
   api_key = "abc"  # allowed key ✓
+}
+```
+
+### 12. Count/ForEach Validation (`count_for_each`)
+
+**Purpose:** Detect potential issues with count and for_each expressions.
+
+**Configuration:**
+
+```json
+{
+  "count_for_each": {
+    "enabled": true,
+    "warn_on_count_zero": true,
+    "warn_on_empty_for_each": true,
+    "warn_on_conflict": true
+  }
+}
+```
+
+**Checks:**
+
+- `warn_on_count_zero` - Detect `count = 0` which means resource won't be created
+- `warn_on_empty_for_each` - Detect empty `for_each = {}` 
+- `warn_on_conflict` - Detect when both `count` and `for_each` are used together (they can't be)
+
+**Example violations:**
+
+```hcl
+# count_zero violation
+resource "aws_instance" "test" {
+  count = 0  # WARNING: resource will not be created
+}
+
+# empty_for_each violation
+resource "aws_instance" "test" {
+  for_each = {}  # WARNING: resource will not be created
+}
+
+# count_for_each_conflict violation
+resource "aws_instance" "test" {
+  count     = 1  # ERROR: cannot use both count and for_each
+  for_each = {}
 }
 ```
 

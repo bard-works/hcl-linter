@@ -61,6 +61,8 @@ Detect potential issues with count and for_each expressions.
 - Warn about potentially unintended empty iterations
 - Check for count/for_each conflicts
 
+**Status:** ✅ Implemented
+
 ### 5. Nested Block Ordering
 Extend `block_order` to support nested blocks.
 
