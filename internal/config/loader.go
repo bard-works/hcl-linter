@@ -69,6 +69,7 @@ type Rules struct {
 	Terragrunt          *TerragruntConfig          `json:"terragrunt,omitempty"`
 	TerragruntFunctions *TerragruntFunctionsConfig `json:"terragrunt_functions,omitempty"`
 	TerraformBlock      *TerraformBlockConfig      `json:"terraform_block,omitempty"`
+	KeyValue            *KeyValueConfig            `json:"key_value,omitempty"`
 	MaxConcurrency      int                        `json:"max_concurrency,omitempty"`
 }
 
@@ -163,6 +164,13 @@ type TerraformBlockConfig struct {
 	NoDeprecatedFields  bool `json:"no_deprecated_fields"`
 }
 
+type KeyValueConfig struct {
+	Enabled      bool              `json:"enabled"`
+	KeyCase      string            `json:"key_case,omitempty"`
+	ValuePattern map[string]string `json:"value_pattern,omitempty"`
+	Disallowed   []string          `json:"disallowed,omitempty"`
+}
+
 type DeprecatedField struct {
 	Name    string `json:"name"`
 	Block   string `json:"block"`
@@ -173,7 +181,7 @@ func (r *Rules) IsEnabled() bool {
 	return r.BlockOrder != nil || r.ArrayFormat != nil ||
 		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
 		r.BlankLines != nil || r.RequiredBlocks != nil || r.Terragrunt != nil ||
-		r.TerragruntFunctions != nil || r.TerraformBlock != nil
+		r.TerragruntFunctions != nil || r.TerraformBlock != nil || r.KeyValue != nil
 }
 
 type Loader struct {
@@ -469,6 +477,8 @@ func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {
 			rules.TerragruntFunctions = parseHCLTerragruntFunctions(block.Body)
 		case "terraform_block":
 			rules.TerraformBlock = parseHCLTerraformBlock(block.Body)
+		case "key_value":
+			rules.KeyValue = parseHCLKeyValue(block.Body)
 		}
 	}
 
@@ -673,6 +683,40 @@ func parseHCLTerragrunt(body *hclsyntax.Body) *TerragruntConfig {
 		}
 	}
 	return cfg
+}
+
+func parseHCLKeyValue(body *hclsyntax.Body) *KeyValueConfig {
+	cfg := &KeyValueConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["key_case"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.KeyCase = val.AsString()
+		}
+	}
+	if attr, ok := body.Attributes["disallowed"]; ok {
+		cfg.Disallowed = hclExprToStringSlice(attr.Expr)
+	}
+	if attr, ok := body.Attributes["value_pattern"]; ok {
+		cfg.ValuePattern = parseValuePatternAttribute(attr.Expr)
+	}
+	return cfg
+}
+
+func parseValuePatternAttribute(expr hclsyntax.Expression) map[string]string {
+	result := make(map[string]string)
+	val, diags := expr.Value(nil)
+	if diags.HasErrors() {
+		return result
+	}
+	obj := val.AsValueMap()
+	for key, v := range obj {
+		result[key] = v.AsString()
+	}
+	return result
 }
 
 func hclExprToStringSlice(expr hclsyntax.Expression) []string {

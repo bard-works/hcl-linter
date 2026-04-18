@@ -75,6 +75,10 @@ func (l *Linter) LintFile(path string) (*Result, error) {
 		checkTerraformBlock(result, file, cfg.TerraformBlock)
 	}
 
+	if cfg.KeyValue != nil && cfg.KeyValue.Enabled {
+		checkKeyValueImpl(result, blocks, cfg.KeyValue)
+	}
+
 	return result, nil
 }
 

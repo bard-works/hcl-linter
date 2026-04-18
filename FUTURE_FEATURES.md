@@ -52,6 +52,8 @@ Add configurable attribute-level linting.
 - `value_pattern` - Regex validation for specific attribute values (e.g., AWS region format)
 - `disallowed_keys` - Blocklist certain attributes that shouldn't exist
 
+**Status:** ✅ Implemented
+
 ### 4. Count/ForEach Validation
 Detect potential issues with count and for_each expressions.
 

@@ -1682,3 +1682,236 @@ locals {
 		}
 	}
 }
+
+func TestKeyCaseRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"key_value": {
+				"enabled": true,
+				"key_case": "snake_case"
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name        string
+		content     string
+		expectIssue bool
+		issueRule   string
+	}{
+		{
+			name: "valid snake_case",
+			content: `locals {
+  my_var = "test"
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "invalid camelCase in snake_case config",
+			content: `locals {
+  myVar = "test"
+}
+`,
+			expectIssue: true,
+			issueRule:   "key_case",
+		},
+		{
+			name: "invalid kebab-case in snake_case config",
+			content: `locals {
+  my-var = "test"
+}
+`,
+			expectIssue: true,
+			issueRule:   "key_case",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == tt.issueRule {
+					hasIssue = true
+					break
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Error("expected key_case issue, got none")
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected key_case issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestDisallowedKeysRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"key_value": {
+				"enabled": true,
+				"disallowed": ["secret", "password"]
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name        string
+		content     string
+		expectIssue bool
+	}{
+		{
+			name: "allowed keys",
+			content: `locals {
+  name = "test"
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "disallowed secret key",
+			content: `locals {
+  secret = "abc"
+}
+`,
+			expectIssue: true,
+		},
+		{
+			name: "disallowed password key",
+			content: `locals {
+  password = "123"
+}
+`,
+			expectIssue: true,
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "disallowed_keys" {
+					hasIssue = true
+					break
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Error("expected disallowed_keys issue, got none")
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected disallowed_keys issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestValuePatternRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"key_value": {
+				"enabled": true,
+				"value_pattern": {
+					"region": "^us-[a-z]+-[0-9]+$"
+				}
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name          string
+		content       string
+		expectIssue   bool
+		issueContains string
+	}{
+		{
+			name: "valid region format",
+			content: `locals {
+  region = "us-east-1"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "invalid region format",
+			content: `locals {
+  region = "invalid"
+}
+`,
+			expectIssue:   true,
+			issueContains: "does not match pattern",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "value_pattern" {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected value_pattern issue containing %q, got none", tt.issueContains)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected value_pattern issue: %v", result.Issues)
+			}
+		})
+	}
+}

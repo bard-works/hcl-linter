@@ -97,6 +97,14 @@ If falling back to project defaults (no user config found), a warning is display
       "version_format": true,
       "extra_arguments_valid": true,
       "no_deprecated_fields": true
+    },
+    "key_value": {
+      "enabled": true,
+      "key_case": "snake_case",
+      "value_pattern": {
+        "region": "^us-[a-z]+-[0-9]+$"
+      },
+      "disallowed": ["secret", "password"]
     }
   }
 }
@@ -504,6 +512,64 @@ terraform {
   extra_arguments "example" {
     arguments = ["-var", "foo=bar"]
   }
+```
+
+### 11. Key-Value Validation (`key_value`)
+
+**Purpose:** Enforce attribute naming conventions, validate values against patterns, and blocklist certain keys.
+
+**Configuration:**
+
+```json
+{
+  "key_value": {
+    "enabled": true,
+    "key_case": "snake_case",
+    "value_pattern": {
+      "region": "^us-[a-z]+-[0-9]+$"
+    },
+    "disallowed": ["secret", "password"]
+  }
+}
+```
+
+**Checks:**
+
+- `key_case` - Enforce naming convention: `camelCase`, `snake_case`, or `kebab-case`
+- `value_pattern` - Regex validation for attribute values (e.g., AWS region format)
+- `disallowed` - Blocklist certain attributes that shouldn't exist
+
+**Supported case values:**
+
+- `camelCase` - `^[a-z][a-zA-Z0-9]*$`
+- `snake_case` - `^[a-z][a-z0-9_]*$`
+- `kebab-case` - `^[a-z][a-z0-9-]*$`
+
+**Example violations:**
+
+```hcl
+# key_case violation (snake_case expected)
+locals {
+  myVar = "test"  # ERROR: should be snake_case
+  my-var = "test"  # ERROR: should be snake_case
+}
+
+# value_pattern violation
+locals {
+  region = "invalid"  # WARNING: does not match pattern ^us-[a-z]+-[0-9]+$
+}
+
+# disallowed_keys violation
+locals {
+  secret = "abc"  # ERROR: attribute is not allowed
+  password = "123"  # ERROR: attribute is not allowed
+}
+
+# Correct usage
+locals {
+  my_var = "test"  # snake_case ✓
+  region = "us-east-1"  # matches pattern ✓
+  api_key = "abc"  # allowed key ✓
 }
 ```
 
