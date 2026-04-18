@@ -1,7 +1,7 @@
 # HCL Linter
 
 <p align="center">
-  <img src="hcl-linter-banner.png" alt="HCL Linter" width="680"/>
+  <img src="docs/assets/hcl-linter-banner.png" alt="HCL Linter" width="680"/>
 </p>
 
 A configurable linter for Terragrunt HCL files that enforces consistency standards across large codebases.
