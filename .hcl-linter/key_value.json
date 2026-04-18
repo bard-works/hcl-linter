@@ -2,7 +2,9 @@
   "rules": {
     "block_order": {
       "enabled": true,
-      "order": ["locals"]
+      "order": [
+        "locals"
+      ]
     },
     "array_format": {
       "enabled": true,
@@ -15,7 +17,12 @@
         "region": "^us-[a-z]+-[0-9]+$",
         "account_id": "^[0-9]{12}$"
       },
-      "disallowed": ["secret", "password", "api_key", "token"]
+      "disallowed": [
+        "secret",
+        "password",
+        "api_key",
+        "token"
+      ]
     }
   }
 }

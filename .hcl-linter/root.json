@@ -2,7 +2,10 @@
   "rules": {
     "block_order": {
       "enabled": true,
-      "order": ["locals", "include"]
+      "order": [
+        "locals",
+        "include"
+      ]
     },
     "array_format": {
       "enabled": true,
@@ -10,7 +13,10 @@
     },
     "duplicates": {
       "enabled": true,
-      "blocks": ["locals", "include"]
+      "blocks": [
+        "locals",
+        "include"
+      ]
     }
   }
 }
