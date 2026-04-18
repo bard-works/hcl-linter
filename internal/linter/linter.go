@@ -83,6 +83,10 @@ func (l *Linter) LintFile(path string) (*Result, error) {
 		checkCountForEachImpl(result, blocks, cfg.CountForEach)
 	}
 
+	if cfg.DependencyOutputs != nil && cfg.DependencyOutputs.Enabled {
+		checkDependencyOutputsImpl(result, blocks, path, cfg.DependencyOutputs, nil)
+	}
+
 	return result, nil
 }
 

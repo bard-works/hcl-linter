@@ -111,6 +111,9 @@ If falling back to project defaults (no user config found), a warning is display
       "warn_on_count_zero": true,
       "warn_on_empty_for_each": true,
       "warn_on_conflict": true
+    },
+    "dependency_outputs": {
+      "enabled": true
     }
   }
 }
@@ -619,6 +622,65 @@ resource "aws_instance" "test" {
 resource "aws_instance" "test" {
   count     = 1  # ERROR: cannot use both count and for_each
   for_each = {}
+}
+```
+
+### 13. Dependency Output Validation (`dependency_outputs`)
+
+**Purpose:** Validate `dependency.*.outputs.*` references by walking the dependency chain.
+
+**Configuration:**
+
+```json
+{
+  "dependency_outputs": {
+    "enabled": true
+  }
+}
+```
+
+**Behavior:**
+
+1. **Dependency resolution**:
+   - Parse `dependency` blocks to get `config_path`
+   - Support relative paths (e.g., `../vpc`, `vpc`)
+   - Skip paths with variables/expressions (shown in verbose mode)
+   - Detect circular dependencies to avoid infinite loops
+
+2. **Output validation**:
+   - Parse `output` blocks from `.tf` files in dependency module
+   - Validate output name exists
+   - Error if output doesn't exist
+
+3. **Mock outputs** (for development):
+   - Support `.mock-outputs.json` in dependency module directory
+   - Format:
+     ```json
+     {
+       "outputs": {
+         "vpc_id": { "value": "vpc-123", "type": "string" }
+       }
+     }
+     ```
+   - Optional - if not present, only validate against `.tf` files
+
+4. **Error handling**:
+   - If output doesn't exist = error
+   - If dependency path doesn't exist = warning (validation skipped)
+   - No terraform/terragrunt execution - purely static analysis
+
+**Example violations:**
+
+```hcl
+# In your terragrunt.hcl
+dependency "vpc" {
+  config_path = "../vpc"
+}
+
+# Reference outputs
+inputs = {
+  vpc_id = dependency.vpc.outputs.vpc_id  # ✓ validated
+  fake   = dependency.vpc.outputs.fake_id  # ✗ not defined in ../vpc/outputs.tf
 }
 ```
 

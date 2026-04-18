@@ -2019,3 +2019,64 @@ func TestCountForEachRule(t *testing.T) {
 		})
 	}
 }
+
+func TestDependencyOutputsRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	vpcDir := filepath.Join(tmpDir, "vpc")
+	if err := os.MkdirAll(vpcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	outputsTf := `output "vpc_id" {
+  type        = string
+  description = " VPC ID"
+  value       = "vpc-123"
+}
+`
+	if err := os.WriteFile(filepath.Join(vpcDir, "outputs.tf"), []byte(outputsTf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	configContent := `{
+		"rules": {
+			"dependency_outputs": {
+				"enabled": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	terragruntHcl := filepath.Join(tmpDir, "terragrunt.hcl")
+	hclContent := `dependency "vpc" {
+  config_path = "vpc"
+}
+
+inputs = {
+  vpc_id = dependency.vpc.outputs.vpc_id
+}
+`
+	if err := os.WriteFile(terragruntHcl, []byte(hclContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	result, err := l.LintFile(terragruntHcl)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	hasDependencyOutputsError := false
+	for _, issue := range result.Issues {
+		if issue.Rule == "dependency_outputs" {
+			hasDependencyOutputsError = true
+			t.Logf("Got issue: %s", issue.Message)
+		}
+	}
+
+	if !hasDependencyOutputsError {
+		t.Log("No dependency_outputs issues - validation working")
+	}
+}

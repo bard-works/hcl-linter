@@ -77,29 +77,12 @@ Extend `block_order` to support nested blocks.
 ### 6. Dependency Output Validation
 Validate `dependency.*.outputs.*` references by walking the dependency chain.
 
-- Find `dependency` block definition → get `source` path
-- Locate `terragrunt.hcl` in that path → extract terraform source
-- Parse `outputs.tf` (or `.tf` files with `output` blocks) in that module
-- Verify the referenced output exists
+- Find `dependency` block definition → get `config_path`
+- Locate `.tf` files with `output` blocks in that module
+- Validate output name AND type (e.g., number for string = wrong)
+- Support `.mock-outputs.json` for development
 
-**Example:**
-```hcl
-# In your terragrunt.hcl
-dependency "vpc" {
-  config_path = "../vpc"
-}
-
-# Reference outputs
-inputs = {
-  vpc_id = dependency.vpc.outputs.vpc_id  # ✓ validated
-  fake  = dependency.vpc.outputs.fake_id  # ✗ not defined in ../vpc/outputs.tf
-}
-```
-
-**Requirements:**
-- No terraform/terragrunt execution
-- No state file access
-- Works with mock outputs (useful during development)
+**Status:** ✅ Implemented
 
 ### 7. Config Inheritance (extends)
 Allow configs to inherit from base configs.

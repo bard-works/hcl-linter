@@ -71,6 +71,7 @@ type Rules struct {
 	TerraformBlock      *TerraformBlockConfig      `json:"terraform_block,omitempty"`
 	KeyValue            *KeyValueConfig            `json:"key_value,omitempty"`
 	CountForEach        *CountForEachConfig        `json:"count_for_each,omitempty"`
+	DependencyOutputs   *DependencyOutputsConfig   `json:"dependency_outputs,omitempty"`
 	MaxConcurrency      int                        `json:"max_concurrency,omitempty"`
 }
 
@@ -179,6 +180,10 @@ type CountForEachConfig struct {
 	WarnOnConflict     bool `json:"warn_on_conflict"`
 }
 
+type DependencyOutputsConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
 type DeprecatedField struct {
 	Name    string `json:"name"`
 	Block   string `json:"block"`
@@ -190,7 +195,7 @@ func (r *Rules) IsEnabled() bool {
 		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
 		r.BlankLines != nil || r.RequiredBlocks != nil || r.Terragrunt != nil ||
 		r.TerragruntFunctions != nil || r.TerraformBlock != nil || r.KeyValue != nil ||
-		r.CountForEach != nil
+		r.CountForEach != nil || r.DependencyOutputs != nil
 }
 
 type Loader struct {
@@ -490,6 +495,8 @@ func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {
 			rules.KeyValue = parseHCLKeyValue(block.Body)
 		case "count_for_each":
 			rules.CountForEach = parseHCLCountForEach(block.Body)
+		case "dependency_outputs":
+			rules.DependencyOutputs = parseHCLDependencyOutputs(block.Body)
 		}
 	}
 
@@ -750,6 +757,16 @@ func parseHCLCountForEach(body *hclsyntax.Body) *CountForEachConfig {
 	if attr, ok := body.Attributes["warn_on_conflict"]; ok {
 		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
 			cfg.WarnOnConflict = val.True()
+		}
+	}
+	return cfg
+}
+
+func parseHCLDependencyOutputs(body *hclsyntax.Body) *DependencyOutputsConfig {
+	cfg := &DependencyOutputsConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
 		}
 	}
 	return cfg
