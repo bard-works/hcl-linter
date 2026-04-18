@@ -14,9 +14,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-type outputDef struct {
-	typ cty.Type
-}
+type outputDef struct{}
 
 type mockOutputs struct {
 	Outputs map[string]mockOutput `json:"outputs"`
@@ -112,18 +110,8 @@ func getDependencyOutputs(depPath string) (map[string]outputDef, map[string]mock
 	mockPath := filepath.Join(depPath, ".mock-outputs.json")
 	if mockContent, err := os.ReadFile(mockPath); err == nil {
 		mockOuts = parseMockOutputs(mockContent)
-		for name, mock := range mockOuts {
-			typ := cty.String
-			if mock.Type == "number" {
-				typ = cty.Number
-			} else if mock.Type == "bool" {
-				typ = cty.Bool
-			} else if mock.Type == "list" || mock.Type == "tuple" {
-				typ = cty.List(cty.DynamicPseudoType)
-			} else if mock.Type == "map" || mock.Type == "object" {
-				typ = cty.Map(cty.DynamicPseudoType)
-			}
-			outputs[name] = outputDef{typ: typ}
+		for name := range mockOuts {
+			outputs[name] = outputDef{}
 		}
 	}
 
@@ -150,23 +138,8 @@ func parseOutputsFromTf(content string) map[string]outputDef {
 			currentName = match[1]
 			inOutput = true
 		} else if inOutput && strings.HasPrefix(trimmed, "type =") {
-			typStr := strings.TrimSpace(strings.TrimPrefix(trimmed, "type ="))
-			typStr = strings.Trim(typStr, ";")
-
-			typ := cty.String
-			if strings.HasPrefix(typStr, "string") {
-				typ = cty.String
-			} else if strings.HasPrefix(typStr, "number") {
-				typ = cty.Number
-			} else if strings.HasPrefix(typStr, "bool") {
-				typ = cty.Bool
-			} else if strings.HasPrefix(typStr, "list(") || strings.HasPrefix(typStr, "tuple(") {
-				typ = cty.List(cty.DynamicPseudoType)
-			} else if strings.HasPrefix(typStr, "map(") || strings.HasPrefix(typStr, "object(") {
-				typ = cty.Map(cty.DynamicPseudoType)
-			}
 			if currentName != "" {
-				outputs[currentName] = outputDef{typ: typ}
+				outputs[currentName] = outputDef{}
 			}
 		} else if trimmed == "}" {
 			inOutput = false
@@ -197,31 +170,6 @@ func checkInputsOutputRefs(result *Result, body hcl.Body, outputs map[string]out
 	}
 }
 
-func checkObjectForOutputs(result *Result, val cty.Value, outputs map[string]outputDef, mockOutputs map[string]mockOutput, depName, depPath string, exprRange hcl.Range) {
-	if !val.IsKnown() || !val.IsWhollyKnown() {
-		return
-	}
-
-	if val.Type().IsObjectType() {
-		obj := val.AsValueMap()
-
-		if outputsVal, ok := obj["outputs"]; ok {
-			checkObjectForOutputs(result, outputsVal, outputs, mockOutputs, depName, depPath, exprRange)
-		}
-
-		if depVal, ok := obj["dependency"]; ok {
-			checkObjectForOutputs(result, depVal, outputs, mockOutputs, depName, depPath, exprRange)
-		}
-
-		for _, v := range obj {
-			checkObjectForOutputs(result, v, outputs, mockOutputs, depName, depPath, exprRange)
-		}
-	}
-
-	if val.CanIterateElements() {
-		for it := val.ElementIterator(); it.Next(); {
-			_, v := it.Element()
-			checkObjectForOutputs(result, v, outputs, mockOutputs, depName, depPath, exprRange)
-		}
-	}
+// checkObjectForOutputs is kept for future use with output validation
+func checkObjectForOutputs(_ *Result, _ cty.Value, _ map[string]outputDef, _ map[string]mockOutput, _, _ string, _ hcl.Range) {
 }
