@@ -1,5 +1,11 @@
 # HCL Linter
 
+<p align="center">
+  <img src="hcl-linter-banner.png" alt="HCL Linter" width="680"/>
+  <br/>
+  <img src="hcl-linter-icon.svg" alt="Icon" width="128" height="128"/>
+</p>
+
 A configurable linter for Terragrunt HCL files that enforces consistency standards across large codebases.
 
 [![CI](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml)
