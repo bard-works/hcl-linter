@@ -43,71 +43,33 @@ func getCwdConfigDir() (string, error) {
 }
 
 func findConfigDir(loader *Loader) *ConfigResult {
-	if loader.configDir != "" {
-		configDir := loader.configDir
-		if !strings.HasSuffix(configDir, ".hcl-linter") && !strings.HasSuffix(configDir, "/.hcl-linter") {
-			configDir = filepath.Join(configDir, ".hcl-linter")
-		}
-		if _, err := os.Stat(configDir); err == nil {
+	for source, dir := range map[ConfigSource]string{
+		ConfigSourceCLI: loader.configDir,
+		ConfigSourceEnv: os.Getenv("HCL_LINTER_CONFIG_DIR"),
+	} {
+		if resolved, ok := resolveConfigDir(dir); ok {
 			return &ConfigResult{
-				Source:     ConfigSourceCLI,
-				SourcePath: configDir,
-			}
-		}
-		if _, err := os.Stat(loader.configDir); err == nil {
-			return &ConfigResult{
-				Source:     ConfigSourceCLI,
-				SourcePath: loader.configDir,
+				Source:     source,
+				SourcePath: resolved,
 			}
 		}
 	}
 
-	envDir := os.Getenv("HCL_LINTER_CONFIG_DIR")
-	if envDir != "" {
-		configDir := envDir
-		if !strings.HasSuffix(configDir, ".hcl-linter") && !strings.HasSuffix(configDir, "/.hcl-linter") {
-			configDir = filepath.Join(envDir, ".hcl-linter")
-		}
-		if _, err := os.Stat(configDir); err == nil {
-			return &ConfigResult{
-				Source:     ConfigSourceEnv,
-				SourcePath: configDir,
-			}
-		}
-		if _, err := os.Stat(envDir); err == nil {
-			return &ConfigResult{
-				Source:     ConfigSourceEnv,
-				SourcePath: envDir,
-			}
+	if cwd, _ := getCwdConfigDir(); cwd != "" {
+		if _, err := os.Stat(cwd); err == nil {
+			return &ConfigResult{Source: ConfigSourceCwd, SourcePath: cwd}
 		}
 	}
-
-	cwdDir, _ := getCwdConfigDir()
-	if cwdDir != "" {
-		if _, err := os.Stat(cwdDir); err == nil {
-			return &ConfigResult{
-				Source:     ConfigSourceCwd,
-				SourcePath: cwdDir,
-			}
+	if home, _ := getHomeConfigDir(); home != "" {
+		if _, err := os.Stat(home); err == nil {
+			return &ConfigResult{Source: ConfigSourceHome, SourcePath: home}
 		}
 	}
-
-	homeDir, _ := getHomeConfigDir()
-	if homeDir != "" {
-		if _, err := os.Stat(homeDir); err == nil {
-			return &ConfigResult{
-				Source:     ConfigSourceHome,
-				SourcePath: homeDir,
-			}
-		}
-	}
-
-	projectDir, _ := getProjectConfigDir()
-	if projectDir != "" {
-		if _, err := os.Stat(projectDir); err == nil {
+	if proj, _ := getProjectConfigDir(); proj != "" {
+		if _, err := os.Stat(proj); err == nil {
 			return &ConfigResult{
 				Source:     ConfigSourceProject,
-				SourcePath: projectDir,
+				SourcePath: proj,
 				WarningMsg: "No user config found, using project defaults",
 			}
 		}
@@ -133,42 +95,27 @@ func NewLoaderWithDiscovery(explicitDir string) (*Loader, *ConfigResult) {
 }
 
 func (l *Loader) LoadForFile(filename string) (*Rules, error) {
-	base := filepath.Base(filename)
+	baseName := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
 
-	baseName := strings.TrimSuffix(base, filepath.Ext(base))
-	for _, ext := range []string{".json", ".hcl", ""} {
-		var configFile string
-		if ext == "" {
-			configFile = filepath.Join(l.configDir, baseName)
-		} else {
-			configFile = filepath.Join(l.configDir, baseName+ext)
+	paths := findConfigFiles(l.configDir, baseName)
+	if file := firstExistingFile(paths); file != "" {
+		rules, err := l.loadConfigFile(file)
+		if err == nil {
+			return rules, nil
 		}
-		if _, err := os.Stat(configFile); err == nil {
-			rules, err := l.loadConfigFile(configFile)
-			if err == nil {
-				return rules, nil
-			}
-			if !strings.Contains(err.Error(), "unsupported config format") {
-				return nil, err
-			}
+		if !strings.Contains(err.Error(), "unsupported config format") {
+			return nil, err
 		}
 	}
 
-	for _, ext := range []string{".json", ".hcl", ""} {
-		var defaultFile string
-		if ext == "" {
-			defaultFile = filepath.Join(l.configDir, "default")
-		} else {
-			defaultFile = filepath.Join(l.configDir, "default"+ext)
+	defaultPaths := findConfigFiles(l.configDir, "default")
+	if file := firstExistingFile(defaultPaths); file != "" {
+		rules, err := l.loadConfigFile(file)
+		if err == nil {
+			return rules, nil
 		}
-		if _, err := os.Stat(defaultFile); err == nil {
-			rules, err := l.loadConfigFile(defaultFile)
-			if err == nil {
-				return rules, nil
-			}
-			if !strings.Contains(err.Error(), "unsupported config format") {
-				return nil, err
-			}
+		if !strings.Contains(err.Error(), "unsupported config format") {
+			return nil, err
 		}
 	}
 
@@ -197,27 +144,14 @@ func (l *Loader) HasConfigForFile(filename string) bool {
 		return false
 	}
 
-	base := filepath.Base(filename)
-	baseName := strings.TrimSuffix(base, filepath.Ext(base))
+	baseName := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
 
-	for _, ext := range []string{".json", ".hcl", ""} {
-		var configFile string
-		if ext == "" {
-			configFile = filepath.Join(l.configDir, baseName)
-		} else {
-			configFile = filepath.Join(l.configDir, baseName+ext)
-		}
-		if _, err := os.Stat(configFile); err == nil {
-			return true
-		}
-	}
-
-	defaultFile := filepath.Join(l.configDir, "default.json")
-	if _, err := os.Stat(defaultFile); err == nil {
+	paths := findConfigFiles(l.configDir, baseName)
+	if firstExistingFile(paths) != "" {
 		return true
 	}
 
-	return false
+	return firstExistingFile(findConfigFiles(l.configDir, "default")) != ""
 }
 
 func (l *Loader) HasSpecificConfigForFile(filename string) bool {
@@ -225,20 +159,7 @@ func (l *Loader) HasSpecificConfigForFile(filename string) bool {
 		return false
 	}
 
-	base := filepath.Base(filename)
-	baseName := strings.TrimSuffix(base, filepath.Ext(base))
+	baseName := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
 
-	for _, ext := range []string{".json", ".hcl", ""} {
-		var configFile string
-		if ext == "" {
-			configFile = filepath.Join(l.configDir, baseName)
-		} else {
-			configFile = filepath.Join(l.configDir, baseName+ext)
-		}
-		if _, err := os.Stat(configFile); err == nil {
-			return true
-		}
-	}
-
-	return false
+	return firstExistingFile(findConfigFiles(l.configDir, baseName)) != ""
 }
