@@ -87,9 +87,9 @@ func GetMaxConcurrency(cfg *Rules) int {
 }
 
 type BlockOrderConfig struct {
-	Enabled      bool              `json:"enabled"`
-	Order        []string          `json:"order"`
-	NestedOrder  map[string][]string `json:"nested_order,omitempty"`
+	Enabled     bool                `json:"enabled"`
+	Order       []string            `json:"order"`
+	NestedOrder map[string][]string `json:"nested_order,omitempty"`
 }
 
 type ArrayFormatConfig struct {

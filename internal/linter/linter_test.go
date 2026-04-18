@@ -97,7 +97,7 @@ terraform {}
 			if tt.expectIssue && !hasBlockOrderIssue {
 				t.Error("expected block_order issue, got none")
 			}
-if !tt.expectIssue && hasBlockOrderIssue {
+			if !tt.expectIssue && hasBlockOrderIssue {
 				t.Errorf("unexpected block_order issue: %v", result.Issues)
 			}
 		})
