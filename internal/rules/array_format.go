@@ -1,12 +1,43 @@
-package fix
+package rules
 
 import (
 	"sort"
 	"strings"
+
+	"github.com/bard-works/hcl-linter/internal/ast"
+	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/zclconf/go-cty/cty"
 )
 
-// fixArrays converts single-line arrays with 2+ items to multiline format and sorts items.
-func fixArrays(content string) (string, int) {
+type ArrayFormatRule struct{}
+
+func (r ArrayFormatRule) Name() string { return "array_format" }
+
+func (r ArrayFormatRule) Enabled(cfg *config.Rules) bool {
+	return cfg != nil && cfg.ArrayFormat != nil && cfg.ArrayFormat.Enabled
+}
+
+func (r ArrayFormatRule) Check(ctx *Context) []linter.Issue {
+	var issues []linter.Issue
+	checkArrayFormatBlocks(&issues, ctx.Blocks)
+	return issues
+}
+
+func (r ArrayFormatRule) Fix(ctx *Context) ([]byte, bool, error) {
+	sortItems := ctx.Config.ArrayFormat != nil && ctx.Config.ArrayFormat.Sort
+	newContent, changes := FixArrays(string(ctx.Content), sortItems)
+	if changes == 0 {
+		return ctx.Content, false, nil
+	}
+	return []byte(newContent), true, nil
+}
+
+// FixArrays converts single-line arrays with 2+ items to multiline format.
+// When sortItems is true, items are sorted alphabetically.
+// Exported for use by the legacy fixer during migration.
+func FixArrays(content string, sortItems bool) (string, int) {
 	lines := strings.Split(content, "\n")
 	changes := 0
 	var result strings.Builder
@@ -18,7 +49,7 @@ func fixArrays(content string) (string, int) {
 		if isArrayAssignment(line) && !isMultilineArrayStart(lines, i) {
 			items := extractAndFormatArray(line)
 			if len(items) >= 2 {
-				result.WriteString(formatMultilineArray(line, items))
+				result.WriteString(formatMultilineArray(line, items, sortItems))
 				changes++
 				i++
 				continue
@@ -28,7 +59,7 @@ func fixArrays(content string) (string, int) {
 		if isMultilineArrayStart(lines, i) {
 			arrayLines, itemCount := collectMultilineArray(lines, i)
 			if itemCount >= 2 && needsMultilineFix(arrayLines) {
-				fixed := fixMultilineArray(arrayLines, line)
+				fixed := fixMultilineArray(arrayLines, line, sortItems)
 				result.WriteString(fixed)
 				changes++
 				i += len(arrayLines)
@@ -50,13 +81,11 @@ func fixArrays(content string) (string, int) {
 	return result.String(), changes
 }
 
-// isArrayAssignment checks if a line contains an array assignment.
 func isArrayAssignment(line string) bool {
 	trimmed := strings.TrimSpace(line)
 	return strings.Contains(trimmed, "=") && strings.Contains(trimmed, "[") && strings.Contains(trimmed, "]")
 }
 
-// isMultilineArrayStart checks if a line starts a multiline array.
 func isMultilineArrayStart(lines []string, idx int) bool {
 	if idx >= len(lines) {
 		return false
@@ -65,7 +94,6 @@ func isMultilineArrayStart(lines []string, idx int) bool {
 	return strings.Contains(trimmed, "[") && !strings.Contains(trimmed, "]")
 }
 
-// collectMultilineArray collects all lines belonging to a multiline array.
 func collectMultilineArray(lines []string, start int) ([]string, int) {
 	var arrayLines []string
 	itemCount := 0
@@ -88,7 +116,6 @@ func collectMultilineArray(lines []string, start int) ([]string, int) {
 	return arrayLines, itemCount / 2
 }
 
-// extractAndFormatArray extracts items from a single-line array assignment.
 func extractAndFormatArray(line string) []string {
 	trimmed := strings.TrimSpace(line)
 
@@ -119,25 +146,23 @@ func extractAndFormatArray(line string) []string {
 		}
 	}
 
-	item := strings.TrimSpace(current.String())
-	if item != "" {
+	if item := strings.TrimSpace(current.String()); item != "" {
 		items = append(items, item)
 	}
 
 	return items
 }
 
-// formatMultilineArray formats items as a multiline array with proper indentation.
-func formatMultilineArray(line string, items []string) string {
+func formatMultilineArray(line string, items []string, sortItems bool) string {
 	indent := ""
-	var indentSb357 strings.Builder
+	var indentBuilder strings.Builder
 	for _, ch := range line {
 		if ch != ' ' && ch != '\t' {
 			break
 		}
-		indentSb357.WriteString(string(ch))
+		indentBuilder.WriteRune(ch)
 	}
-	indent += indentSb357.String()
+	indent = indentBuilder.String()
 
 	idx := strings.Index(line, "[")
 	if idx == -1 {
@@ -145,32 +170,29 @@ func formatMultilineArray(line string, items []string) string {
 	}
 	key := strings.TrimSpace(line[:idx])
 
+	if sortItems {
+		sort.Strings(items)
+	}
+
 	var sb strings.Builder
 	sb.WriteString(indent)
 	sb.WriteString(key)
 	sb.WriteString(" = [\n")
-
-	sort.Strings(items)
-
 	for _, item := range items {
 		sb.WriteString(indent)
 		sb.WriteString("  ")
 		sb.WriteString(strings.TrimSpace(item))
 		sb.WriteString(",\n")
 	}
-
 	sb.WriteString(indent)
 	sb.WriteString("]\n")
-
 	return sb.String()
 }
 
-// needsMultilineFix checks if a multiline array needs fixing.
 func needsMultilineFix(lines []string) bool {
 	if len(lines) < 2 {
 		return false
 	}
-
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasSuffix(trimmed, ",") {
@@ -180,21 +202,19 @@ func needsMultilineFix(lines []string) bool {
 			return true
 		}
 	}
-
 	return false
 }
 
-// fixMultilineArray fixes a multiline array by sorting and reformatting items.
-func fixMultilineArray(lines []string, firstLine string) string {
+func fixMultilineArray(lines []string, firstLine string, sortItems bool) string {
 	indent := ""
-	var indentSb407 strings.Builder
+	var indentBuilder strings.Builder
 	for _, ch := range firstLine {
 		if ch != ' ' && ch != '\t' {
 			break
 		}
-		indentSb407.WriteString(string(ch))
+		indentBuilder.WriteRune(ch)
 	}
-	indent += indentSb407.String()
+	indent = indentBuilder.String()
 
 	idx := strings.Index(firstLine, "[")
 	if idx == -1 {
@@ -204,29 +224,79 @@ func fixMultilineArray(lines []string, firstLine string) string {
 
 	var items []string
 	for _, line := range lines[1 : len(lines)-1] {
-		trimmed := strings.TrimSpace(line)
-		trimmed = strings.TrimSuffix(trimmed, ",")
+		trimmed := strings.TrimSuffix(strings.TrimSpace(line), ",")
 		if trimmed != "" {
 			items = append(items, trimmed)
 		}
 	}
 
-	sort.Strings(items)
+	if sortItems {
+		sort.Strings(items)
+	}
 
 	var sb strings.Builder
 	sb.WriteString(indent)
 	sb.WriteString(key)
 	sb.WriteString(" = [\n")
-
 	for _, item := range items {
 		sb.WriteString(indent)
 		sb.WriteString("  ")
 		sb.WriteString(item)
 		sb.WriteString(",\n")
 	}
-
 	sb.WriteString(indent)
 	sb.WriteString("]\n")
-
 	return sb.String()
+}
+
+// --- Check helpers ---
+
+func checkArrayFormatBlocks(issues *[]linter.Issue, blocks []ast.BlockInfo) {
+	for _, block := range blocks {
+		if len(block.Block.Body.Attributes) > 0 {
+			for _, attr := range block.Block.Body.Attributes {
+				checkExprArrayFormat(issues, attr.Expr)
+			}
+		}
+		if len(block.Block.Body.Blocks) > 0 {
+			checkArrayFormatBlocks(issues, ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks))
+		}
+	}
+}
+
+func checkExprArrayFormat(issues *[]linter.Issue, expr hclsyntax.Expression) {
+	switch e := expr.(type) {
+	case *hclsyntax.TupleConsExpr:
+		if len(e.Exprs) > 1 {
+			allStrings := true
+			for _, ex := range e.Exprs {
+				if !isStringLiteralExpr(ex) {
+					allStrings = false
+					break
+				}
+			}
+			if allStrings {
+				*issues = append(*issues, linter.Issue{
+					Severity: linter.SeverityWarning,
+					Rule:     "array_format",
+					Message:  "tuple of string literals should be written as a list for better readability",
+				})
+			}
+		}
+	case *hclsyntax.ObjectConsExpr:
+		for _, item := range e.Items {
+			checkExprArrayFormat(issues, item.ValueExpr)
+		}
+	}
+}
+
+func isStringLiteralExpr(expr hclsyntax.Expression) bool {
+	switch e := expr.(type) {
+	case *hclsyntax.LiteralValueExpr:
+		return e.Val.Type() == cty.String
+	case *hclsyntax.TemplateExpr:
+		return true
+	default:
+		return false
+	}
 }

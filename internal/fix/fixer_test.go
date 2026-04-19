@@ -1169,3 +1169,118 @@ func TestFixTerraformPreservesAllAttributes(t *testing.T) {
 		}
 	}
 }
+
+// TestFixArraySortDisabled verifies that when sort is not configured (defaults
+// to false), array items are expanded to multiline but their original order is
+// preserved.
+func TestFixArraySortDisabled(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `rules {
+  array_format {
+    enabled = true
+  }
+}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := newFixTestLoader(t, tmpDir)
+	fixer := NewFixer(loader)
+
+	// Items are intentionally out of alphabetical order.
+	input := `arr = ["charlie", "alpha", "bravo"]
+`
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes == 0 {
+		t.Fatal("expected array to be expanded to multiline, got 0 changes")
+	}
+
+	// Items should appear in their original order, not sorted.
+	charlieIdx := strings.Index(result.Content, "charlie")
+	alphaIdx := strings.Index(result.Content, "alpha")
+	bravoIdx := strings.Index(result.Content, "bravo")
+
+	if charlieIdx == -1 || alphaIdx == -1 || bravoIdx == -1 {
+		t.Fatalf("missing items in output:\n%s", result.Content)
+	}
+
+	if charlieIdx > alphaIdx {
+		t.Errorf("items were sorted even though sort = false: charlie should appear before alpha\n%s", result.Content)
+	}
+}
+
+// TestFixArraySortEnabled verifies that when sort = true, array items are
+// sorted alphabetically after expansion.
+func TestFixArraySortEnabled(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `rules {
+  array_format {
+    enabled = true
+    sort    = true
+  }
+}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := newFixTestLoader(t, tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `arr = ["charlie", "alpha", "bravo"]
+`
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes == 0 {
+		t.Fatal("expected changes, got 0")
+	}
+
+	alphaIdx := strings.Index(result.Content, "alpha")
+	bravoIdx := strings.Index(result.Content, "bravo")
+	charlieIdx := strings.Index(result.Content, "charlie")
+
+	if alphaIdx == -1 || bravoIdx == -1 || charlieIdx == -1 {
+		t.Fatalf("missing items in output:\n%s", result.Content)
+	}
+
+	if !(alphaIdx < bravoIdx && bravoIdx < charlieIdx) {
+		t.Errorf("expected items to be sorted alphabetically (alpha < bravo < charlie), got:\n%s", result.Content)
+	}
+}
+
+// TestFormatFixFileArraySort verifies that fix --format always sorts array
+// items regardless of config, maintaining its original opinionated behaviour.
+func TestFormatFixFileArraySort(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+	loader := newFixTestLoader(t, tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `arr = ["charlie", "alpha", "bravo"]
+`
+	file := createHCLFile(t, tmpDir, "format_test.hcl", input)
+
+	result, err := fixer.FormatFixFile(file)
+	if err != nil {
+		t.Fatalf("FormatFixFile failed: %v", err)
+	}
+
+	alphaIdx := strings.Index(result.Content, "alpha")
+	bravoIdx := strings.Index(result.Content, "bravo")
+	charlieIdx := strings.Index(result.Content, "charlie")
+
+	if alphaIdx == -1 || bravoIdx == -1 || charlieIdx == -1 {
+		t.Fatalf("missing items in output:\n%s", result.Content)
+	}
+
+	if !(alphaIdx < bravoIdx && bravoIdx < charlieIdx) {
+		t.Errorf("expected --format to always sort items (alpha < bravo < charlie), got:\n%s", result.Content)
+	}
+}

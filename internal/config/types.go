@@ -101,6 +101,7 @@ type BlockOrderConfig struct {
 type ArrayFormatConfig struct {
 	Enabled            bool `json:"enabled"`
 	MultilineThreshold int  `json:"multiline_threshold"`
+	Sort               bool `json:"sort"`
 }
 
 // NameValidationConfig configures name validation rules.

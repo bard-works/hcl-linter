@@ -39,30 +39,6 @@ func (l *Linter) LintFile(path string) (*Result, error) {
 
 	blocks := ast.GetTopLevelBlocks(file)
 
-	if cfg.BlockOrder != nil && cfg.BlockOrder.Enabled {
-		checkBlockOrderImpl(result, blocks, cfg.BlockOrder)
-	}
-
-	if cfg.ArrayFormat != nil && cfg.ArrayFormat.Enabled {
-		checkArrayFormatImpl(result, blocks)
-	}
-
-	if cfg.NameValidation != nil && cfg.NameValidation.Enabled {
-		checkNameValidationImpl(result, blocks)
-	}
-
-	if cfg.Duplicates != nil && cfg.Duplicates.Enabled {
-		checkDuplicatesImpl(result, blocks, cfg.Duplicates)
-	}
-
-	if cfg.RequiredFields != nil {
-		checkRequiredFieldsImpl(result, blocks, cfg.RequiredFields)
-	}
-
-	if cfg.RequiredBlocks != nil && len(cfg.RequiredBlocks.Required) > 0 {
-		checkRequiredBlocksImpl(result, blocks, cfg.RequiredBlocks)
-	}
-
 	if cfg.Terragrunt != nil && cfg.Terragrunt.Enabled {
 		checkTerragrunt(result, path, file, cfg.Terragrunt)
 	}

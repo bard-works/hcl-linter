@@ -38,7 +38,7 @@ func checkKeyCase(result *Result, blocks []ast.BlockInfo, caseType string) {
 	for _, block := range blocks {
 		checkBlockKeyCase(result, block.Block.Body, pattern, caseType)
 		if len(block.Block.Body.Blocks) > 0 {
-			nestedBlocks := getBlockInfoFromBlocks(block.Block.Body.Blocks)
+			nestedBlocks := ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks)
 			checkKeyCase(result, nestedBlocks, caseType)
 		}
 	}
@@ -67,7 +67,7 @@ func checkDisallowedKeys(result *Result, blocks []ast.BlockInfo, disallowed []st
 	for _, block := range blocks {
 		checkBlockDisallowedKeys(result, block.Block.Body, disallowedMap)
 		if len(block.Block.Body.Blocks) > 0 {
-			nestedBlocks := getBlockInfoFromBlocks(block.Block.Body.Blocks)
+			nestedBlocks := ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks)
 			checkDisallowedKeys(result, nestedBlocks, disallowed)
 		}
 	}
@@ -98,7 +98,7 @@ func checkValuePattern(result *Result, blocks []ast.BlockInfo, patterns map[stri
 	for _, block := range blocks {
 		checkBlockValuePattern(result, block.Block.Body, compilePatterns)
 		if len(block.Block.Body.Blocks) > 0 {
-			nestedBlocks := getBlockInfoFromBlocks(block.Block.Body.Blocks)
+			nestedBlocks := ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks)
 			checkValuePattern(result, nestedBlocks, patterns)
 		}
 	}
