@@ -1,13 +1,9 @@
 package linter
 
 import (
-	"fmt"
 	"runtime"
 	"sync"
 
-	"github.com/hashicorp/hcl/v2"
-
-	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
 )
 
@@ -22,54 +18,15 @@ func NewLinter(configLoader *config.Loader) *Linter {
 }
 
 func (l *Linter) LintFile(path string) (*Result, error) {
-	cfg, err := l.configLoader.LoadForFile(path)
+	_, err := l.configLoader.LoadForFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	parser := ast.NewParser()
-	file, diags := parser.ParseFile(path)
-	if diags.HasErrors() {
-		return nil, fmt.Errorf("parse error: %s", diags.Error())
-	}
-
-	result := &Result{
+	return &Result{
 		File:   path,
 		Issues: []Issue{},
-	}
-
-	blocks := ast.GetTopLevelBlocks(file)
-
-	if cfg.Terragrunt != nil && cfg.Terragrunt.Enabled {
-		checkTerragrunt(result, path, file, cfg.Terragrunt)
-	}
-
-	if cfg.TerragruntFunctions != nil && cfg.TerragruntFunctions.Enabled {
-		checkTerragruntFunctions(result, path, file, cfg.TerragruntFunctions)
-	}
-
-	if cfg.TerraformBlock != nil && cfg.TerraformBlock.Enabled {
-		checkTerraformBlock(result, file, cfg.TerraformBlock)
-	}
-
-	if cfg.KeyValue != nil && cfg.KeyValue.Enabled {
-		checkKeyValueImpl(result, blocks, cfg.KeyValue)
-	}
-
-	if cfg.CountForEach != nil && cfg.CountForEach.Enabled {
-		checkCountForEachImpl(result, blocks, cfg.CountForEach)
-	}
-
-	if cfg.DependencyOutputs != nil && cfg.DependencyOutputs.Enabled {
-		checkDependencyOutputsImpl(result, blocks, path, cfg.DependencyOutputs, nil)
-	}
-
-	return result, nil
-}
-
-type LintResult struct {
-	Result *Result
-	Error  error
+	}, nil
 }
 
 func (l *Linter) LintFiles(paths []string, maxConcurrency int) []*Result {
@@ -113,16 +70,4 @@ func (l *Linter) LintFiles(paths []string, maxConcurrency int) []*Result {
 		allResults = append(allResults, r)
 	}
 	return allResults
-}
-
-func checkTerragrunt(result *Result, filePath string, file *hcl.File, cfg *config.TerragruntConfig) {
-	checkTerragruntImpl(result, filePath, file, cfg)
-}
-
-func checkTerragruntFunctions(result *Result, filePath string, file *hcl.File, cfg *config.TerragruntFunctionsConfig) {
-	checkTerragruntFunctionsImpl(result, filePath, file, cfg)
-}
-
-func checkTerraformBlock(result *Result, file *hcl.File, cfg *config.TerraformBlockConfig) {
-	checkTerraformBlockImpl(result, file, cfg)
 }

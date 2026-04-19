@@ -1,4 +1,4 @@
-package linter
+package rules
 
 import (
 	"fmt"
@@ -9,21 +9,35 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/linter"
 )
 
-func checkKeyValueImpl(result *Result, blocks []ast.BlockInfo, cfg *config.KeyValueConfig) {
-	if cfg.KeyCase != "" {
-		checkKeyCase(result, blocks, cfg.KeyCase)
-	}
-	if len(cfg.Disallowed) > 0 {
-		checkDisallowedKeys(result, blocks, cfg.Disallowed)
-	}
-	if len(cfg.ValuePattern) > 0 {
-		checkValuePattern(result, blocks, cfg.ValuePattern)
-	}
+type KeyValueRule struct{}
+
+func (r KeyValueRule) Name() string { return "key_value" }
+
+func (r KeyValueRule) Enabled(cfg *config.Rules) bool {
+	return cfg != nil && cfg.KeyValue != nil && cfg.KeyValue.Enabled
 }
 
-func checkKeyCase(result *Result, blocks []ast.BlockInfo, caseType string) {
+func (r KeyValueRule) Check(ctx *Context) []linter.Issue {
+	cfg := ctx.Config.KeyValue
+	var issues []linter.Issue
+
+	if cfg.KeyCase != "" {
+		kvCheckKeyCase(&issues, ctx.Blocks, cfg.KeyCase)
+	}
+	if len(cfg.Disallowed) > 0 {
+		kvCheckDisallowedKeys(&issues, ctx.Blocks, cfg.Disallowed)
+	}
+	if len(cfg.ValuePattern) > 0 {
+		kvCheckValuePattern(&issues, ctx.Blocks, cfg.ValuePattern)
+	}
+
+	return issues
+}
+
+func kvCheckKeyCase(issues *[]linter.Issue, blocks []ast.BlockInfo, caseType string) {
 	var pattern *regexp.Regexp
 	switch strings.ToLower(caseType) {
 	case "camelcase":
@@ -37,20 +51,20 @@ func checkKeyCase(result *Result, blocks []ast.BlockInfo, caseType string) {
 	}
 
 	for _, block := range blocks {
-		checkBlockKeyCase(result, block.Block.Body, pattern, caseType)
+		kvCheckBlockKeyCase(issues, block.Block.Body, pattern, caseType)
 		if len(block.Block.Body.Blocks) > 0 {
 			nestedBlocks := ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks)
-			checkKeyCase(result, nestedBlocks, caseType)
+			kvCheckKeyCase(issues, nestedBlocks, caseType)
 		}
 	}
 }
 
-func checkBlockKeyCase(result *Result, body hcl.Body, pattern *regexp.Regexp, caseType string) {
+func kvCheckBlockKeyCase(issues *[]linter.Issue, body hcl.Body, pattern *regexp.Regexp, caseType string) {
 	attrs, _ := body.JustAttributes()
 	for name := range attrs {
 		if !pattern.MatchString(name) {
-			result.Issues = append(result.Issues, Issue{
-				Severity: SeverityError,
+			*issues = append(*issues, linter.Issue{
+				Severity: linter.SeverityError,
 				Rule:     "key_case",
 				Message:  fmt.Sprintf("attribute %q should be %s", name, caseType),
 				Location: attrs[name].Expr.Range(),
@@ -59,27 +73,27 @@ func checkBlockKeyCase(result *Result, body hcl.Body, pattern *regexp.Regexp, ca
 	}
 }
 
-func checkDisallowedKeys(result *Result, blocks []ast.BlockInfo, disallowed []string) {
+func kvCheckDisallowedKeys(issues *[]linter.Issue, blocks []ast.BlockInfo, disallowed []string) {
 	disallowedMap := make(map[string]bool)
 	for _, k := range disallowed {
 		disallowedMap[k] = true
 	}
 
 	for _, block := range blocks {
-		checkBlockDisallowedKeys(result, block.Block.Body, disallowedMap)
+		kvCheckBlockDisallowedKeys(issues, block.Block.Body, disallowedMap)
 		if len(block.Block.Body.Blocks) > 0 {
 			nestedBlocks := ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks)
-			checkDisallowedKeys(result, nestedBlocks, disallowed)
+			kvCheckDisallowedKeys(issues, nestedBlocks, disallowed)
 		}
 	}
 }
 
-func checkBlockDisallowedKeys(result *Result, body hcl.Body, disallowed map[string]bool) {
+func kvCheckBlockDisallowedKeys(issues *[]linter.Issue, body hcl.Body, disallowed map[string]bool) {
 	attrs, _ := body.JustAttributes()
 	for name := range attrs {
 		if disallowed[name] {
-			result.Issues = append(result.Issues, Issue{
-				Severity: SeverityError,
+			*issues = append(*issues, linter.Issue{
+				Severity: linter.SeverityError,
 				Rule:     "disallowed_keys",
 				Message:  fmt.Sprintf("attribute %q is not allowed", name),
 				Location: attrs[name].Expr.Range(),
@@ -88,24 +102,24 @@ func checkBlockDisallowedKeys(result *Result, body hcl.Body, disallowed map[stri
 	}
 }
 
-func checkValuePattern(result *Result, blocks []ast.BlockInfo, patterns map[string]string) {
-	compilePatterns := make(map[string]*regexp.Regexp)
+func kvCheckValuePattern(issues *[]linter.Issue, blocks []ast.BlockInfo, patterns map[string]string) {
+	compiled := make(map[string]*regexp.Regexp)
 	for key, pat := range patterns {
 		if p, err := regexp.Compile(pat); err == nil {
-			compilePatterns[key] = p
+			compiled[key] = p
 		}
 	}
 
 	for _, block := range blocks {
-		checkBlockValuePattern(result, block.Block.Body, compilePatterns)
+		kvCheckBlockValuePattern(issues, block.Block.Body, compiled)
 		if len(block.Block.Body.Blocks) > 0 {
 			nestedBlocks := ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks)
-			checkValuePattern(result, nestedBlocks, patterns)
+			kvCheckValuePattern(issues, nestedBlocks, patterns)
 		}
 	}
 }
 
-func checkBlockValuePattern(result *Result, body hcl.Body, patterns map[string]*regexp.Regexp) {
+func kvCheckBlockValuePattern(issues *[]linter.Issue, body hcl.Body, patterns map[string]*regexp.Regexp) {
 	attrs, _ := body.JustAttributes()
 	for key, attr := range attrs {
 		if pattern, ok := patterns[key]; ok {
@@ -115,8 +129,8 @@ func checkBlockValuePattern(result *Result, body hcl.Body, patterns map[string]*
 			}
 			strVal := val.AsString()
 			if !pattern.MatchString(strVal) {
-				result.Issues = append(result.Issues, Issue{
-					Severity: SeverityWarning,
+				*issues = append(*issues, linter.Issue{
+					Severity: linter.SeverityWarning,
 					Rule:     "value_pattern",
 					Message:  fmt.Sprintf("attribute %q value %q does not match pattern %q", key, strVal, pattern.String()),
 					Location: attr.Expr.Range(),

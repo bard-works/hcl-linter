@@ -1,13 +1,34 @@
-package fix
+package rules
 
 import (
 	"strings"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
+	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/linter"
 )
 
-// fixBlankLinesWithinBlocks removes unnecessary blank lines within blocks and object attributes.
-func fixBlankLinesWithinBlocks(content string, blocks []ast.BlockInfo, attrs []ast.AttributeInfo) (string, int) {
+type BlankLinesRule struct{}
+
+func (r BlankLinesRule) Name() string { return "blank_lines" }
+
+func (r BlankLinesRule) Enabled(cfg *config.Rules) bool {
+	return cfg != nil && cfg.BlankLines != nil && cfg.BlankLines.Enabled && cfg.BlankLines.WithinBlocks
+}
+
+func (r BlankLinesRule) Check(_ *Context) []linter.Issue { return nil }
+
+func (r BlankLinesRule) Fix(ctx *Context) ([]byte, bool, error) {
+	contentStr := string(ctx.Content)
+	newContent, changes := FixBlankLines(contentStr, ctx.Blocks, ctx.Attrs)
+	if changes == 0 {
+		return ctx.Content, false, nil
+	}
+	return []byte(newContent), true, nil
+}
+
+// FixBlankLines removes unnecessary blank lines within blocks and object attributes.
+func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.AttributeInfo) (string, int) {
 	lines := strings.Split(content, "\n")
 	changes := 0
 	usedLines := make(map[int]bool)
@@ -71,7 +92,7 @@ func fixBlankLinesWithinBlocks(content string, blocks []ast.BlockInfo, attrs []a
 					continue
 				}
 				prefixLines = []string{lines[lineIdx]}
-				contentStart = blockContentStart(lines, lineIdx)
+				contentStart = blankLinesBlockContentStart(lines, lineIdx)
 				contentEnd = block.EndLine
 				for j := lineIdx; j <= contentEnd; j++ {
 					processedLines[j] = true
@@ -112,8 +133,7 @@ func fixBlankLinesWithinBlocks(content string, blocks []ast.BlockInfo, attrs []a
 	return strings.Join(result, "\n") + "\n", changes
 }
 
-// blockContentStart finds the line where a block's content starts (after the opening brace).
-func blockContentStart(lines []string, blockStart int) int {
+func blankLinesBlockContentStart(lines []string, blockStart int) int {
 	for i := blockStart; i < len(lines); i++ {
 		if strings.Contains(strings.TrimSpace(lines[i]), "{") {
 			return i + 1
@@ -122,7 +142,6 @@ func blockContentStart(lines []string, blockStart int) int {
 	return blockStart + 1
 }
 
-// removeBlankLinesWithinBlock removes unnecessary blank lines within a block.
 func removeBlankLinesWithinBlock(lines []string) []string {
 	if len(lines) < 2 {
 		return lines

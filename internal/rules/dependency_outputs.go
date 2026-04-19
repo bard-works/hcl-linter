@@ -1,4 +1,4 @@
-package linter
+package rules
 
 import (
 	"encoding/json"
@@ -13,47 +13,55 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/linter"
 )
 
-type outputDef struct{}
+type DependencyOutputsRule struct{}
 
-type mockOutputs struct {
-	Outputs map[string]mockOutput `json:"outputs"`
+func (r DependencyOutputsRule) Name() string { return "dependency_outputs" }
+
+func (r DependencyOutputsRule) Enabled(cfg *config.Rules) bool {
+	return cfg != nil && cfg.DependencyOutputs != nil && cfg.DependencyOutputs.Enabled
 }
 
-type mockOutput struct {
+func (r DependencyOutputsRule) Check(ctx *Context) []linter.Issue {
+	var issues []linter.Issue
+	visited := make(map[string]bool)
+
+	for _, block := range ctx.Blocks {
+		if block.Type == "dependency" {
+			depCheckOutputRefs(&issues, block, ctx.FilePath, visited)
+		}
+	}
+
+	return issues
+}
+
+type depOutputDef struct{}
+
+type depMockOutputs struct {
+	Outputs map[string]depMockOutput `json:"outputs"`
+}
+
+type depMockOutput struct {
 	Value any    `json:"value"`
 	Type  string `json:"type"`
 }
 
-func checkDependencyOutputsImpl(result *Result, blocks []ast.BlockInfo, filePath string, cfg *config.DependencyOutputsConfig, _ *config.Loader) {
-	if !cfg.Enabled {
-		return
-	}
-
-	visited := make(map[string]bool)
-	for _, block := range blocks {
-		if block.Type == "dependency" {
-			checkDependencyOutputRefs(result, block, filePath, visited)
-		}
-	}
-}
-
-func checkDependencyOutputRefs(result *Result, block ast.BlockInfo, currentFilePath string, visited map[string]bool) {
+func depCheckOutputRefs(issues *[]linter.Issue, block ast.BlockInfo, currentFilePath string, visited map[string]bool) {
 	depName := block.Labels[0]
-	depPath := getDependencyPath(block.Block.Body)
+	depPath := depGetPath(block.Block.Body)
 	if depPath == "" {
 		return
 	}
 
 	currentDir := filepath.Dir(currentFilePath)
 	depFullPath := filepath.Clean(filepath.Join(currentDir, depPath))
-
 	absDep, _ := filepath.Abs(depFullPath)
 
 	if visited[absDep] {
-		result.Issues = append(result.Issues, Issue{
-			Severity: SeverityWarning,
+		*issues = append(*issues, linter.Issue{
+			Severity: linter.SeverityWarning,
 			Rule:     "dependency_outputs",
 			Message:  fmt.Sprintf("circular dependency detected for %q", depName),
 			Location: block.Block.TypeRange,
@@ -62,10 +70,10 @@ func checkDependencyOutputRefs(result *Result, block ast.BlockInfo, currentFileP
 	}
 	visited[absDep] = true
 
-	outputs, mockOutputs := getDependencyOutputs(depFullPath)
-	if outputs == nil && len(mockOutputs) == 0 {
-		result.Issues = append(result.Issues, Issue{
-			Severity: SeverityWarning,
+	outputs, mockOuts := depGetOutputs(depFullPath)
+	if outputs == nil && len(mockOuts) == 0 {
+		*issues = append(*issues, linter.Issue{
+			Severity: linter.SeverityWarning,
 			Rule:     "dependency_outputs",
 			Message:  fmt.Sprintf("cannot validate dependency %q: outputs not found in %s", depName, depPath),
 			Location: block.Block.TypeRange,
@@ -73,10 +81,10 @@ func checkDependencyOutputRefs(result *Result, block ast.BlockInfo, currentFileP
 		return
 	}
 
-	checkInputsOutputRefs(result, block.Block.Body, outputs, mockOutputs, depName, depPath)
+	depCheckInputsOutputRefs(issues, block.Block.Body, outputs, mockOuts, depName, depPath)
 }
 
-func getDependencyPath(body hcl.Body) string {
+func depGetPath(body hcl.Body) string {
 	attrs, _ := body.JustAttributes()
 	if attr, ok := attrs["config_path"]; ok {
 		val, diags := attr.Expr.Value(nil)
@@ -87,9 +95,9 @@ func getDependencyPath(body hcl.Body) string {
 	return ""
 }
 
-func getDependencyOutputs(depPath string) (map[string]outputDef, map[string]mockOutput) {
-	outputs := make(map[string]outputDef)
-	mockOuts := make(map[string]mockOutput)
+func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockOutput) {
+	outputs := make(map[string]depOutputDef)
+	mockOuts := make(map[string]depMockOutput)
 
 	if _, err := os.Stat(depPath); os.IsNotExist(err) {
 		return nil, nil
@@ -101,18 +109,17 @@ func getDependencyOutputs(depPath string) (map[string]outputDef, map[string]mock
 		if err != nil {
 			continue
 		}
-
-		outputsFromTf := parseOutputsFromTf(string(content))
-		for name, out := range outputsFromTf {
+		for name, out := range depParseOutputsFromTf(string(content)) {
 			outputs[name] = out
 		}
 	}
 
 	mockPath := filepath.Join(depPath, ".mock-outputs.json")
 	if mockContent, err := os.ReadFile(mockPath); err == nil {
-		mockOuts = parseMockOutputs(mockContent)
-		for name := range mockOuts {
-			outputs[name] = outputDef{}
+		parsed := depParseMockOutputs(mockContent)
+		for name, out := range parsed {
+			mockOuts[name] = out
+			outputs[name] = depOutputDef{}
 		}
 	}
 
@@ -123,24 +130,22 @@ func getDependencyOutputs(depPath string) (map[string]outputDef, map[string]mock
 	return outputs, mockOuts
 }
 
-var outputBlockRe = regexp.MustCompile(`^output\s+"(\w+)"`)
+var depOutputBlockRe = regexp.MustCompile(`^output\s+"(\w+)"`)
 
-func parseOutputsFromTf(content string) map[string]outputDef {
-	outputs := make(map[string]outputDef)
-
+func depParseOutputsFromTf(content string) map[string]depOutputDef {
+	outputs := make(map[string]depOutputDef)
 	lines := strings.Split(content, "\n")
 	var inOutput bool
 	var currentName string
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-
-		if match := outputBlockRe.FindStringSubmatch(trimmed); match != nil {
+		if match := depOutputBlockRe.FindStringSubmatch(trimmed); match != nil {
 			currentName = match[1]
 			inOutput = true
 		} else if inOutput && strings.HasPrefix(trimmed, "type =") {
 			if currentName != "" {
-				outputs[currentName] = outputDef{}
+				outputs[currentName] = depOutputDef{}
 			}
 		} else if trimmed == "}" {
 			inOutput = false
@@ -151,26 +156,26 @@ func parseOutputsFromTf(content string) map[string]outputDef {
 	return outputs
 }
 
-func parseMockOutputs(content []byte) map[string]mockOutput {
-	var mock mockOutputs
+func depParseMockOutputs(content []byte) map[string]depMockOutput {
+	var mock depMockOutputs
 	if err := json.Unmarshal(content, &mock); err != nil {
 		return nil
 	}
 	return mock.Outputs
 }
 
-func checkInputsOutputRefs(result *Result, body hcl.Body, outputs map[string]outputDef, mockOutputs map[string]mockOutput, depName, depPath string) {
+func depCheckInputsOutputRefs(issues *[]linter.Issue, body hcl.Body, outputs map[string]depOutputDef, mockOuts map[string]depMockOutput, depName, depPath string) {
 	attrs, _ := body.JustAttributes()
 	for _, attr := range attrs {
 		val, diags := attr.Expr.Value(nil)
 		if diags.HasErrors() {
 			continue
 		}
-
-		checkObjectForOutputs(result, val, outputs, mockOutputs, depName, depPath, attr.Expr.Range())
+		_ = val
+		_ = outputs
+		_ = mockOuts
+		_ = depName
+		_ = depPath
+		_ = attr
 	}
-}
-
-// checkObjectForOutputs is kept for future use with output validation
-func checkObjectForOutputs(_ *Result, _ cty.Value, _ map[string]outputDef, _ map[string]mockOutput, _, _ string, _ hcl.Range) {
 }

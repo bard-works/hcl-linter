@@ -191,13 +191,13 @@ For each rule:
 - [x] 4. DuplicatesRule
 - [x] 5. RequiredFieldsRule
 - [x] 6. RequiredBlocksRule
-- [ ] 7. BlankLinesRule
-- [ ] 8. TerragruntRule
-- [ ] 9. TerragruntFunctionsRule
-- [ ] 10. TerraformBlockRule
-- [ ] 11. KeyValueRule
-- [ ] 12. CountForEachRule
-- [ ] 13. DependencyOutputsRule
+- [x] 7. BlankLinesRule
+- [x] 8. TerragruntRule
+- [x] 9. TerragruntFunctionsRule
+- [x] 10. TerraformBlockRule
+- [x] 11. KeyValueRule
+- [x] 12. CountForEachRule
+- [x] 13. DependencyOutputsRule
 
 After each migration: engine calls the new rule struct; old function is deleted from linter/fix.
 
@@ -214,17 +214,17 @@ After all rules migrated, delete:
 - `SeverityInfo` constant (unused)
 - Any `GetBlockBodyAttributes`, `ParseJSON`, `checkObjectForOutputs` leftovers
 
-- [ ] Remove `internal/linter/` rule implementations (keep types)
-- [ ] Remove `internal/fix/fixer.go`
-- [ ] Remove dead code items above
-- [ ] `go test ./...` passes
+- [x] Remove `internal/linter/` rule implementations (keep types)
+- [x] Remove `internal/fix/fixer.go` (and entire `internal/fix/` directory)
+- [x] Remove dead code items above (LintResult, PreviewFix, SeverityInfo, getStringValue)
+- [x] `go test ./...` passes
 
 ---
 
 ## Step 5 — Fix non-determinism
 
-- [ ] Config source selection: map iteration → explicit ordered slice in `internal/config/`
-- [ ] `LintFiles` / `FixFiles` output: sort results by file path before returning
+- [x] Config source selection: map iteration → explicit ordered slice in `internal/config/`
+- [x] `LintFiles` / `FixFiles` output: sort results by file path before returning
 
 ---
 
@@ -242,4 +242,10 @@ After all rules migrated, delete:
 
 *(Update this section each session — what was done, what's next)*
 
-**Session 2 (2026-04-19):** Wrote plan. Completed Steps 1–2. Migrated Rules 1–6 (BlockOrder, ArrayFormat, NameValidation, Duplicates, RequiredFields, RequiredBlocks). `validation.go` deleted entirely. `addAttributeToBlockStr` moved to `rules.addAttributeToBlock`. All tests green. Next: BlankLinesRule (Step 3.7).
+**Session 2 (2026-04-19):** Wrote plan. Completed Steps 1–2. Migrated Rules 1–6 (BlockOrder, ArrayFormat, NameValidation, Duplicates, RequiredFields, RequiredBlocks). `validation.go` deleted entirely. `addAttributeToBlockStr` moved to `rules.addAttributeToBlock`. All tests green.
+
+**Session 3 (2026-04-19):** Migrated Rule 7 (BlankLinesRule). Exported `FixBlankLines` in `internal/rules/blank_lines.go`, updated `fixer.go` to call it, deleted `internal/fix/blank_lines.go`, registered in engine. All tests green. Next: TerragruntRule (Step 3.8).
+
+**Session 4 (2026-04-19):** Migrated Rules 8–13 (TerragruntRule, TerragruntFunctionsRule, TerraformBlockRule, KeyValueRule, CountForEachRule, DependencyOutputsRule). Deleted all source files from `internal/linter/`. Removed dead code: LintResult, PreviewFix, SeverityInfo, getStringValue. `linter.go` is now a thin stub returning empty Results. All tests green.
+
+**Session 5 (2026-04-19):** Step 4 remainder — moved fix pipeline (FixFile, FixFiles, FormatFixFile, FormatFixFiles, FixResult) into engine.go, moved fixer_test.go to engine_test.go, deleted `internal/fix/` entirely. Step 5 — fixed config source non-determinism (ordered slice instead of map), added sort by file path to LintFiles/FixFiles/FormatFixFiles. All tests green. Refactoring complete.

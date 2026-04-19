@@ -1,4 +1,4 @@
-package linter
+package rules
 
 import (
 	"math/big"
@@ -7,17 +7,31 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/linter"
 )
 
-func checkCountForEachImpl(result *Result, blocks []ast.BlockInfo, cfg *config.CountForEachConfig) {
-	if cfg.WarnOnCountZero || cfg.WarnOnEmptyForEach || cfg.WarnOnConflict {
-		checkCountZero(result, blocks, cfg.WarnOnCountZero)
-		checkEmptyForEach(result, blocks, cfg.WarnOnEmptyForEach)
-		checkConflict(result, blocks, cfg.WarnOnConflict)
-	}
+type CountForEachRule struct{}
+
+func (r CountForEachRule) Name() string { return "count_for_each" }
+
+func (r CountForEachRule) Enabled(cfg *config.Rules) bool {
+	return cfg != nil && cfg.CountForEach != nil && cfg.CountForEach.Enabled
 }
 
-func checkCountZero(result *Result, blocks []ast.BlockInfo, enabled bool) {
+func (r CountForEachRule) Check(ctx *Context) []linter.Issue {
+	cfg := ctx.Config.CountForEach
+	var issues []linter.Issue
+
+	if cfg.WarnOnCountZero || cfg.WarnOnEmptyForEach || cfg.WarnOnConflict {
+		cfeCheckCountZero(&issues, ctx.Blocks, cfg.WarnOnCountZero)
+		cfeCheckEmptyForEach(&issues, ctx.Blocks, cfg.WarnOnEmptyForEach)
+		cfeCheckConflict(&issues, ctx.Blocks, cfg.WarnOnConflict)
+	}
+
+	return issues
+}
+
+func cfeCheckCountZero(issues *[]linter.Issue, blocks []ast.BlockInfo, enabled bool) {
 	if !enabled {
 		return
 	}
@@ -41,8 +55,8 @@ func checkCountZero(result *Result, blocks []ast.BlockInfo, enabled bool) {
 		if val.Type() == cty.Number {
 			numVal := val.AsBigFloat()
 			if numVal.Cmp(big.NewFloat(0)) == 0 {
-				result.Issues = append(result.Issues, Issue{
-					Severity: SeverityWarning,
+				*issues = append(*issues, linter.Issue{
+					Severity: linter.SeverityWarning,
 					Rule:     "count_zero",
 					Message:  block.Type + " block has count = 0, resource will not be created",
 					Location: countAttr.Range(),
@@ -52,7 +66,7 @@ func checkCountZero(result *Result, blocks []ast.BlockInfo, enabled bool) {
 	}
 }
 
-func checkEmptyForEach(result *Result, blocks []ast.BlockInfo, enabled bool) {
+func cfeCheckEmptyForEach(issues *[]linter.Issue, blocks []ast.BlockInfo, enabled bool) {
 	if !enabled {
 		return
 	}
@@ -75,8 +89,8 @@ func checkEmptyForEach(result *Result, blocks []ast.BlockInfo, enabled bool) {
 
 		valMap := val.AsValueMap()
 		if len(valMap) == 0 {
-			result.Issues = append(result.Issues, Issue{
-				Severity: SeverityWarning,
+			*issues = append(*issues, linter.Issue{
+				Severity: linter.SeverityWarning,
 				Rule:     "empty_for_each",
 				Message:  block.Type + " block has empty for_each, resource will not be created",
 				Location: forEachAttr.Range(),
@@ -85,7 +99,7 @@ func checkEmptyForEach(result *Result, blocks []ast.BlockInfo, enabled bool) {
 	}
 }
 
-func checkConflict(result *Result, blocks []ast.BlockInfo, enabled bool) {
+func cfeCheckConflict(issues *[]linter.Issue, blocks []ast.BlockInfo, enabled bool) {
 	if !enabled {
 		return
 	}
@@ -101,8 +115,8 @@ func checkConflict(result *Result, blocks []ast.BlockInfo, enabled bool) {
 
 		if hasCount && hasForEach {
 			countAttr := attrs["count"]
-			result.Issues = append(result.Issues, Issue{
-				Severity: SeverityError,
+			*issues = append(*issues, linter.Issue{
+				Severity: linter.SeverityError,
 				Rule:     "count_for_each_conflict",
 				Message:  block.Type + " block has both count and for_each, which cannot be used together",
 				Location: countAttr.Range(),
