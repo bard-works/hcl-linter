@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -101,31 +102,58 @@ func TestFindConfigFiles(t *testing.T) {
 		}
 	})
 
-	t.Run("generates hcl and no extension files", func(t *testing.T) {
-		files := findConfigFiles("/config", "myfile")
-		want := []string{
-			"/config/myfile.hcl",
-			"/config/myfile",
+	t.Run("generates hcl and no extension files in correct order", func(t *testing.T) {
+		dir := t.TempDir()
+
+		hcl := filepath.Join(dir, "myfile.hcl")
+		raw := filepath.Join(dir, "myfile")
+
+		if err := os.WriteFile(hcl, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
 		}
-		if len(files) != len(want) {
-			t.Fatalf("got %d files, want %d", len(files), len(want))
+		if err := os.WriteFile(raw, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
 		}
-		for i, w := range want {
-			if files[i] != w {
-				t.Errorf("files[%d]: got %s, want %s", i, files[i], w)
-			}
+
+		files := findConfigFiles(dir, "myfile")
+
+		want := []string{hcl, raw}
+
+		if !reflect.DeepEqual(files, want) {
+			t.Fatalf("got %v, want %v", files, want)
 		}
 	})
 
-	t.Run("uses provided dir", func(t *testing.T) {
-		files := findConfigFiles("/custom/dir", "test")
-		want := []string{
-			"/custom/dir/test.hcl",
-			"/custom/dir/test",
+	t.Run("generates hcl and no extension files", func(t *testing.T) {
+		dir := t.TempDir()
+
+		// create files
+		hcl := filepath.Join(dir, "myfile.hcl")
+		raw := filepath.Join(dir, "myfile")
+
+		if err := os.WriteFile(hcl, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
 		}
-		for i, w := range want {
-			if files[i] != w {
-				t.Errorf("files[%d]: got %s, want %s", i, files[i], w)
+		if err := os.WriteFile(raw, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		files := findConfigFiles(dir, "myfile")
+
+		want := []string{hcl, raw}
+
+		if len(files) != len(want) {
+			t.Fatalf("got %d files, want %d (%v)", len(files), len(want), files)
+		}
+
+		gotSet := make(map[string]struct{}, len(files))
+		for _, f := range files {
+			gotSet[f] = struct{}{}
+		}
+
+		for _, w := range want {
+			if _, ok := gotSet[w]; !ok {
+				t.Errorf("missing expected file: %s (got %v)", w, files)
 			}
 		}
 	})

@@ -122,9 +122,17 @@ func TestConfigSourcePrecedence(t *testing.T) {
 			name: "CLI takes precedence",
 			setup: func() (string, func()) {
 				tmpDir := t.TempDir()
-				cliFile := filepath.Join(tmpDir, "test.hcl")
-				_ = os.WriteFile(cliFile, []byte("rules {}"), 0o644)
-				return cliFile, func() {}
+				configDir := filepath.Join(tmpDir, ".hcl-linter")
+				if err := os.MkdirAll(configDir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+
+				cliFile := filepath.Join(configDir, "test.hcl")
+				if err := os.WriteFile(cliFile, []byte("rules {}"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+
+				return tmpDir, func() {}
 			},
 			expect: ConfigSourceCLI,
 		},
