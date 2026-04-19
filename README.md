@@ -88,6 +88,24 @@ rules {
 }
 ```
 
+### Config Inheritance
+
+Use `extends` to inherit from another config in the same directory. Child rules override the base rule block entirely; unset rules are inherited as-is.
+
+```hcl
+# .hcl-linter/terragrunt.hcl — inherits all rules from default, overrides block_order
+extends = "default"
+
+rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+}
+```
+
+Chains are supported (`A extends B extends C`). Circular references are detected and reported as errors.
+
 ## Formatting
 
 The `fix` command auto-fixes formatting issues:

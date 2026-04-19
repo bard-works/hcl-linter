@@ -421,3 +421,219 @@ rules {
 		t.Error("TerraformBlock.VersionFormat should be false")
 	}
 }
+
+func TestExtendsMultiLevelChain(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	grandparentContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
+	parentContent := `extends = "grandparent"
+
+rules {
+  duplicates {
+    enabled = true
+    blocks  = ["dependency"]
+  }
+}`
+	childContent := `extends = "parent"
+
+rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals"]
+  }
+}`
+
+	for name, content := range map[string]string{
+		"grandparent.hcl": grandparentContent,
+		"parent.hcl":      parentContent,
+		"child.hcl":       childContent,
+	} {
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("child.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.BlankLines == nil {
+		t.Fatal("BlankLines should be inherited from grandparent")
+	}
+	if rules.Duplicates == nil {
+		t.Fatal("Duplicates should be inherited from parent")
+	}
+	if rules.BlockOrder == nil {
+		t.Fatal("BlockOrder should be set in child")
+	}
+	if len(rules.BlockOrder.Order) != 2 {
+		t.Errorf("expected 2 items in block_order, got %d", len(rules.BlockOrder.Order))
+	}
+}
+
+func TestExtendsMissingBase(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	childContent := `extends = "nonexistent"
+rules {}`
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "child.hcl"), []byte(childContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	_, err := loader.LoadForFile("child.hcl")
+	if err == nil {
+		t.Fatal("expected error when base config does not exist")
+	}
+}
+
+func TestExtendsWithExplicitHCLExtension(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	baseContent := `rules {
+  duplicates {
+    enabled = true
+    blocks  = ["dependency"]
+  }
+}`
+	childContent := `extends = "base.hcl"
+rules {}`
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "base.hcl"), []byte(baseContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "child.hcl"), []byte(childContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("child.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+	if rules.Duplicates == nil {
+		t.Fatal("Duplicates should be inherited from base")
+	}
+}
+
+func TestExtendsInheritance(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	baseContent := `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+  duplicates {
+    enabled = true
+    blocks  = ["dependency"]
+  }
+}`
+	childContent := `extends = "base"
+
+rules {
+  block_order {
+    enabled = true
+    order   = ["locals", "terraform"]
+  }
+}`
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "base.hcl"), []byte(baseContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "child.hcl"), []byte(childContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("child.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.BlockOrder == nil {
+		t.Fatal("BlockOrder should not be nil")
+	}
+	if len(rules.BlockOrder.Order) != 2 || rules.BlockOrder.Order[0] != "locals" {
+		t.Errorf("expected child block_order to override base, got %v", rules.BlockOrder.Order)
+	}
+
+	if rules.Duplicates == nil {
+		t.Fatal("Duplicates should be inherited from base")
+	}
+	if len(rules.Duplicates.Blocks) != 1 || rules.Duplicates.Blocks[0] != "dependency" {
+		t.Errorf("expected duplicates inherited from base, got %v", rules.Duplicates.Blocks)
+	}
+}
+
+func TestExtendsCircularDetection(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	aContent := `extends = "b"
+rules {}`
+	bContent := `extends = "a"
+rules {}`
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "a.hcl"), []byte(aContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "b.hcl"), []byte(bContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	_, err := loader.LoadForFile("a.hcl")
+	if err == nil {
+		t.Fatal("expected error for circular extends")
+	}
+}
+
+func TestExtendsWithDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	defaultContent := `rules {
+  blank_lines {
+    enabled      = true
+    within_blocks = true
+  }
+}`
+	childContent := `extends = "default"
+
+rules {
+  duplicates {
+    enabled = true
+    blocks  = ["dependency"]
+  }
+}`
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "default.hcl"), []byte(defaultContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "terragrunt.hcl"), []byte(childContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.BlankLines == nil {
+		t.Fatal("BlankLines should be inherited from default")
+	}
+	if !rules.BlankLines.WithinBlocks {
+		t.Error("BlankLines.WithinBlocks should be true (inherited)")
+	}
+	if rules.Duplicates == nil {
+		t.Fatal("Duplicates should be set in child")
+	}
+}

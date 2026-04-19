@@ -87,16 +87,17 @@ Validate `dependency.*.outputs.*` references by walking the dependency chain.
 ### 7. Config Inheritance (extends)
 Allow configs to inherit from base configs.
 
-```json
-{
-  "extends": "default",
-  "rules": {
-    "block_order": {
-      "order": ["include", "locals", "terraform"]
-    }
+```hcl
+extends = "default"
+
+rules {
+  block_order {
+    order = ["include", "locals", "terraform"]
   }
 }
 ```
+
+**Status:** ✅ Implemented
 
 ### 8. JSON Schema for Config
 Validate `.hcl-linter/` config files against a schema.

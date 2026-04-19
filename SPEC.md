@@ -34,11 +34,43 @@ Configs are loaded in the following order (first match wins):
 | 4        | `.hcl-linter/` in home      | User config in home directory    |
 | 5        | Project's `.hcl-linter/`    | Built-in defaults (fallback)     |
 
-**Full override**: User config completely replaces project configs - no merging.
+**Full override**: User config completely replaces project configs - no merging across source locations. Within a single config directory, use `extends` for inheritance (see below).
 
 **Applied configs are printed at startup** for transparency.
 
 If falling back to project defaults (no user config found), a warning is displayed.
+
+### Config Inheritance (`extends`)
+
+A config file can inherit from another config in the same directory using the top-level `extends` attribute:
+
+```hcl
+extends = "default"
+
+rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+}
+```
+
+**Behavior:**
+
+- `extends` takes a config name (with or without `.hcl` extension) relative to the same directory
+- Base config is loaded first; child rules override the base at the rule-block level (whole rule blocks, not individual fields)
+- Unset rules in the child are inherited from the base unchanged
+- Chains are supported: `child extends parent extends grandparent`
+- Circular references are detected and reported as an error
+
+**Example — shared base with per-file overrides:**
+
+```
+.hcl-linter/
+├── default.hcl       # Shared base rules (block_order, blank_lines, etc.)
+├── terragrunt.hcl    # extends = "default", overrides block_order
+└── root.hcl          # extends = "default", adds required_blocks
+```
 
 ### Configuration Schema (HCL)
 
@@ -759,6 +791,8 @@ Config files are matched by filename:
 1. Exact match: `terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`
 2. Fallback: use `.hcl-linter/default.hcl` if exists
 3. No config: file is skipped with a warning
+
+A matched config may use `extends` to inherit from another config in the same directory (see [Config Inheritance](#config-inheritance-extends) above).
 
 ### Target File Filtering
 

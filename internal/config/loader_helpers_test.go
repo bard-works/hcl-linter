@@ -131,6 +131,43 @@ func TestFindConfigFiles(t *testing.T) {
 	})
 }
 
+func TestResolveExtendsPath(t *testing.T) {
+	tests := []struct {
+		name        string
+		currentPath string
+		ref         string
+		want        string
+	}{
+		{
+			name:        "name without extension gets .hcl appended",
+			currentPath: "/config/dir/child.hcl",
+			ref:         "base",
+			want:        "/config/dir/base.hcl",
+		},
+		{
+			name:        "name with .hcl extension unchanged",
+			currentPath: "/config/dir/child.hcl",
+			ref:         "base.hcl",
+			want:        "/config/dir/base.hcl",
+		},
+		{
+			name:        "resolves relative to current file directory",
+			currentPath: "/a/b/c.hcl",
+			ref:         "default",
+			want:        "/a/b/default.hcl",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveExtendsPath(tt.currentPath, tt.ref)
+			if got != tt.want {
+				t.Errorf("resolveExtendsPath(%q, %q) = %q, want %q", tt.currentPath, tt.ref, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFirstExistingFile(t *testing.T) {
 	t.Run("empty slice returns empty string", func(t *testing.T) {
 		if got := firstExistingFile([]string{}); got != "" {
