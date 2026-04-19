@@ -20,15 +20,13 @@ Validate that referenced paths in Terragrunt blocks actually exist.
 - `remote_state_config` - Check `terraform.remote_state` has `backend`
 
 **Example config:**
-```json
-{
-  "rules": {
-    "terragrunt": {
-      "enabled": true,
-      "dependency_path_exists": true,
-      "include_path_exists": true,
-      "remote_state_config": true
-    }
+```hcl
+rules {
+  terragrunt {
+    enabled                = true
+    dependency_path_exists = true
+    include_path_exists    = true
+    remote_state_config    = true
   }
 }
 ```
@@ -100,11 +98,9 @@ rules {
 **Status:** ✅ Implemented
 
 ### 8. JSON Schema for Config
-Validate `.hcl-linter/` config files against a schema.
-
-- Catch typos in rule names
-- Provide IDE autocomplete support
-- Validate rule configuration structure
+~~JSON support was removed — this item no longer applies.~~ The typo/misconfiguration
+detection goal is covered by `validate-config` (item 12, implemented).
+IDE autocomplete via HCL language server could be a separate future item.
 
 ### 9. IDE Integration
 Improve editor support.
@@ -135,6 +131,10 @@ Lint the linter config itself.
 - Warn about unused config keys
 - Warn about conflicting rules
 - Suggest missing common keys
+
+**Status:** ✅ Implemented — `hcl-linter validate-config` detects unknown rule blocks
+and enabled rules with missing required fields. Warnings also surface at startup during
+`lint`/`check`/`fix`.
 
 ### 13. Interactive Fix Mode
 Prompt for each fix individually.
