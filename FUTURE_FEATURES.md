@@ -5,6 +5,7 @@ Planned features for hcl-linter, in priority order.
 ## High Priority
 
 ### 1. Terragrunt Function Embedding (IMPLEMENTED)
+
 Validate Terragrunt function calls in expressions.
 
 - `find_in_parent_folders_exists` - Check that the file being searched for exists in parent directories
@@ -13,6 +14,7 @@ Validate Terragrunt function calls in expressions.
 **Status:** ✅ Implemented
 
 ### 1.1. Terragrunt Path Validation
+
 Validate that referenced paths in Terragrunt blocks actually exist.
 
 - `dependency_path_exists` - Check `dependency.config_path` exists
@@ -20,6 +22,7 @@ Validate that referenced paths in Terragrunt blocks actually exist.
 - `remote_state_config` - Check `terraform.remote_state` has `backend`
 
 **Example config:**
+
 ```hcl
 rules {
   terragrunt {
@@ -34,6 +37,7 @@ rules {
 **Status:** ✅ Implemented
 
 ### 2. Terraform Block Validation
+
 Validate `terraform` blocks for completeness and correctness.
 
 - Enforce required `source` field
@@ -44,6 +48,7 @@ Validate `terraform` blocks for completeness and correctness.
 **Status:** ✅ Implemented
 
 ### 3. Key-Value Validation Rules
+
 Add configurable attribute-level linting.
 
 - `key_case` - Enforce naming convention (camelCase, snake_case, kebab-case)
@@ -53,6 +58,7 @@ Add configurable attribute-level linting.
 **Status:** ✅ Implemented
 
 ### 4. Count/ForEach Validation
+
 Detect potential issues with count and for_each expressions.
 
 - Detect dangling `count = 0` or `for_each = {}` patterns
@@ -62,6 +68,7 @@ Detect potential issues with count and for_each expressions.
 **Status:** ✅ Implemented
 
 ### 5. Nested Block Ordering
+
 Extend `block_order` to support nested blocks.
 
 - Example: enforce `before_hook` ordering inside `terraform` blocks
@@ -73,6 +80,7 @@ Extend `block_order` to support nested blocks.
 ## Medium Priority
 
 ### 6. Dependency Output Validation
+
 Validate `dependency.*.outputs.*` references by walking the dependency chain.
 
 - Find `dependency` block definition → get `config_path`
@@ -83,6 +91,7 @@ Validate `dependency.*.outputs.*` references by walking the dependency chain.
 **Status:** ✅ Implemented
 
 ### 7. Config Inheritance (extends)
+
 Allow configs to inherit from base configs.
 
 ```hcl
@@ -98,11 +107,13 @@ rules {
 **Status:** ✅ Implemented
 
 ### 8. JSON Schema for Config
+
 ~~JSON support was removed — this item no longer applies.~~ The typo/misconfiguration
 detection goal is covered by `validate-config` (item 12, implemented).
 IDE autocomplete via HCL language server could be a separate future item.
 
 ### 9. IDE Integration
+
 Improve editor support.
 
 - `--format json` for machine-readable output
@@ -113,12 +124,14 @@ Improve editor support.
 ## Lower Priority
 
 ### 10. Git Hook Integration
+
 Pre-commit hook installer.
 
 - `hcl-linter install-hook` command
 - Generate `.pre-commit-config.yaml` snippet
 
 ### 11. Report Generation
+
 Generate lint reports in various formats.
 
 - HTML report with severity breakdown
@@ -126,6 +139,7 @@ Generate lint reports in various formats.
 - JSON structured output for CI dashboards
 
 ### 12. Config Validation Rules
+
 Lint the linter config itself.
 
 - Warn about unused config keys
@@ -137,6 +151,7 @@ and enabled rules with missing required fields. Warnings also surface at startup
 `lint`/`check`/`fix`.
 
 ### 13. Interactive Fix Mode
+
 Prompt for each fix individually.
 
 - `--interactive` flag
@@ -144,6 +159,7 @@ Prompt for each fix individually.
 - Skip specific fixes
 
 ### 14. Fix Dry-Run / Diff Output
+
 Show what `fix` would change without writing files.
 
 - `hcl-linter fix ./ --dry-run` prints a unified diff to stdout
@@ -151,6 +167,7 @@ Show what `fix` would change without writing files.
 - Exit non-zero if any changes would be made (enforces "committed files must be formatted")
 
 ### 15. Per-Directory Config Override
+
 Allow a `.hcl-linter/` directory anywhere in the tree to override rules for files beneath it.
 
 - Closer config wins; root config is the fallback
@@ -158,8 +175,17 @@ Allow a `.hcl-linter/` directory anywhere in the tree to override rules for file
 - Useful in monorepos where different services have different conventions
 
 ### 16. Rule Severity Override
+
 Let users promote warnings to errors or demote errors to warnings per rule in config.
 
 - `severity = "error"` / `"warning"` field on any rule block
 - Enables gradual adoption: introduce a rule as warning first, promote to error once the codebase is clean
 - `--strict` flag treats all warnings as errors globally
+
+### 17. Ignore comments
+
+18. `# hcl-linter:ignore` or `# hcl-linter:disable block_order` inline in HCL files to suppress specific rules on a block or file. Essential for escape hatches without changing config. Very common in linters (eslint-disable, golangci nolint).
+
+### 18. Rule statistics / explain —
+
+`hcl-linter explain block_order` prints what the rule checks, what config keys it accepts, and an example violation+fix. Helps onboarding new contributors and debugging why a rule isn't firing.

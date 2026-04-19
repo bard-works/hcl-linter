@@ -11,7 +11,7 @@ Module: `github.com/bard-works/hcl-linter`
 make test            # run all tests
 make build           # build to dist/hcl-linter
 go test ./...        # tests with default output
-go test ./internal/fix/... -v -run TestName   # single test
+go test ./internal/engine/... -v -run TestName   # single test
 make lint            # run golangci-lint
 make fmt && make vet # format and vet
 ```
@@ -22,11 +22,41 @@ Always run `go test ./...` after any code change before reporting done.
 
 ```
 cmd/hcl-linter/main.go        # CLI (cobra): lint, check, fix, version commands
+internal/engine/              # Engine: entry point for all lint and fix operations
+internal/rules/               # Rule implementations (Rule/Fixer interface)
 internal/config/              # config loading — HCL only, file-based matching
-internal/linter/              # rule checkers, returns []Issue per file
-internal/fix/                 # auto-fixers (FixFile, FormatFixFile)
+internal/linter/              # types only: Issue, Result, Severity
 internal/ast/                 # HCL parse helpers
 .hcl-linter/                  # example configs shipped with the project
+```
+
+## Architecture
+
+```
+CLI ──► Engine.LintFile(path) / Engine.FixFile(path)
+              │
+              ├── Config Loader ──► *config.Rules
+              ├── AST Parser    ──► *hcl.File, []BlockInfo, []AttrInfo
+              │
+              └── Registry.Enabled(cfg) ──► []Rule
+                        │
+                        ├── BlockOrderRule.Check(ctx)  / .Fix(ctx)
+                        ├── ArrayFormatRule.Check(ctx) / .Fix(ctx)
+                        ├── BlankLinesRule              .Fix(ctx)  (fix-only)
+                        ├── NameValidationRule.Check   / .Fix
+                        ├── RequiredFieldsRule.Check   / .Fix
+                        ├── DuplicatesRule.Check
+                        ├── RequiredBlocksRule.Check
+                        ├── TerragruntRule.Check
+                        ├── TerragruntFunctionsRule.Check
+                        ├── TerraformBlockRule.Check
+                        ├── KeyValueRule.Check
+                        ├── CountForEachRule.Check
+                        └── DependencyOutputsRule.Check
+
+Rule interface:  Name() / Enabled(cfg) / Check(ctx) []Issue
+Fixer interface: Rule + Fix(ctx) ([]byte, bool, error)
+Context:         FilePath, Content, File, Blocks, Attrs, Config
 ```
 
 ## Config format
@@ -72,7 +102,7 @@ fallback to `.hcl-linter/default.hcl`).
 - Array normalization (2+ items → multiline)
 - Blank line cleanup within blocks
 
-Implemented via `Fixer.FormatFixFile` / `Fixer.FormatFixFiles` in `internal/fix/fixer.go`.
+Implemented via `Engine.FormatFixFile` / `Engine.FormatFixFiles` in `internal/engine/engine.go`.
 
 ## Do not
 

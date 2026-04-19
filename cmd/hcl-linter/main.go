@@ -521,7 +521,7 @@ func runValidateConfig(_ *cobra.Command, args []string) error {
 
 	loader, result := config.LoadConfigDirWithResult(configDir)
 	if result.Source == config.ConfigSourceNone {
-		return fmt.Errorf("no config directory found")
+		return errors.New("no config directory found")
 	}
 	_ = loader
 
