@@ -164,7 +164,7 @@ func depParseMockOutputs(content []byte) map[string]depMockOutput {
 	return mock.Outputs
 }
 
-func depCheckInputsOutputRefs(issues *[]linter.Issue, body hcl.Body, outputs map[string]depOutputDef, mockOuts map[string]depMockOutput, depName, depPath string) {
+func depCheckInputsOutputRefs(_ *[]linter.Issue, body hcl.Body, outputs map[string]depOutputDef, mockOuts map[string]depMockOutput, depName, depPath string) {
 	attrs, _ := body.JustAttributes()
 	for _, attr := range attrs {
 		val, diags := attr.Expr.Value(nil)
