@@ -5,10 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bard-works/hcl-linter/internal/ast"
-	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+
+	"github.com/bard-works/hcl-linter/internal/ast"
+	"github.com/bard-works/hcl-linter/internal/config"
 )
 
 func checkTerragruntImpl(result *Result, filePath string, file *hcl.File, cfg *config.TerragruntConfig) {

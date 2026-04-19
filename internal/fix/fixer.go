@@ -7,11 +7,12 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/hclwrite"
+
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/rules"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
 type Fixer struct {
@@ -156,7 +157,6 @@ func (f *Fixer) PreviewFix(path string) (string, error) {
 
 	return result, nil
 }
-
 
 func (f *Fixer) FixFiles(paths []string, maxConcurrency int) []*FixResult {
 	if maxConcurrency <= 0 {

@@ -58,7 +58,7 @@ func TestRequiredFieldsRuleCheck(t *testing.T) {
 				}
 			}
 			if tt.expectIssue && !hasIssue {
-				t.Errorf("expected required_fields issue, got none")
+				t.Error("expected required_fields issue, got none")
 			}
 			if !tt.expectIssue && hasIssue {
 				t.Errorf("unexpected required_fields issue: %v", issues)

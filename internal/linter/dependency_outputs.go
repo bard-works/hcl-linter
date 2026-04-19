@@ -8,10 +8,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bard-works/hcl-linter/internal/ast"
-	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/zclconf/go-cty/cty"
+
+	"github.com/bard-works/hcl-linter/internal/ast"
+	"github.com/bard-works/hcl-linter/internal/config"
 )
 
 type outputDef struct{}

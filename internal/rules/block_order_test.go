@@ -4,10 +4,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/hcl/v2/hclparse"
+
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/rules"
-	"github.com/hashicorp/hcl/v2/hclparse"
 )
 
 func buildContext(t *testing.T, content string, cfg *config.Rules) *rules.Context {
@@ -175,7 +176,7 @@ func TestBlockOrderRuleFix(t *testing.T) {
 	includePos := strings.Index(got, "include")
 	localsPos := strings.Index(got, "locals")
 	terraformPos := strings.Index(got, "terraform")
-	if !(includePos < localsPos && localsPos < terraformPos) {
+	if includePos >= localsPos || localsPos >= terraformPos {
 		t.Errorf("blocks not reordered correctly:\n%s", got)
 	}
 }

@@ -3,9 +3,10 @@ package linter
 import (
 	"math/big"
 
+	"github.com/zclconf/go-cty/cty"
+
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/zclconf/go-cty/cty"
 )
 
 func checkCountForEachImpl(result *Result, blocks []ast.BlockInfo, cfg *config.CountForEachConfig) {

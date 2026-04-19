@@ -5,9 +5,10 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/hashicorp/hcl/v2"
+
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/hashicorp/hcl/v2"
 )
 
 func checkKeyValueImpl(result *Result, blocks []ast.BlockInfo, cfg *config.KeyValueConfig) {

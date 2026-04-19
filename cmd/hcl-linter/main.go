@@ -7,10 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/engine"
 	"github.com/bard-works/hcl-linter/internal/linter"
-	"github.com/spf13/cobra"
 )
 
 var (

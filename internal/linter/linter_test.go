@@ -32,7 +32,6 @@ func newTestLoader(t *testing.T, tmpDir string) *config.Loader {
 	return config.NewLoader(filepath.Join(tmpDir, ".linter-rules"))
 }
 
-
 func TestDependencyPathExistsRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 

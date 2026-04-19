@@ -1251,7 +1251,7 @@ func TestFixArraySortEnabled(t *testing.T) {
 		t.Fatalf("missing items in output:\n%s", result.Content)
 	}
 
-	if !(alphaIdx < bravoIdx && bravoIdx < charlieIdx) {
+	if alphaIdx >= bravoIdx || bravoIdx >= charlieIdx {
 		t.Errorf("expected items to be sorted alphabetically (alpha < bravo < charlie), got:\n%s", result.Content)
 	}
 }
@@ -1280,7 +1280,7 @@ func TestFormatFixFileArraySort(t *testing.T) {
 		t.Fatalf("missing items in output:\n%s", result.Content)
 	}
 
-	if !(alphaIdx < bravoIdx && bravoIdx < charlieIdx) {
+	if alphaIdx >= bravoIdx || bravoIdx >= charlieIdx {
 		t.Errorf("expected --format to always sort items (alpha < bravo < charlie), got:\n%s", result.Content)
 	}
 }

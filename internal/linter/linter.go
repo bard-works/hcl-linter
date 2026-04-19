@@ -5,9 +5,10 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/hashicorp/hcl/v2"
+
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/hashicorp/hcl/v2"
 )
 
 type Linter struct {

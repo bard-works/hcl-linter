@@ -1,10 +1,11 @@
 package rules
 
 import (
+	"github.com/hashicorp/hcl/v2"
+
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/linter"
-	"github.com/hashicorp/hcl/v2"
 )
 
 // Context holds all parsed state passed to every rule.
