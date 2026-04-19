@@ -59,6 +59,12 @@ func main() {
 		RunE:  runFix,
 	}
 	fixCmd.Flags().BoolVar(&flagFormat, "format", false, "Apply default formatting (block ordering, array formatting, blank line normalization) without requiring config rules")
+	validateConfigCmd := &cobra.Command{
+		Use:   "validate-config [config-dir]",
+		Short: "Validate .hcl-linter config files for unknown rules and misconfigurations",
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  runValidateConfig,
+	}
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
@@ -69,7 +75,7 @@ func main() {
 		},
 	}
 
-	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd, versionCmd)
+	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd, validateConfigCmd, versionCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -105,6 +111,7 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 		if configResult.WarningMsg != "" {
 			fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
 		}
+		warnConfigIssues(configResult.SourcePath)
 	}
 
 	if loader == nil {
@@ -217,6 +224,7 @@ func run(_ *cobra.Command, args []string, checkMode, fixMode bool) error {
 		if configResult.WarningMsg != "" {
 			fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
 		}
+		warnConfigIssues(configResult.SourcePath)
 	}
 
 	if loader == nil {
@@ -503,6 +511,45 @@ func runFixMode(loader *config.Loader, files []string) error {
 	}
 
 	return nil
+}
+
+func runValidateConfig(_ *cobra.Command, args []string) error {
+	var configDir string
+	if len(args) == 1 {
+		configDir = args[0]
+	}
+
+	loader, result := config.LoadConfigDirWithResult(configDir)
+	if result.Source == config.ConfigSourceNone {
+		return fmt.Errorf("no config directory found")
+	}
+	_ = loader
+
+	fmt.Printf("Validating config: %s\n", result.SourcePath)
+
+	issues := config.ValidateDir(result.SourcePath)
+	if len(issues) == 0 {
+		fmt.Println("Config OK")
+		return nil
+	}
+
+	for _, issue := range issues {
+		fmt.Fprintf(os.Stderr, "  error: %s\n", issue)
+	}
+	return fmt.Errorf("%d config issue(s) found", len(issues))
+}
+
+// warnConfigIssues prints config validation warnings to stderr. Called at
+// startup for lint/fix so users see config problems even without running
+// validate-config explicitly.
+func warnConfigIssues(configDir string) {
+	if configDir == "" {
+		return
+	}
+	issues := config.ValidateDir(configDir)
+	for _, issue := range issues {
+		fmt.Fprintf(os.Stderr, "Config warning: %s\n", issue)
+	}
 }
 
 func findHCLFiles(root string) []string {
