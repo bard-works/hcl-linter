@@ -1,6 +1,7 @@
 package fix
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
@@ -837,6 +839,13 @@ func (f *Fixer) FormatFixFile(path string) (*FixResult, error) {
 	if changes2 > 0 {
 		contentStr = newContent3
 		result.Changes += changes2
+	}
+
+	// Apply hclwrite.Format for final whitespace cleanup
+	formattedBytes := hclwrite.Format([]byte(contentStr))
+	if !bytes.Equal(formattedBytes, []byte(contentStr)) {
+		contentStr = string(formattedBytes)
+		result.Changes++
 	}
 
 	if result.Changes > 0 {

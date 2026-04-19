@@ -1,7 +1,13 @@
 rules {
   block_order {
     enabled = true
-    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+    order   = [
+      "dependency",
+      "include",
+      "inputs",
+      "locals",
+      "terraform",
+    ]
   }
 
   array_format {
@@ -12,12 +18,19 @@ rules {
   name_validation {
     enabled = true
     pattern = "^[a-z][a-z0-9_]*$"
-    blocks  = ["include", "dependency"]
+    blocks  = [
+      "dependency",
+      "include",
+    ]
   }
 
   duplicates {
     enabled = true
-    blocks = ["locals", "dependency", "include"]
+    blocks = [
+      "dependency",
+      "include",
+      "locals",
+    ]
   }
 
   required_fields {
@@ -27,7 +40,8 @@ rules {
   }
 
   blank_lines {
-    enabled        = true
+    enabled       = true
     within_blocks = true
   }
 }
+

@@ -1,6 +1,6 @@
 rules {
   blank_lines {
-    enabled        = true
+    enabled       = true
     within_blocks = true
   }
 
@@ -10,13 +10,13 @@ rules {
   }
 
   array_format {
-    enabled            = true
+    enabled             = true
     multiline_threshold = 2
   }
 
   key_value {
-    enabled      = true
-    key_case    = "snake_case"
+    enabled  = true
+    key_case = "snake_case"
 
     value_pattern = {
       region     = "^us-[a-z]+-[0-9]+$"

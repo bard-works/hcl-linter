@@ -1,6 +1,6 @@
 rules {
   blank_lines {
-    enabled        = true
+    enabled       = true
     within_blocks = true
   }
 
@@ -10,12 +10,12 @@ rules {
   }
 
   array_format {
-    enabled            = true
+    enabled             = true
     multiline_threshold = 2
   }
 
   duplicates {
     enabled = true
-    blocks = ["locals", "include"]
+    blocks  = ["locals", "include"]
   }
 }
