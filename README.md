@@ -13,6 +13,7 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 
 - **Block ordering** - Enforce consistent ordering of top-level and nested blocks
 - **Array formatting** - Normalize array formatting (inline vs multiline)
+- **Blank lines** - Remove excess blank lines within blocks
 - **Name validation** - Enforce naming conventions for block labels
 - **Duplicate detection** - Detect duplicate block definitions
 - **Required fields** - Enforce required attributes per block type
@@ -20,7 +21,11 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 - **Terragrunt validation** - Validate paths, include files, and remote state config
 - **Terragrunt functions** - Validate `find_in_parent_folders()` and `get_env()` calls
 - **Terraform block** - Validate terraform blocks for source, version, and deprecated fields
+- **Key-value validation** - Enforce key case, value patterns, and disallowed attributes
+- **Count/for_each** - Detect count=0, empty for_each, and count+for_each conflicts
+- **Dependency outputs** - Validate `dependency.*.outputs.*` references against `.tf` files
 - Auto-fix capability for formatable issues
+- Config inheritance via `extends`
 - Configurable rules per filename pattern
 - Fast processing with configurable concurrency
 
@@ -172,6 +177,22 @@ rules {
   }
 }
 ```
+
+## Validating Config Files
+
+Config files are plain HCL — typos in rule block names (e.g. `blokc_order`) are silently ignored by the parser. Use `validate-config` to catch these before they cause silent no-ops:
+
+```bash
+hcl-linter validate-config
+hcl-linter validate-config /path/to/.hcl-linter
+```
+
+Exits non-zero and prints errors if any config file contains:
+
+- **Unknown rule blocks** — block names that don't match any known rule (likely a typo)
+- **Enabled rules with missing required fields** — e.g. `block_order` with no `order` list, `name_validation` with no `pattern`
+
+During normal `lint`, `check`, and `fix` runs the same checks run automatically and print warnings to stderr — no separate step needed in CI unless you want a hard failure.
 
 ## CLI Options
 
