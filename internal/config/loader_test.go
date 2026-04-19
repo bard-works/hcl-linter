@@ -18,8 +18,8 @@ func TestNewLoader(t *testing.T) {
 
 func TestHasSpecificConfigForFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "terragrunt.json")
-	if err := os.WriteFile(configFile, []byte(`{"rules":{}}`), 0o644); err != nil {
+	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(configFile, []byte("rules {}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -36,15 +36,15 @@ func TestHasSpecificConfigForFile(t *testing.T) {
 
 func TestHasConfigForFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	defaultFile := filepath.Join(tmpDir, "default.json")
-	if err := os.WriteFile(defaultFile, []byte(`{"rules":{}}`), 0o644); err != nil {
+	defaultFile := filepath.Join(tmpDir, "default.hcl")
+	if err := os.WriteFile(defaultFile, []byte("rules {}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	loader := NewLoader(tmpDir)
 
 	if !loader.HasConfigForFile("anyfile.hcl") {
-		t.Error("expected HasConfigForFile to return true when default.json exists")
+		t.Error("expected HasConfigForFile to return true when default.hcl exists")
 	}
 }
 
@@ -57,15 +57,13 @@ func TestHasConfigForFileWithNilLoader(t *testing.T) {
 
 func TestLoadForFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "terragrunt.json")
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals"]
-			}
-		}
-	}`
+	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	configContent := `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals"]
+  }
+}`
 	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -89,15 +87,13 @@ func TestLoadForFile(t *testing.T) {
 
 func TestLoadForFileFallsBackToDefault(t *testing.T) {
 	tmpDir := t.TempDir()
-	defaultFile := filepath.Join(tmpDir, "default.json")
-	configContent := `{
-		"rules": {
-			"duplicates": {
-				"enabled": true,
-				"blocks": ["dependency"]
-			}
-		}
-	}`
+	defaultFile := filepath.Join(tmpDir, "default.hcl")
+	configContent := `rules {
+  duplicates {
+    enabled = true
+    blocks  = ["dependency"]
+  }
+}`
 	if err := os.WriteFile(defaultFile, []byte(configContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -109,10 +105,10 @@ func TestLoadForFileFallsBackToDefault(t *testing.T) {
 	}
 
 	if rules.Duplicates == nil {
-		t.Fatal("Duplicates should not be nil when using default.json")
+		t.Fatal("Duplicates should not be nil when using default.hcl")
 	}
 	if !rules.Duplicates.Enabled {
-		t.Error("Duplicates.Enabled should be true from default.json")
+		t.Error("Duplicates.Enabled should be true from default.hcl")
 	}
 }
 
@@ -126,8 +122,8 @@ func TestConfigSourcePrecedence(t *testing.T) {
 			name: "CLI takes precedence",
 			setup: func() (string, func()) {
 				tmpDir := t.TempDir()
-				cliFile := filepath.Join(tmpDir, "test.json")
-				_ = os.WriteFile(cliFile, []byte(`{"rules":{}}`), 0o644)
+				cliFile := filepath.Join(tmpDir, "test.hcl")
+				_ = os.WriteFile(cliFile, []byte("rules {}"), 0o644)
 				return cliFile, func() {}
 			},
 			expect: ConfigSourceCLI,
@@ -232,17 +228,15 @@ func TestConfigSourceString(t *testing.T) {
 
 func TestLoadTerragruntConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "terragrunt.json")
-	configContent := `{
-		"rules": {
-			"terragrunt": {
-				"enabled": true,
-				"dependency_path_exists": true,
-				"include_path_exists": true,
-				"remote_state_config": true
-			}
-		}
-	}`
+	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	configContent := `rules {
+  terragrunt {
+    enabled                = true
+    dependency_path_exists = true
+    include_path_exists    = true
+    remote_state_config    = true
+  }
+}`
 	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -272,16 +266,14 @@ func TestLoadTerragruntConfig(t *testing.T) {
 
 func TestLoadTerragruntFunctionsConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "terragrunt.json")
-	configContent := `{
-		"rules": {
-			"terragrunt_functions": {
-				"enabled": true,
-				"find_in_parent_folders_exists": true,
-				"get_env_has_default": true
-			}
-		}
-	}`
+	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	configContent := `rules {
+  terragrunt_functions {
+    enabled                       = true
+    find_in_parent_folders_exists = true
+    get_env_has_default           = true
+  }
+}`
 	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -355,18 +347,16 @@ rules {
 
 func TestLoadTerraformBlockConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "terragrunt.json")
-	configContent := `{
-		"rules": {
-			"terraform_block": {
-				"enabled": true,
-				"source_required": true,
-				"version_format": true,
-				"extra_arguments_valid": true,
-				"no_deprecated_fields": true
-			}
-		}
-	}`
+	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	configContent := `rules {
+  terraform_block {
+    enabled               = true
+    source_required       = true
+    version_format        = true
+    extra_arguments_valid = true
+    no_deprecated_fields  = true
+  }
+}`
 	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
 		t.Fatal(err)
 	}

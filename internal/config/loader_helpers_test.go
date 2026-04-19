@@ -88,7 +88,6 @@ func TestFindConfigFiles(t *testing.T) {
 	t.Run("empty baseName defaults to default", func(t *testing.T) {
 		files := findConfigFiles("/config", "")
 		want := []string{
-			"/config/default.json",
 			"/config/default.hcl",
 			"/config/default",
 		}
@@ -102,10 +101,9 @@ func TestFindConfigFiles(t *testing.T) {
 		}
 	})
 
-	t.Run("generates json hcl and no extension files", func(t *testing.T) {
+	t.Run("generates hcl and no extension files", func(t *testing.T) {
 		files := findConfigFiles("/config", "myfile")
 		want := []string{
-			"/config/myfile.json",
 			"/config/myfile.hcl",
 			"/config/myfile",
 		}
@@ -122,7 +120,6 @@ func TestFindConfigFiles(t *testing.T) {
 	t.Run("uses provided dir", func(t *testing.T) {
 		files := findConfigFiles("/custom/dir", "test")
 		want := []string{
-			"/custom/dir/test.json",
 			"/custom/dir/test.hcl",
 			"/custom/dir/test",
 		}
@@ -143,7 +140,7 @@ func TestFirstExistingFile(t *testing.T) {
 
 	t.Run("no existing files returns empty string", func(t *testing.T) {
 		paths := []string{
-			"/nonexistent/file1.json",
+			"/nonexistent/file1.hcl",
 			"/nonexistent/file2.hcl",
 		}
 		if got := firstExistingFile(paths); got != "" {
@@ -154,22 +151,22 @@ func TestFirstExistingFile(t *testing.T) {
 	t.Run("returns first existing file", func(t *testing.T) {
 		dir := t.TempDir()
 
-		file1 := filepath.Join(dir, "file1.json")
+		file1 := filepath.Join(dir, "file1.hcl")
 		file2 := filepath.Join(dir, "file2.hcl")
 		file3 := filepath.Join(dir, "file3")
 
-		if err := os.WriteFile(file1, []byte("{}"), 0o644); err != nil {
+		if err := os.WriteFile(file1, []byte("rules {}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(file2, []byte("{}"), 0o644); err != nil {
+		if err := os.WriteFile(file2, []byte("rules {}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(file3, []byte("{}"), 0o644); err != nil {
+		if err := os.WriteFile(file3, []byte("rules {}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
 		paths := []string{
-			"/nonexistent/a.json",
+			"/nonexistent/a.hcl",
 			file1,
 			file2,
 			file3,
@@ -185,12 +182,12 @@ func TestFirstExistingFile(t *testing.T) {
 		dir := t.TempDir()
 
 		file2 := filepath.Join(dir, "file2.hcl")
-		if err := os.WriteFile(file2, []byte("{}"), 0o644); err != nil {
+		if err := os.WriteFile(file2, []byte("rules {}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
 		paths := []string{
-			"/nonexistent/a.json",
+			"/nonexistent/a.hcl",
 			"/nonexistent/b.hcl",
 			file2,
 		}

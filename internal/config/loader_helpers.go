@@ -30,7 +30,7 @@ func findConfigFiles(dir, baseName string) []string {
 	}
 
 	var files []string
-	for _, ext := range []string{".json", ".hcl", ""} {
+	for _, ext := range []string{".hcl", ""} {
 		var path string
 		if ext == "" {
 			path = filepath.Join(dir, baseName)

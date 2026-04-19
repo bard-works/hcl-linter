@@ -16,10 +16,10 @@ Configuration files in `.hcl-linter/` directory, named after the file pattern th
 
 ```
 .hcl-linter/
-├── default.json       # Base config for all files (optional)
-├── terragrunt.json    # Rules for terragrunt.hcl
-├── root.json          # Rules for root.hcl
-└── service.json       # Rules for service.hcl
+├── default.hcl       # Base config for all files (optional)
+├── terragrunt.hcl    # Rules for terragrunt.hcl
+├── root.hcl          # Rules for root.hcl
+└── service.hcl       # Rules for service.hcl
 ```
 
 ### Config Source Precedence
@@ -40,81 +40,89 @@ Configs are loaded in the following order (first match wins):
 
 If falling back to project defaults (no user config found), a warning is displayed.
 
-### Configuration Schema (JSON)
+### Configuration Schema (HCL)
 
-```json
-{
-  "rules": {
-    "block_order": {
-      "enabled": true,
-      "order": ["include", "locals", "terraform", "dependency", "inputs"]
-    },
-    "array_format": {
-      "enabled": true,
-      "multiline_threshold": 2
-    },
-    "blank_lines": {
-      "enabled": true,
-      "within_blocks": true
-    },
-    "name_validation": {
-      "enabled": true,
-      "pattern": "^[a-z][a-z0-9_]*$",
-      "blocks": ["include", "dependency"]
-    },
-    "duplicates": {
-      "enabled": true,
-      "blocks": ["locals", "dependency", "include"]
-    },
-    "required_fields": {
-      "include": {
-        "expose": true
-      }
-    },
-    "required_blocks": {
-      "required": [
-        {
-          "type": "terraform",
-          "count": "once",
-          "error": "missing terraform block"
-        }
-      ]
-    },
-    "terragrunt": {
-      "enabled": true,
-      "dependency_path_exists": true,
-      "include_path_exists": true,
-      "remote_state_config": true
-    },
-    "terragrunt_functions": {
-      "enabled": true,
-      "find_in_parent_folders_exists": true,
-      "get_env_has_default": true
-    },
-    "terraform_block": {
-      "enabled": true,
-      "source_required": true,
-      "version_format": true,
-      "extra_arguments_valid": true,
-      "no_deprecated_fields": true
-    },
-    "key_value": {
-      "enabled": true,
-      "key_case": "snake_case",
-      "value_pattern": {
-        "region": "^us-[a-z]+-[0-9]+$"
-      },
-      "disallowed": ["secret", "password"]
-    },
-    "count_for_each": {
-      "enabled": true,
-      "warn_on_count_zero": true,
-      "warn_on_empty_for_each": true,
-      "warn_on_conflict": true
-    },
-    "dependency_outputs": {
-      "enabled": true
+```hcl
+rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+  }
+
+  array_format {
+    enabled             = true
+    multiline_threshold = 2
+  }
+
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+
+  name_validation {
+    enabled = true
+    pattern = "^[a-z][a-z0-9_]*$"
+    blocks  = ["include", "dependency"]
+  }
+
+  duplicates {
+    enabled = true
+    blocks  = ["locals", "dependency", "include"]
+  }
+
+  required_fields {
+    include {
+      expose = true
     }
+  }
+
+  required_blocks {
+    required {
+      type  = "terraform"
+      count = "once"
+      error = "missing terraform block"
+    }
+  }
+
+  terragrunt {
+    enabled                = true
+    dependency_path_exists = true
+    include_path_exists    = true
+    remote_state_config    = true
+  }
+
+  terragrunt_functions {
+    enabled                       = true
+    find_in_parent_folders_exists = true
+    get_env_has_default           = true
+  }
+
+  terraform_block {
+    enabled               = true
+    source_required       = true
+    version_format        = true
+    extra_arguments_valid = true
+    no_deprecated_fields  = true
+  }
+
+  key_value {
+    enabled   = true
+    key_case  = "snake_case"
+    value_pattern = {
+      region = "^us-[a-z]+-[0-9]+$"
+    }
+    disallowed = ["secret", "password"]
+  }
+
+  count_for_each {
+    enabled                = true
+    warn_on_count_zero     = true
+    warn_on_empty_for_each = true
+    warn_on_conflict       = true
+  }
+
+  dependency_outputs {
+    enabled = true
   }
 }
 ```
@@ -132,13 +140,13 @@ If falling back to project defaults (no user config found), a warning is display
 
 **Configuration:**
 
-```json
-{
-  "block_order": {
-    "enabled": true,
-    "order": ["include", "locals", "terraform", "dependency", "inputs"],
-    "nested_order": {
-      "terraform": ["before_hooks", "after_hooks"]
+```hcl
+rules {
+  block_order {
+    enabled      = true
+    order        = ["include", "locals", "terraform", "dependency", "inputs"]
+    nested_order = {
+      terraform = ["before_hooks", "after_hooks"]
     }
   }
 }
@@ -220,11 +228,11 @@ actions = [
 
 **Configuration:**
 
-```json
-{
-  "blank_lines": {
-    "enabled": true,
-    "within_blocks": true
+```hcl
+rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
   }
 }
 ```
@@ -301,11 +309,11 @@ dependency "vpc" {}  # ERROR: duplicate
 
 **Configuration:**
 
-```json
-{
-  "required_fields": {
-    "include": {
-      "expose": true
+```hcl
+rules {
+  required_fields {
+    include {
+      expose = true
     }
   }
 }
@@ -322,16 +330,14 @@ dependency "vpc" {}  # ERROR: duplicate
 
 **Configuration:**
 
-```json
-{
-  "required_blocks": {
-    "required": [
-      {
-        "type": "terraform",
-        "count": "once",
-        "error": "missing terraform block"
-      }
-    ]
+```hcl
+rules {
+  required_blocks {
+    required {
+      type  = "terraform"
+      count = "once"
+      error = "missing terraform block"
+    }
   }
 }
 ```
@@ -364,13 +370,13 @@ locals {}
 
 **Configuration:**
 
-```json
-{
-  "terragrunt": {
-    "enabled": true,
-    "dependency_path_exists": true,
-    "include_path_exists": true,
-    "remote_state_config": true
+```hcl
+rules {
+  terragrunt {
+    enabled                = true
+    dependency_path_exists = true
+    include_path_exists    = true
+    remote_state_config    = true
   }
 }
 ```
@@ -411,12 +417,12 @@ terraform {
 
 **Configuration:**
 
-```json
-{
-  "terragrunt_functions": {
-    "enabled": true,
-    "find_in_parent_folders_exists": true,
-    "get_env_has_default": true
+```hcl
+rules {
+  terragrunt_functions {
+    enabled                       = true
+    find_in_parent_folders_exists = true
+    get_env_has_default           = true
   }
 }
 ```
@@ -451,14 +457,14 @@ locals {
 
 **Configuration:**
 
-```json
-{
-  "terraform_block": {
-    "enabled": true,
-    "source_required": true,
-    "version_format": true,
-    "extra_arguments_valid": true,
-    "no_deprecated_fields": true
+```hcl
+rules {
+  terraform_block {
+    enabled               = true
+    source_required       = true
+    version_format        = true
+    extra_arguments_valid = true
+    no_deprecated_fields  = true
   }
 }
 ```
@@ -529,15 +535,15 @@ terraform {
 
 **Configuration:**
 
-```json
-{
-  "key_value": {
-    "enabled": true,
-    "key_case": "snake_case",
-    "value_pattern": {
-      "region": "^us-[a-z]+-[0-9]+$"
-    },
-    "disallowed": ["secret", "password"]
+```hcl
+rules {
+  key_value {
+    enabled      = true
+    key_case     = "snake_case"
+    value_pattern = {
+      region = "^us-[a-z]+-[0-9]+$"
+    }
+    disallowed = ["secret", "password"]
   }
 }
 ```
@@ -588,13 +594,13 @@ locals {
 
 **Configuration:**
 
-```json
-{
-  "count_for_each": {
-    "enabled": true,
-    "warn_on_count_zero": true,
-    "warn_on_empty_for_each": true,
-    "warn_on_conflict": true
+```hcl
+rules {
+  count_for_each {
+    enabled                = true
+    warn_on_count_zero     = true
+    warn_on_empty_for_each = true
+    warn_on_conflict       = true
   }
 }
 ```
@@ -631,10 +637,10 @@ resource "aws_instance" "test" {
 
 **Configuration:**
 
-```json
-{
-  "dependency_outputs": {
-    "enabled": true
+```hcl
+rules {
+  dependency_outputs {
+    enabled = true
   }
 }
 ```
@@ -654,14 +660,7 @@ resource "aws_instance" "test" {
 
 3. **Mock outputs** (for development):
    - Support `.mock-outputs.json` in dependency module directory
-   - Format:
-     ```json
-     {
-       "outputs": {
-         "vpc_id": { "value": "vpc-123", "type": "string" }
-       }
-     }
-     ```
+   - Format: `{"outputs": {"vpc_id": {"value": "vpc-123", "type": "string"}}}`
    - Optional - if not present, only validate against `.tf` files
 
 4. **Error handling**:
@@ -697,8 +696,11 @@ hcl-linter lint ./payments/integration/iam-policy/terragrunt.hcl
 hcl-linter check ./my-dir --filter terragrunt.hcl --filter service.hcl
 hcl-linter check ./my-dir --filter "*.hcl"
 
-# Auto-fix issues
+# Auto-fix issues (uses configured rules)
 hcl-linter fix ./
+
+# Apply default formatting without any config required
+hcl-linter fix ./ --format
 
 # Check mode (exit 1 if issues found)
 hcl-linter check ./
@@ -716,7 +718,17 @@ hcl-linter --concurrency 4 lint ./
 hcl-linter version
 ```
 
-**Note:** Files without a matching config (e.g., `something-special.hcl` without `something-special.json`) are warned and skipped.
+**Note:** Files without a matching config (e.g., `something-special.hcl` without a `something-special.hcl` or `default.hcl` in `.hcl-linter/`) are warned and skipped. Use `--format` to apply formatting to any file without requiring config.
+
+### `fix --format` Flag
+
+The `--format` flag applies opinionated default formatting to all HCL files without requiring any config to be present:
+
+- **Block order**: `include → locals → terraform → dependency → inputs`
+- **Array format**: converts inline arrays with 2+ items to multiline
+- **Blank lines**: removes blank lines at block boundaries, collapses consecutive blank lines
+
+This is useful for one-off formatting or bootstrapping a codebase before introducing config-based rules. Config-based `array_format` and `blank_lines` rules are also applied if a config exists for the file.
 
 ### Environment Variables
 
@@ -729,7 +741,6 @@ By default, the linter automatically detects the optimal concurrency level based
 
 - CLI flag: `--concurrency <number>`
 - Environment variable: `HCL_LINTER_MAX_CONCURRENCY`
-- Config: `{"max_concurrency": <number>}` in rules (lowest priority)
 
 Higher concurrency speeds up processing of large file sets but uses more memory.
 
@@ -745,8 +756,8 @@ Higher concurrency speeds up processing of large file sets but uses more memory.
 
 Config files are matched by filename:
 
-1. Exact match: `terragrunt.hcl` → `configs/terragrunt.json`
-2. Fallback: use `default.json` if exists
+1. Exact match: `terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`
+2. Fallback: use `.hcl-linter/default.hcl` if exists
 3. No config: file is skipped with a warning
 
 ### Target File Filtering
@@ -779,12 +790,12 @@ internal/
 │   ├── linter.go                 # Main linting logic
 │   ├── result.go                 # Result types
 │   ├── block_order.go            # Block ordering checks
-│   ├── array_format.go            # Array format checks
-│   ├── validation.go              # Name validation, duplicates, required fields/blocks
-│   ├── terragrunt.go               # Terragrunt path and function validation
-│   └── terraform.go               # Terraform block validation
+│   ├── array_format.go           # Array format checks
+│   ├── validation.go             # Name validation, duplicates, required fields/blocks
+│   ├── terragrunt.go             # Terragrunt path and function validation
+│   └── terraform.go              # Terraform block validation
 ├── fix/
-│   └── fixer.go                  # Auto-fix logic
+│   └── fixer.go                  # Auto-fix logic (FixFile, FormatFixFile, FixFiles, FormatFixFiles)
 └── ast/
     └── parser.go                 # HCL AST utilities
 ```
@@ -792,7 +803,7 @@ internal/
 ## Implementation Notes
 
 - Uses `github.com/hashicorp/hcl/v2` for parsing
-- Configuration format: JSON for simplicity and portability
+- Configuration format: HCL (same format as the files being linted)
 
 ## Build & Release
 
