@@ -142,3 +142,24 @@ Prompt for each fix individually.
 - `--interactive` flag
 - Review changes before applying
 - Skip specific fixes
+
+### 14. Fix Dry-Run / Diff Output
+Show what `fix` would change without writing files.
+
+- `hcl-linter fix ./ --dry-run` prints a unified diff to stdout
+- Useful in CI to surface formatting drift without auto-applying changes
+- Exit non-zero if any changes would be made (enforces "committed files must be formatted")
+
+### 15. Per-Directory Config Override
+Allow a `.hcl-linter/` directory anywhere in the tree to override rules for files beneath it.
+
+- Closer config wins; root config is the fallback
+- Same `extends` mechanism for inheritance
+- Useful in monorepos where different services have different conventions
+
+### 16. Rule Severity Override
+Let users promote warnings to errors or demote errors to warnings per rule in config.
+
+- `severity = "error"` / `"warning"` field on any rule block
+- Enables gradual adoption: introduce a rule as warning first, promote to error once the codebase is clean
+- `--strict` flag treats all warnings as errors globally
