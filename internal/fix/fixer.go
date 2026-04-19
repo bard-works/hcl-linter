@@ -6,14 +6,13 @@ import (
 	"os"
 	"regexp"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
 type Fixer struct {
@@ -60,7 +59,7 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 	contentStr := string(content)
 
 	if cfg.BlockOrder != nil && cfg.BlockOrder.Enabled {
-		newContent := f.fixBlockOrder(contentStr, blocks, cfg.BlockOrder)
+		newContent := fixBlockOrder(contentStr, blocks, cfg.BlockOrder)
 		if newContent != contentStr {
 			contentStr = newContent
 			result.Changes++
@@ -119,16 +118,19 @@ func (f *Fixer) FixFile(path string) (*FixResult, error) {
 	}
 
 	if cfg.ArrayFormat != nil && cfg.ArrayFormat.Enabled {
-		newContent, changes := f.fixArrays(contentStr)
+		newContent, changes := fixArrays(contentStr)
 		if changes > 0 {
 			contentStr = newContent
 			result.Changes += changes
+			parser = ast.NewParser()
+			file, _ = parser.ParseContent([]byte(contentStr), path)
+			blocks = ast.GetTopLevelBlocks(file)
 		}
 	}
 
 	if cfg.BlankLines != nil && cfg.BlankLines.Enabled && cfg.BlankLines.WithinBlocks {
 		attrs := ast.GetTopLevelAttributes(file)
-		newContent, changes := f.fixBlankLinesWithinBlocks(contentStr, blocks, attrs)
+		newContent, changes := fixBlankLinesWithinBlocks(contentStr, blocks, attrs)
 		if changes > 0 {
 			contentStr = newContent
 			result.Changes += changes
@@ -238,224 +240,6 @@ func (f *Fixer) addAttributeToBlockStr(content string, block ast.BlockInfo, attr
 	return strings.Join(newLines, "\n")
 }
 
-func (f *Fixer) fixArrays(content string) (string, int) {
-	lines := strings.Split(content, "\n")
-	changes := 0
-	var result strings.Builder
-
-	i := 0
-	for i < len(lines) {
-		line := lines[i]
-
-		if isArrayAssignment(line) && !isMultilineArrayStart(lines, i) {
-			items := extractAndFormatArray(line)
-			if len(items) >= 2 {
-				result.WriteString(formatMultilineArray(line, items))
-				changes++
-				i++
-				continue
-			}
-		}
-
-		if isMultilineArrayStart(lines, i) {
-			arrayLines, itemCount := collectMultilineArray(lines, i)
-			if itemCount >= 2 && needsMultilineFix(arrayLines) {
-				fixed := fixMultilineArray(arrayLines, line)
-				result.WriteString(fixed)
-				changes++
-				i += len(arrayLines)
-				continue
-			}
-			for _, l := range arrayLines {
-				result.WriteString(l)
-				result.WriteString("\n")
-			}
-			i += len(arrayLines)
-			continue
-		}
-
-		result.WriteString(line)
-		result.WriteString("\n")
-		i++
-	}
-
-	return result.String(), changes
-}
-
-func isArrayAssignment(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	return strings.Contains(trimmed, "=") && strings.Contains(trimmed, "[") && strings.Contains(trimmed, "]")
-}
-
-func isMultilineArrayStart(lines []string, idx int) bool {
-	if idx >= len(lines) {
-		return false
-	}
-	trimmed := strings.TrimSpace(lines[idx])
-	return strings.Contains(trimmed, "[") && !strings.Contains(trimmed, "]")
-}
-
-func collectMultilineArray(lines []string, start int) ([]string, int) {
-	var arrayLines []string
-	itemCount := 0
-	braceCount := 0
-
-	for i := start; i < len(lines); i++ {
-		line := lines[i]
-		arrayLines = append(arrayLines, line)
-
-		braceCount += strings.Count(line, "[") - strings.Count(line, "]")
-		if strings.Contains(line, "\"") {
-			itemCount += strings.Count(line, "\"")
-		}
-
-		if braceCount <= 0 && strings.Contains(line, "]") {
-			break
-		}
-	}
-
-	return arrayLines, itemCount / 2
-}
-
-func extractAndFormatArray(line string) []string {
-	trimmed := strings.TrimSpace(line)
-
-	start := strings.Index(trimmed, "[")
-	end := strings.LastIndex(trimmed, "]")
-	if start == -1 || end == -1 || end <= start {
-		return nil
-	}
-
-	inner := trimmed[start+1 : end]
-	var items []string
-	inQuote := false
-	var current strings.Builder
-
-	for _, ch := range inner {
-		switch {
-		case ch == '"':
-			inQuote = !inQuote
-			current.WriteRune(ch)
-		case ch == ',' && !inQuote:
-			item := strings.TrimSpace(current.String())
-			if item != "" {
-				items = append(items, item)
-			}
-			current.Reset()
-		default:
-			current.WriteRune(ch)
-		}
-	}
-
-	item := strings.TrimSpace(current.String())
-	if item != "" {
-		items = append(items, item)
-	}
-
-	return items
-}
-
-func formatMultilineArray(line string, items []string) string {
-	indent := ""
-	var indentSb357 strings.Builder
-	for _, ch := range line {
-		if ch != ' ' && ch != '\t' {
-			break
-		}
-		indentSb357.WriteString(string(ch))
-	}
-	indent += indentSb357.String()
-
-	idx := strings.Index(line, "[")
-	if idx == -1 {
-		return ""
-	}
-	key := strings.TrimSpace(line[:idx])
-
-	var sb strings.Builder
-	sb.WriteString(indent)
-	sb.WriteString(key)
-	sb.WriteString(" = [\n")
-
-	sort.Strings(items)
-
-	for _, item := range items {
-		sb.WriteString(indent)
-		sb.WriteString("  ")
-		sb.WriteString(strings.TrimSpace(item))
-		sb.WriteString(",\n")
-	}
-
-	sb.WriteString(indent)
-	sb.WriteString("]\n")
-
-	return sb.String()
-}
-
-func needsMultilineFix(lines []string) bool {
-	if len(lines) < 2 {
-		return false
-	}
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasSuffix(trimmed, ",") {
-			return false
-		}
-		if strings.Count(trimmed, "\"") > 0 && !strings.Contains(trimmed, "]") {
-			return true
-		}
-	}
-
-	return false
-}
-
-func fixMultilineArray(lines []string, firstLine string) string {
-	indent := ""
-	var indentSb407 strings.Builder
-	for _, ch := range firstLine {
-		if ch != ' ' && ch != '\t' {
-			break
-		}
-		indentSb407.WriteString(string(ch))
-	}
-	indent += indentSb407.String()
-
-	idx := strings.Index(firstLine, "[")
-	if idx == -1 {
-		return ""
-	}
-	key := strings.TrimSpace(firstLine[:idx])
-
-	var items []string
-	for _, line := range lines[1 : len(lines)-1] {
-		trimmed := strings.TrimSpace(line)
-		trimmed = strings.TrimSuffix(trimmed, ",")
-		if trimmed != "" {
-			items = append(items, trimmed)
-		}
-	}
-
-	sort.Strings(items)
-
-	var sb strings.Builder
-	sb.WriteString(indent)
-	sb.WriteString(key)
-	sb.WriteString(" = [\n")
-
-	for _, item := range items {
-		sb.WriteString(indent)
-		sb.WriteString("  ")
-		sb.WriteString(item)
-		sb.WriteString(",\n")
-	}
-
-	sb.WriteString(indent)
-	sb.WriteString("]\n")
-
-	return sb.String()
-}
-
 func (f *Fixer) PreviewFix(path string) (string, error) {
 	cfg, err := f.configLoader.LoadForFile(path)
 	if err != nil {
@@ -506,250 +290,11 @@ func (f *Fixer) PreviewFix(path string) (string, error) {
 }
 
 func (f *Fixer) fixBlockOrder(content string, blocks []ast.BlockInfo, cfg *config.BlockOrderConfig) string {
-	lines := strings.Split(content, "\n")
-
-	orderMap := make(map[string]int)
-	for i, name := range cfg.Order {
-		orderMap[name] = i
-	}
-
-	type blockWithContent struct {
-		info    ast.BlockInfo
-		content []string
-	}
-
-	blockContents := make([]blockWithContent, len(blocks))
-	for i, block := range blocks {
-		var blockLines []string
-		for l := block.StartLine; l <= block.EndLine && l < len(lines); l++ {
-			blockLines = append(blockLines, lines[l])
-		}
-		blockContents[i] = blockWithContent{block, blockLines}
-	}
-
-	sort.SliceStable(blockContents, func(i, j int) bool {
-		posI := orderMap[blockContents[i].info.Type]
-		posJ := orderMap[blockContents[j].info.Type]
-		if posI == 0 && blockContents[i].info.Type != cfg.Order[0] {
-			posI = len(cfg.Order)
-		}
-		if posJ == 0 && blockContents[j].info.Type != cfg.Order[0] {
-			posJ = len(cfg.Order)
-		}
-		return posI < posJ
-	})
-
-	usedLines := make(map[int]bool)
-	for _, block := range blocks {
-		for l := block.StartLine; l <= block.EndLine; l++ {
-			usedLines[l] = true
-		}
-	}
-
-	var nonBlockLines []string
-	for i, line := range lines {
-		if !usedLines[i] {
-			nonBlockLines = append(nonBlockLines, line)
-		}
-	}
-	nonBlockLines = trimTrailingEmptyLines(nonBlockLines)
-
-	var resultLines []string
-	for i, bc := range blockContents {
-		resultLines = append(resultLines, bc.content...)
-		if i < len(blockContents)-1 {
-			resultLines = append(resultLines, "")
-		}
-	}
-
-	if len(nonBlockLines) > 0 {
-		if len(resultLines) > 0 && strings.TrimSpace(resultLines[len(resultLines)-1]) != "" {
-			resultLines = append(resultLines, "")
-		}
-		resultLines = append(resultLines, nonBlockLines...)
-	}
-
-	resultLines = normalizeBlankLines(resultLines)
-
-	for len(resultLines) > 0 && strings.TrimSpace(resultLines[len(resultLines)-1]) == "" {
-		resultLines = resultLines[:len(resultLines)-1]
-	}
-
-	return strings.Join(resultLines, "\n") + "\n"
+	return fixBlockOrder(content, blocks, cfg)
 }
 
-func normalizeBlankLines(lines []string) []string {
-	var result []string
-	prevWasBlank := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			if !prevWasBlank {
-				result = append(result, line)
-				prevWasBlank = true
-			}
-		} else {
-			result = append(result, line)
-			prevWasBlank = false
-		}
-	}
-	return result
-}
-
-func trimTrailingEmptyLines(lines []string) []string {
-	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
-}
-
-func (f *Fixer) fixBlankLinesWithinBlocks(content string, blocks []ast.BlockInfo, attrs []ast.AttributeInfo) (string, int) {
-	lines := strings.Split(content, "\n")
-	changes := 0
-	usedLines := make(map[int]bool)
-	for _, block := range blocks {
-		for l := block.StartLine; l <= block.EndLine; l++ {
-			usedLines[l] = true
-		}
-	}
-	type objectAttr struct {
-		attr      ast.AttributeInfo
-		firstLine int
-	}
-	var objectAttrs []objectAttr
-	for _, attr := range attrs {
-		if ast.IsObjectAttribute(attr.Expr) {
-			startLine, endLine := ast.GetAttributeRange(attr.Expr)
-			for l := startLine; l <= endLine; l++ {
-				usedLines[l] = true
-			}
-			objectAttrs = append(objectAttrs, objectAttr{attr, startLine})
-		}
-	}
-	var result []string
-	processedLines := make(map[int]bool)
-	i := 0
-	for i < len(lines) {
-		lineIdx := i
-		if usedLines[lineIdx] && !processedLines[lineIdx] {
-			var contentStart, contentEnd int
-			var prefixLines []string
-			isObjAttr := false
-			for _, oa := range objectAttrs {
-				if oa.firstLine != lineIdx {
-					continue
-				}
-				_, contentEnd = ast.GetAttributeRange(oa.attr.Expr)
-				prefixLines = []string{lines[lineIdx]}
-				contentStart = lineIdx + 1
-				isObjAttr = true
-			}
-			if isObjAttr {
-				for j := lineIdx; j <= contentEnd; j++ {
-					processedLines[j] = true
-				}
-				var blockLines []string
-				blockLines = append(blockLines, prefixLines...)
-				for j := contentStart; j <= contentEnd; j++ {
-					blockLines = append(blockLines, lines[j])
-				}
-				fixedBlockLines := removeBlankLinesWithinBlock(blockLines)
-				if len(fixedBlockLines) != len(blockLines) {
-					changes++
-				}
-				result = append(result, fixedBlockLines...)
-				i = contentEnd + 1
-				continue
-			}
-			hasNestedBlock := false
-			for _, block := range blocks {
-				if block.StartLine != lineIdx {
-					continue
-				}
-				prefixLines = []string{lines[lineIdx]}
-				contentStart = blockContentStart(lines, lineIdx)
-				contentEnd = block.EndLine
-				for j := lineIdx; j <= contentEnd; j++ {
-					processedLines[j] = true
-				}
-				if contentStart < contentEnd {
-					for k := contentStart; k < contentEnd; k++ {
-						for _, b := range blocks {
-							if b.StartLine == k {
-								hasNestedBlock = true
-								break
-							}
-						}
-						if hasNestedBlock {
-							break
-						}
-					}
-				}
-			}
-			if len(prefixLines) > 0 && contentEnd > contentStart && !hasNestedBlock {
-				var blockLines []string
-				blockLines = append(blockLines, prefixLines...)
-				for j := contentStart; j <= contentEnd; j++ {
-					blockLines = append(blockLines, lines[j])
-				}
-				fixedBlockLines := removeBlankLinesWithinBlock(blockLines)
-				if len(fixedBlockLines) != len(blockLines) {
-					changes++
-				}
-				result = append(result, fixedBlockLines...)
-				i = contentEnd + 1
-				continue
-			}
-		}
-		result = append(result, lines[i])
-		processedLines[i] = true
-		i++
-	}
-	return strings.Join(result, "\n") + "\n", changes
-}
-
-func blockContentStart(lines []string, blockStart int) int {
-	for i := blockStart; i < len(lines); i++ {
-		if strings.Contains(strings.TrimSpace(lines[i]), "{") {
-			return i + 1
-		}
-	}
-	return blockStart + 1
-}
-
-func removeBlankLinesWithinBlock(lines []string) []string {
-	if len(lines) < 2 {
-		return lines
-	}
-	var result []string
-	var lastWasBlank bool
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		isLastLine := i == len(lines)-1
-		isFirstLine := i == 0
-		isBlockHeader := isFirstLine && strings.Contains(line, "{")
-
-		if trimmed == "" {
-			if isLastLine {
-				continue
-			}
-			nextTrimmed := strings.TrimSpace(lines[i+1])
-			if nextTrimmed == "}" || strings.HasPrefix(nextTrimmed, "}") {
-				continue
-			}
-			if isBlockHeader {
-				continue
-			}
-			if !lastWasBlank {
-				result = append(result, line)
-				lastWasBlank = true
-			}
-		} else {
-			result = append(result, line)
-			lastWasBlank = false
-		}
-	}
-	return result
+func (f *Fixer) fixArrays(content string) (string, int) {
+	return fixArrays(content)
 }
 
 func (f *Fixer) FixFiles(paths []string, maxConcurrency int) []*FixResult {
@@ -816,7 +361,7 @@ func (f *Fixer) FormatFixFile(path string) (*FixResult, error) {
 	blocks := ast.GetTopLevelBlocks(file)
 	contentStr := string(content)
 
-	newContent := f.fixBlockOrder(contentStr, blocks, defaultFormatBlockOrder)
+	newContent := fixBlockOrder(contentStr, blocks, defaultFormatBlockOrder)
 	if newContent != contentStr {
 		contentStr = newContent
 		result.Changes++
@@ -825,7 +370,7 @@ func (f *Fixer) FormatFixFile(path string) (*FixResult, error) {
 		blocks = ast.GetTopLevelBlocks(file)
 	}
 
-	newContent2, changes := f.fixArrays(contentStr)
+	newContent2, changes := fixArrays(contentStr)
 	if changes > 0 {
 		contentStr = newContent2
 		result.Changes += changes
@@ -835,7 +380,7 @@ func (f *Fixer) FormatFixFile(path string) (*FixResult, error) {
 	}
 
 	attrs := ast.GetTopLevelAttributes(file)
-	newContent3, changes2 := f.fixBlankLinesWithinBlocks(contentStr, blocks, attrs)
+	newContent3, changes2 := fixBlankLinesWithinBlocks(contentStr, blocks, attrs)
 	if changes2 > 0 {
 		contentStr = newContent3
 		result.Changes += changes2
