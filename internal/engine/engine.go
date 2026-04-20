@@ -19,7 +19,6 @@ import (
 // Engine is the single entry point for lint and fix operations.
 type Engine struct {
 	configLoader *config.Loader
-	linter       *linter.Linter
 	registry     *rules.Registry
 }
 
@@ -51,7 +50,6 @@ func New(loader *config.Loader) *Engine {
 
 	return &Engine{
 		configLoader: loader,
-		linter:       linter.NewLinter(loader),
 		registry:     reg,
 	}
 }
@@ -96,12 +94,6 @@ func (e *Engine) LintFile(path string) (*linter.Result, error) {
 	for _, rule := range e.registry.Enabled(ctx.Config) {
 		result.Issues = append(result.Issues, rule.Check(ctx)...)
 	}
-
-	oldResult, err := e.linter.LintFile(path)
-	if err != nil {
-		return nil, err
-	}
-	result.Issues = append(result.Issues, oldResult.Issues...)
 
 	return result, nil
 }
