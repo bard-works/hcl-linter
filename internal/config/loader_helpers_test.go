@@ -75,7 +75,7 @@ func TestResolveConfigDir(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, ok := resolveConfigDir(dir + "/.hcl-linter")
+		got, ok := resolveConfigDir(filepath.FromSlash(dir + "/.hcl-linter"))
 		if !ok {
 			t.Error("expected true")
 		}
@@ -87,10 +87,11 @@ func TestResolveConfigDir(t *testing.T) {
 
 func TestFindConfigFiles(t *testing.T) {
 	t.Run("empty baseName defaults to default", func(t *testing.T) {
-		files := findConfigFiles("/config", "")
+		dir := filepath.FromSlash("/config")
+		files := findConfigFiles(dir, "")
 		want := []string{
-			"/config/default.hcl",
-			"/config/default",
+			filepath.Join(dir, "default.hcl"),
+			filepath.Join(dir, "default"),
 		}
 		if len(files) != len(want) {
 			t.Fatalf("got %d files, want %d", len(files), len(want))
@@ -160,6 +161,8 @@ func TestFindConfigFiles(t *testing.T) {
 }
 
 func TestResolveExtendsPath(t *testing.T) {
+	configDir := filepath.FromSlash("/config/dir")
+	abDir := filepath.FromSlash("/a/b")
 	tests := []struct {
 		name        string
 		currentPath string
@@ -168,21 +171,21 @@ func TestResolveExtendsPath(t *testing.T) {
 	}{
 		{
 			name:        "name without extension gets .hcl appended",
-			currentPath: "/config/dir/child.hcl",
+			currentPath: filepath.Join(configDir, "child.hcl"),
 			ref:         "base",
-			want:        "/config/dir/base.hcl",
+			want:        filepath.Join(configDir, "base.hcl"),
 		},
 		{
 			name:        "name with .hcl extension unchanged",
-			currentPath: "/config/dir/child.hcl",
+			currentPath: filepath.Join(configDir, "child.hcl"),
 			ref:         "base.hcl",
-			want:        "/config/dir/base.hcl",
+			want:        filepath.Join(configDir, "base.hcl"),
 		},
 		{
 			name:        "resolves relative to current file directory",
-			currentPath: "/a/b/c.hcl",
+			currentPath: filepath.Join(abDir, "c.hcl"),
 			ref:         "default",
-			want:        "/a/b/default.hcl",
+			want:        filepath.Join(abDir, "default.hcl"),
 		},
 	}
 
