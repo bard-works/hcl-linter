@@ -29,7 +29,7 @@ func TestFindInParentFoldersRule(t *testing.T) {
 	}
 
 	cfg := &config.Rules{
-		TerragruntFunctions: &config.TerragruntFunctionsConfig{
+		HCLFunctions: &config.HCLFunctionsConfig{
 			Enabled:                   true,
 			FindInParentFoldersExists: true,
 		},
@@ -69,7 +69,7 @@ func TestFindInParentFoldersRule(t *testing.T) {
 		},
 	}
 
-	r := rules.TerragruntFunctionsRule{}
+	r := rules.HCLFunctionsRule{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			writeFile(t, tt.testFile, tt.content)
@@ -98,7 +98,7 @@ func TestGetEnvHasDefaultRule(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg := &config.Rules{
-		TerragruntFunctions: &config.TerragruntFunctionsConfig{
+		HCLFunctions: &config.HCLFunctionsConfig{
 			Enabled:          true,
 			GetEnvHasDefault: true,
 		},
@@ -131,7 +131,7 @@ func TestGetEnvHasDefaultRule(t *testing.T) {
 		},
 	}
 
-	r := rules.TerragruntFunctionsRule{}
+	r := rules.HCLFunctionsRule{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			file := filepath.Join(tmpDir, "terragrunt.hcl")
@@ -159,7 +159,7 @@ func TestFindInParentFoldersInTerraformBlock(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg := &config.Rules{
-		TerragruntFunctions: &config.TerragruntFunctionsConfig{
+		HCLFunctions: &config.HCLFunctionsConfig{
 			Enabled:                   true,
 			FindInParentFoldersExists: true,
 		},
@@ -169,7 +169,7 @@ func TestFindInParentFoldersInTerraformBlock(t *testing.T) {
 	file := filepath.Join(tmpDir, "terragrunt.hcl")
 	writeFile(t, file, content)
 
-	r := rules.TerragruntFunctionsRule{}
+	r := rules.HCLFunctionsRule{}
 	ctx := buildContextFromFile(t, file, cfg)
 	for _, issue := range r.Check(ctx) {
 		if issue.Rule == "find_in_parent_folders_exists" {
@@ -182,7 +182,7 @@ func TestGetEnvInInputsBlock(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg := &config.Rules{
-		TerragruntFunctions: &config.TerragruntFunctionsConfig{
+		HCLFunctions: &config.HCLFunctionsConfig{
 			Enabled:          true,
 			GetEnvHasDefault: true,
 		},
@@ -197,7 +197,7 @@ func TestGetEnvInInputsBlock(t *testing.T) {
 	file := filepath.Join(tmpDir, "terragrunt.hcl")
 	writeFile(t, file, content)
 
-	r := rules.TerragruntFunctionsRule{}
+	r := rules.HCLFunctionsRule{}
 	ctx := buildContextFromFile(t, file, cfg)
 
 	count := 0
@@ -215,7 +215,7 @@ func TestFunctionNotEvaluatedWhenDisabled(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg := &config.Rules{
-		TerragruntFunctions: &config.TerragruntFunctionsConfig{
+		HCLFunctions: &config.HCLFunctionsConfig{
 			Enabled:                   true,
 			FindInParentFoldersExists: false,
 			GetEnvHasDefault:          false,
@@ -233,7 +233,7 @@ locals {
 	file := filepath.Join(tmpDir, "terragrunt.hcl")
 	writeFile(t, file, content)
 
-	r := rules.TerragruntFunctionsRule{}
+	r := rules.HCLFunctionsRule{}
 	ctx := buildContextFromFile(t, file, cfg)
 	for _, issue := range r.Check(ctx) {
 		if issue.Rule == "find_in_parent_folders_exists" || issue.Rule == "get_env_has_default" {

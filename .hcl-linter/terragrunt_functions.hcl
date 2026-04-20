@@ -31,7 +31,7 @@ rules {
     within_blocks = true
   }
 
-  terragrunt_functions {
+  hcl_functions {
     enabled                       = true
     find_in_parent_folders_exists = true
     get_env_has_default           = true

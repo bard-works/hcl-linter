@@ -48,8 +48,10 @@ CLI ──► Engine.LintFile(path) / Engine.FixFile(path)
                         ├── RequiredFieldsRule.Check   / .Fix
                         ├── DuplicatesRule.Check
                         ├── RequiredBlocksRule.Check
-                        ├── TerragruntRule.Check
-                        ├── TerragruntFunctionsRule.Check
+                        ├── DependencyPathsRule.Check
+                        ├── IncludePathsRule.Check
+                        ├── RemoteStateRule.Check
+                        ├── HCLFunctionsRule.Check
                         ├── TerraformBlockRule.Check
                         ├── KeyValueRule.Check
                         ├── CountForEachRule.Check

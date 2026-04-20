@@ -6,17 +6,17 @@ import (
 	"testing"
 )
 
-func writeTerragruntConfig(t *testing.T, dir, content string) {
+func writeTestConfig(t *testing.T, dir, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, "terragrunt.hcl"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func loadTerragruntRules(t *testing.T, content string) *Rules {
+func loadTestRules(t *testing.T, content string) *Rules {
 	t.Helper()
 	tmpDir := t.TempDir()
-	writeTerragruntConfig(t, tmpDir, content)
+	writeTestConfig(t, tmpDir, content)
 	rules, err := NewLoader(tmpDir).LoadForFile("terragrunt.hcl")
 	if err != nil {
 		t.Fatalf("LoadForFile: %v", err)
@@ -25,7 +25,7 @@ func loadTerragruntRules(t *testing.T, content string) *Rules {
 }
 
 func TestParseHCLArrayFormat(t *testing.T) {
-	rules := loadTerragruntRules(t, `rules {
+	rules := loadTestRules(t, `rules {
   array_format {
     enabled             = true
     multiline_threshold = 3
@@ -48,7 +48,7 @@ func TestParseHCLArrayFormat(t *testing.T) {
 }
 
 func TestParseHCLRequiredFields(t *testing.T) {
-	rules := loadTerragruntRules(t, `rules {
+	rules := loadTestRules(t, `rules {
   required_fields {
     include {
       expose = true
@@ -65,7 +65,7 @@ func TestParseHCLRequiredFields(t *testing.T) {
 }
 
 func TestParseHCLCountForEach(t *testing.T) {
-	rules := loadTerragruntRules(t, `rules {
+	rules := loadTestRules(t, `rules {
   count_for_each {
     enabled                = true
     warn_on_count_zero     = true
@@ -86,7 +86,7 @@ func TestParseHCLCountForEach(t *testing.T) {
 }
 
 func TestParseHCLDependencyOutputs(t *testing.T) {
-	rules := loadTerragruntRules(t, `rules {
+	rules := loadTestRules(t, `rules {
   dependency_outputs {
     enabled = true
   }
@@ -101,7 +101,7 @@ func TestParseHCLDependencyOutputs(t *testing.T) {
 }
 
 func TestParseValuePatternAttribute(t *testing.T) {
-	rules := loadTerragruntRules(t, `rules {
+	rules := loadTestRules(t, `rules {
   key_value {
     enabled = true
     value_pattern = {
@@ -123,7 +123,7 @@ func TestParseValuePatternAttribute(t *testing.T) {
 }
 
 func TestParseNestedOrderAttribute(t *testing.T) {
-	rules := loadTerragruntRules(t, `rules {
+	rules := loadTestRules(t, `rules {
   block_order {
     enabled = true
     order   = ["terraform"]
@@ -154,7 +154,7 @@ func TestLoadConfigDir_Empty(t *testing.T) {
 
 func TestLoadConfigDir_Explicit(t *testing.T) {
 	tmpDir := t.TempDir()
-	writeTerragruntConfig(t, tmpDir, `rules {}`)
+	writeTestConfig(t, tmpDir, `rules {}`)
 
 	loader, err := LoadConfigDir(tmpDir)
 	if err != nil {
@@ -203,7 +203,7 @@ func TestExtendsChain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	writeTerragruntConfig(t, tmpDir, `extends = "base"
+	writeTestConfig(t, tmpDir, `extends = "base"
 rules {
   block_order {
     enabled = true
@@ -233,7 +233,7 @@ func TestExtendsCircular(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(tmpDir, "b.hcl"), []byte(`extends = "a"`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	writeTerragruntConfig(t, tmpDir, `extends = "a"`)
+	writeTestConfig(t, tmpDir, `extends = "a"`)
 
 	_, err := NewLoader(tmpDir).LoadForFile("terragrunt.hcl")
 	if err == nil {

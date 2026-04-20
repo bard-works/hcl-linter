@@ -89,10 +89,14 @@ func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {
 			rules.RequiredFields = parseHCLRequiredFields(block.Body)
 		case "required_blocks":
 			rules.RequiredBlocks = parseHCLRequiredBlocks(block.Body)
-		case "terragrunt":
-			rules.Terragrunt = parseHCLTerragrunt(block.Body)
-		case "terragrunt_functions":
-			rules.TerragruntFunctions = parseHCLTerragruntFunctions(block.Body)
+		case "dependency_paths":
+			rules.DependencyPaths = parseHCLDependencyPaths(block.Body)
+		case "include_paths":
+			rules.IncludePaths = parseHCLIncludePaths(block.Body)
+		case "remote_state":
+			rules.RemoteState = parseHCLRemoteState(block.Body)
+		case "hcl_functions":
+			rules.HCLFunctions = parseHCLFunctions(block.Body)
 		case "terraform_block":
 			rules.TerraformBlock = parseHCLTerraformBlock(block.Body)
 		case "key_value":
@@ -237,8 +241,8 @@ func parseHCLRequiredBlocks(body *hclsyntax.Body) *RequiredBlocksConfig {
 	return cfg
 }
 
-func parseHCLTerragruntFunctions(body *hclsyntax.Body) *TerragruntFunctionsConfig {
-	cfg := &TerragruntFunctionsConfig{}
+func parseHCLFunctions(body *hclsyntax.Body) *HCLFunctionsConfig {
+	cfg := &HCLFunctionsConfig{}
 	if attr, ok := body.Attributes["enabled"]; ok {
 		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
 			cfg.Enabled = val.True()
@@ -287,26 +291,36 @@ func parseHCLTerraformBlock(body *hclsyntax.Body) *TerraformBlockConfig {
 	return cfg
 }
 
-func parseHCLTerragrunt(body *hclsyntax.Body) *TerragruntConfig {
-	cfg := &TerragruntConfig{}
+func parseHCLDependencyPaths(body *hclsyntax.Body) *DependencyPathsConfig {
+	cfg := &DependencyPathsConfig{}
 	if attr, ok := body.Attributes["enabled"]; ok {
 		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
 			cfg.Enabled = val.True()
 		}
 	}
-	if attr, ok := body.Attributes["dependency_path_exists"]; ok {
+	return cfg
+}
+
+func parseHCLIncludePaths(body *hclsyntax.Body) *IncludePathsConfig {
+	cfg := &IncludePathsConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
 		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
-			cfg.DependencyPathExists = val.True()
+			cfg.Enabled = val.True()
 		}
 	}
-	if attr, ok := body.Attributes["include_path_exists"]; ok {
+	return cfg
+}
+
+func parseHCLRemoteState(body *hclsyntax.Body) *RemoteStateConfig {
+	cfg := &RemoteStateConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
 		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
-			cfg.IncludePathExists = val.True()
+			cfg.Enabled = val.True()
 		}
 	}
-	if attr, ok := body.Attributes["remote_state_config"]; ok {
+	if attr, ok := body.Attributes["require_backend"]; ok {
 		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
-			cfg.RemoteStateConfig = val.True()
+			cfg.RequireBackend = val.True()
 		}
 	}
 	return cfg

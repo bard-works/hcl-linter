@@ -1,0 +1,52 @@
+package rules
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/bard-works/hcl-linter/internal/ast"
+	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/linter"
+)
+
+// IncludePathsRule validates that `path` attributes on `include` blocks
+// resolve to existing files or directories.
+type IncludePathsRule struct{}
+
+func (r IncludePathsRule) Name() string { return "include_paths" }
+
+func (r IncludePathsRule) Enabled(cfg *config.Rules) bool {
+	return cfg != nil && cfg.IncludePaths != nil && cfg.IncludePaths.Enabled
+}
+
+func (r IncludePathsRule) Check(ctx *Context) []linter.Issue {
+	var issues []linter.Issue
+	fileDir := filepath.Dir(ctx.FilePath)
+
+	for _, block := range ctx.Blocks {
+		if block.Type != "include" {
+			continue
+		}
+		attrs := ast.GetBlockAttributes(block.Block.Body)
+		path, ok := attrs["path"]
+		if !ok {
+			continue
+		}
+		pathStr := hclStringValue(path)
+		if pathStr == "" {
+			continue
+		}
+		resolved := resolveRelativePath(fileDir, pathStr)
+		if _, err := os.Stat(resolved); os.IsNotExist(err) {
+			issues = append(issues, linter.Issue{
+				Severity: linter.SeverityError,
+				Rule:     "include_path_exists",
+				Message:  fmt.Sprintf("include path %q does not exist", pathStr),
+				Location: path.Range(),
+			})
+		}
+	}
+
+	return issues
+}

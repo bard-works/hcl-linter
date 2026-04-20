@@ -234,15 +234,21 @@ func TestConfigSourceString(t *testing.T) {
 	}
 }
 
-func TestLoadTerragruntConfig(t *testing.T) {
+func TestLoadDependencyPathsConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
 	configContent := `rules {
-  terragrunt {
-    enabled                = true
-    dependency_path_exists = true
-    include_path_exists    = true
-    remote_state_config    = true
+  dependency_paths {
+    enabled = true
+  }
+
+  include_paths {
+    enabled = true
+  }
+
+  remote_state {
+    enabled         = true
+    require_backend = true
   }
 }`
 	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
@@ -255,28 +261,22 @@ func TestLoadTerragruntConfig(t *testing.T) {
 		t.Fatalf("LoadForFile failed: %v", err)
 	}
 
-	if rules.Terragrunt == nil {
-		t.Fatal("Terragrunt should not be nil")
+	if rules.DependencyPaths == nil || !rules.DependencyPaths.Enabled {
+		t.Error("DependencyPaths should be enabled")
 	}
-	if !rules.Terragrunt.Enabled {
-		t.Error("Terragrunt.Enabled should be true")
+	if rules.IncludePaths == nil || !rules.IncludePaths.Enabled {
+		t.Error("IncludePaths should be enabled")
 	}
-	if !rules.Terragrunt.DependencyPathExists {
-		t.Error("Terragrunt.DependencyPathExists should be true")
-	}
-	if !rules.Terragrunt.IncludePathExists {
-		t.Error("Terragrunt.IncludePathExists should be true")
-	}
-	if !rules.Terragrunt.RemoteStateConfig {
-		t.Error("Terragrunt.RemoteStateConfig should be true")
+	if rules.RemoteState == nil || !rules.RemoteState.Enabled || !rules.RemoteState.RequireBackend {
+		t.Errorf("RemoteState should be enabled with RequireBackend, got %+v", rules.RemoteState)
 	}
 }
 
-func TestLoadTerragruntFunctionsConfig(t *testing.T) {
+func TestLoadHCLFunctionsConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
 	configContent := `rules {
-  terragrunt_functions {
+  hcl_functions {
     enabled                       = true
     find_in_parent_folders_exists = true
     get_env_has_default           = true
@@ -292,64 +292,17 @@ func TestLoadTerragruntFunctionsConfig(t *testing.T) {
 		t.Fatalf("LoadForFile failed: %v", err)
 	}
 
-	if rules.TerragruntFunctions == nil {
-		t.Fatal("TerragruntFunctions should not be nil")
+	if rules.HCLFunctions == nil {
+		t.Fatal("HCLFunctions should not be nil")
 	}
-	if !rules.TerragruntFunctions.Enabled {
-		t.Error("TerragruntFunctions.Enabled should be true")
+	if !rules.HCLFunctions.Enabled {
+		t.Error("HCLFunctions.Enabled should be true")
 	}
-	if !rules.TerragruntFunctions.FindInParentFoldersExists {
-		t.Error("TerragruntFunctions.FindInParentFoldersExists should be true")
+	if !rules.HCLFunctions.FindInParentFoldersExists {
+		t.Error("HCLFunctions.FindInParentFoldersExists should be true")
 	}
-	if !rules.TerragruntFunctions.GetEnvHasDefault {
-		t.Error("TerragruntFunctions.GetEnvHasDefault should be true")
-	}
-}
-
-func TestLoadTerragruntHCLConfig(t *testing.T) {
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
-	configContent := `
-rules {
-  terragrunt {
-    enabled = true
-    dependency_path_exists = true
-    include_path_exists = true
-    remote_state_config = false
-  }
-
-  terragrunt_functions {
-    enabled = true
-    find_in_parent_folders_exists = true
-    get_env_has_default = false
-  }
-}
-`
-	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	loader := NewLoader(tmpDir)
-	rules, err := loader.LoadForFile("terragrunt.hcl")
-	if err != nil {
-		t.Fatalf("LoadForFile failed: %v", err)
-	}
-
-	if rules.Terragrunt == nil {
-		t.Fatal("Terragrunt should not be nil")
-	}
-	if !rules.Terragrunt.Enabled {
-		t.Error("Terragrunt.Enabled should be true")
-	}
-	if rules.Terragrunt.RemoteStateConfig {
-		t.Error("Terragrunt.RemoteStateConfig should be false")
-	}
-
-	if rules.TerragruntFunctions == nil {
-		t.Fatal("TerragruntFunctions should not be nil")
-	}
-	if rules.TerragruntFunctions.GetEnvHasDefault {
-		t.Error("TerragruntFunctions.GetEnvHasDefault should be false")
+	if !rules.HCLFunctions.GetEnvHasDefault {
+		t.Error("HCLFunctions.GetEnvHasDefault should be true")
 	}
 }
 

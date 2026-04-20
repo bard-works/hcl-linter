@@ -12,16 +12,18 @@ import (
 	"github.com/bard-works/hcl-linter/internal/linter"
 )
 
-type TerragruntFunctionsRule struct{}
+// HCLFunctionsRule validates HCL function calls. Currently recognizes
+// Terragrunt's `find_in_parent_folders` and `get_env`.
+type HCLFunctionsRule struct{}
 
-func (r TerragruntFunctionsRule) Name() string { return "terragrunt_functions" }
+func (r HCLFunctionsRule) Name() string { return "hcl_functions" }
 
-func (r TerragruntFunctionsRule) Enabled(cfg *config.Rules) bool {
-	return cfg != nil && cfg.TerragruntFunctions != nil && cfg.TerragruntFunctions.Enabled
+func (r HCLFunctionsRule) Enabled(cfg *config.Rules) bool {
+	return cfg != nil && cfg.HCLFunctions != nil && cfg.HCLFunctions.Enabled
 }
 
-func (r TerragruntFunctionsRule) Check(ctx *Context) []linter.Issue {
-	cfg := ctx.Config.TerragruntFunctions
+func (r HCLFunctionsRule) Check(ctx *Context) []linter.Issue {
+	cfg := ctx.Config.HCLFunctions
 	if !cfg.FindInParentFoldersExists && !cfg.GetEnvHasDefault {
 		return nil
 	}
@@ -46,7 +48,7 @@ func (r TerragruntFunctionsRule) Check(ctx *Context) []linter.Issue {
 type functionCallWalker struct {
 	issues  *[]linter.Issue
 	fileDir string
-	cfg     *config.TerragruntFunctionsConfig
+	cfg     *config.HCLFunctionsConfig
 }
 
 func (w *functionCallWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
@@ -85,9 +87,9 @@ func checkFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall *
 	}
 
 	if findFileInAncestors(fileDir, filename) == "" {
-		msg := "find_in_parent_folders() could not find terragrunt.hcl in parent directories"
-		if filename != defaultFile {
-			msg = fmt.Sprintf("find_in_parent_folders(%q) could not find file in parent directories", filename)
+		msg := fmt.Sprintf("find_in_parent_folders(%q) could not find file in parent directories", filename)
+		if len(funcCall.Args) == 0 {
+			msg = "find_in_parent_folders() could not find terragrunt.hcl in parent directories"
 		}
 		*issues = append(*issues, linter.Issue{
 			Severity: linter.SeverityError,

@@ -18,9 +18,11 @@ A configurable HCL linter that enforces consistency standards across large codeb
 - **Duplicate detection** - Detect duplicate block definitions
 - **Required fields** - Enforce required attributes per block type
 - **Required blocks** - Enforce presence of required block types
-- **Terragrunt validation** - Validate paths, include files, and remote state config
-- **Terragrunt functions** - Validate `find_in_parent_folders()` and `get_env()` calls
-- **Terraform block** - Validate terraform blocks for source, version, and deprecated fields
+- **Dependency paths** - Validate `config_path` on `dependency` blocks points to an existing directory
+- **Include paths** - Validate `path` on `include` blocks points to an existing file or directory
+- **Remote state** - Require `backend` on `remote_state` blocks nested inside the `terraform` block
+- **HCL functions** - Validate common HCL function calls (`find_in_parent_folders()`, `get_env()`)
+- **Terraform block** - Validate the `terraform { }` HCL block for source, version, and deprecated fields
 - **Key-value validation** - Enforce key case, value patterns, and disallowed attributes
 - **Count/for_each** - Detect count=0, empty for_each, and count+for_each conflicts
 - **Dependency outputs** - Validate `dependency.*.outputs.*` references against `.tf` files

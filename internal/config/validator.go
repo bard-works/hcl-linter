@@ -23,9 +23,9 @@ func (v ValidationIssue) String() string {
 var knownRuleBlocks = map[string]bool{
 	"block_order": true, "array_format": true, "blank_lines": true,
 	"name_validation": true, "duplicates": true, "required_fields": true,
-	"required_blocks": true, "terragrunt": true, "terragrunt_functions": true,
-	"terraform_block": true, "key_value": true, "count_for_each": true,
-	"dependency_outputs": true,
+	"required_blocks": true, "dependency_paths": true, "include_paths": true,
+	"remote_state": true, "hcl_functions": true, "terraform_block": true,
+	"key_value": true, "count_for_each": true, "dependency_outputs": true,
 }
 
 // ValidateConfigFile checks a single config file for unknown rule blocks and

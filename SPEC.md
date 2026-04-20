@@ -120,14 +120,20 @@ rules {
     }
   }
 
-  terragrunt {
-    enabled                = true
-    dependency_path_exists = true
-    include_path_exists    = true
-    remote_state_config    = true
+  dependency_paths {
+    enabled = true
   }
 
-  terragrunt_functions {
+  include_paths {
+    enabled = true
+  }
+
+  remote_state {
+    enabled         = true
+    require_backend = true
+  }
+
+  hcl_functions {
     enabled                       = true
     find_in_parent_folders_exists = true
     get_env_has_default           = true
@@ -400,43 +406,80 @@ include "root" {}
 locals {}
 ```
 
-### 8. Terragrunt Validation (`terragrunt`)
+### 8. Dependency Paths (`dependency_paths`)
 
-**Purpose:** Validate Terragrunt-specific configurations.
+**Purpose:** Validate that `config_path` attributes on `dependency` blocks
+resolve to existing directories. Targets the Terragrunt `dependency` block
+shape.
 
 **Configuration:**
 
 ```hcl
 rules {
-  terragrunt {
-    enabled                = true
-    dependency_path_exists = true
-    include_path_exists    = true
-    remote_state_config    = true
+  dependency_paths {
+    enabled = true
   }
 }
 ```
 
-**Checks:**
+**Rule ID emitted:** `dependency_path_exists`
 
-- `dependency_path_exists` - Validates `dependency.config_path` points to an existing directory
-- `include_path_exists` - Validates `include.path` exists (function calls like `find_in_parent_folders()` are skipped)
-- `remote_state_config` - Validates `terraform.remote_state` has a `backend` attribute
-
-**Example violations:**
+**Example violation:**
 
 ```hcl
-# dependency_path_exists violation
 dependency "vpc" {
   config_path = "../non-existent-vpc"  # ERROR: directory does not exist
 }
+```
 
-# include_path_exists violation
+### 9. Include Paths (`include_paths`)
+
+**Purpose:** Validate that `path` attributes on `include` blocks resolve to
+existing files or directories. Function-call values (e.g.
+`find_in_parent_folders()`) are skipped.
+
+**Configuration:**
+
+```hcl
+rules {
+  include_paths {
+    enabled = true
+  }
+}
+```
+
+**Rule ID emitted:** `include_path_exists`
+
+**Example violation:**
+
+```hcl
 include "root" {
   path = "non-existent/parent.hcl"  # ERROR: file does not exist
 }
+```
 
-# remote_state_config violation
+### 10. Remote State (`remote_state`)
+
+**Purpose:** Validate `remote_state { }` blocks nested inside the top-level
+`terraform { }` block. When `require_backend = true`, the `backend` attribute
+must be set and non-empty.
+
+**Configuration:**
+
+```hcl
+rules {
+  remote_state {
+    enabled         = true
+    require_backend = true
+  }
+}
+```
+
+**Rule ID emitted:** `remote_state_backend_required`
+
+**Example violation:**
+
+```hcl
 terraform {
   remote_state {
     # ERROR: missing required 'backend' attribute
@@ -447,15 +490,16 @@ terraform {
 }
 ```
 
-### 9. Terragrunt Functions (`terragrunt_functions`)
+### 11. HCL Functions (`hcl_functions`)
 
-**Purpose:** Validate Terragrunt function calls.
+**Purpose:** Validate common HCL function calls. Currently recognizes
+Terragrunt's `find_in_parent_folders` and `get_env`.
 
 **Configuration:**
 
 ```hcl
 rules {
-  terragrunt_functions {
+  hcl_functions {
     enabled                       = true
     find_in_parent_folders_exists = true
     get_env_has_default           = true
@@ -487,7 +531,7 @@ locals {
 }
 ```
 
-### 10. Terraform Block (`terraform_block`)
+### 12. Terraform Block (`terraform_block`)
 
 **Purpose:** Validate Terragrunt's `terraform` block configuration.
 
@@ -565,7 +609,7 @@ terraform {
   }
 ```
 
-### 11. Key-Value Validation (`key_value`)
+### 13. Key-Value Validation (`key_value`)
 
 **Purpose:** Enforce attribute naming conventions, validate values against patterns, and blocklist certain keys.
 
@@ -624,7 +668,7 @@ locals {
 }
 ```
 
-### 12. Count/ForEach Validation (`count_for_each`)
+### 14. Count/ForEach Validation (`count_for_each`)
 
 **Purpose:** Detect potential issues with count and for_each expressions.
 
@@ -667,7 +711,7 @@ resource "aws_instance" "test" {
 }
 ```
 
-### 13. Dependency Output Validation (`dependency_outputs`)
+### 15. Dependency Output Validation (`dependency_outputs`)
 
 **Purpose:** Validate `dependency.*.outputs.*` references by walking the dependency chain.
 
