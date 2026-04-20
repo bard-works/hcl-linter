@@ -40,17 +40,6 @@ func TestParseFile(t *testing.T) {
 	}
 }
 
-func TestParseJSON(t *testing.T) {
-	p := NewParser()
-	file, diags := p.ParseJSON([]byte(`{"locals": {"foo": 1}}`), "test.json")
-	if diags.HasErrors() {
-		t.Fatalf("unexpected errors: %s", diags.Error())
-	}
-	if file == nil {
-		t.Fatal("expected file, got nil")
-	}
-}
-
 func TestGetTopLevelBlocks(t *testing.T) {
 	p := NewParser()
 	file, _ := p.ParseContent([]byte(`
@@ -114,24 +103,6 @@ terraform {
 	}
 	if _, ok := attrs["version"]; !ok {
 		t.Error("missing 'version' attribute")
-	}
-}
-
-func TestGetBlockBodyAttributes(t *testing.T) {
-	p := NewParser()
-	file, _ := p.ParseContent([]byte(`
-terraform {
-  source = "./m"
-}
-`), "test.hcl")
-
-	body := file.Body.(*hclsyntax.Body)
-	attrs, err := GetBlockBodyAttributes(body.Blocks[0].Body)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if attrs == nil {
-		t.Error("expected non-nil map")
 	}
 }
 

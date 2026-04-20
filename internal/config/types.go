@@ -221,9 +221,3 @@ type BlankLinesConfig struct {
 	WithinBlocks bool `json:"within_blocks"`
 }
 
-// DeprecatedField represents a deprecated field.
-type DeprecatedField struct {
-	Name    string `json:"name"`
-	Block   string `json:"block"`
-	Message string `json:"message"`
-}
