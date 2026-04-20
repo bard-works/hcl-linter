@@ -59,6 +59,34 @@ Fixer interface: Rule + Fix(ctx) ([]byte, bool, error)
 Context:         FilePath, Content, File, Blocks, Attrs, Config
 ```
 
+## Conventions for new rules
+
+When adding or modifying a rule in `internal/rules/`:
+
+- **Register it.** Implement `Rule` (`Name() / Enabled(cfg) / Check(ctx) []Issue`)
+  and add it to `engine.New()` via `reg.Register(...)`. A rule that isn't
+  registered is dead code. Implement `Fixer` only when the issue is
+  auto-fixable — most rules are `Check`-only.
+- **Use `internal/ast` helpers, not `hcl/v2` directly.** Reach for
+  `ast.GetTopLevelBlocks`, `ast.GetBlockAttributes`,
+  `ast.GetBlockNestedBlocks`. Rules should not walk `hclsyntax.Body` by hand
+  except where an existing helper can't express what's needed (the
+  `remote_state` nested-block walk in `terragrunt.go` is the rare exception).
+- **Guard config access.** Both `Enabled()` and `Check()` should nil-check the
+  way other rules do:
+  ```go
+  func (r FooRule) Enabled(cfg *config.Rules) bool {
+      return cfg != nil && cfg.Foo != nil && cfg.Foo.Enabled
+  }
+  ```
+  `Check` runs only when `Enabled` returns true, but still read config fields
+  defensively.
+- **Severity constants.** Emit `linter.SeverityError` or `linter.SeverityWarning`
+  — never raw strings.
+- **Check is read-only; Fix mutates.** `Check(ctx) []linter.Issue` must not
+  touch `ctx.Content`. `Fix(ctx) ([]byte, bool, error)` returns the new bytes,
+  a `changed` bool (false = no-op, return original content), and an error.
+
 ## Config format
 
 HCL only — JSON support was intentionally removed. Config files live in
