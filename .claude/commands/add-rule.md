@@ -1,6 +1,8 @@
 Add a new lint rule to the engine. The rule name is provided as $ARGUMENTS (e.g. `/add-rule MyNewRule`).
 
-Steps to follow — work through them in order, running `go test ./...` after step 4:
+Steps to follow — work through them in order. Step 5 (tests) is **not optional**:
+every `internal/rules/<rule>.go` file must have a matching `<rule>_test.go`.
+Treat a rule without tests as incomplete.
 
 ## 1. Add config type in `internal/config/types.go`
 
@@ -84,16 +86,21 @@ if cfg.MyNewRule != nil && cfg.MyNewRule.Enabled {
 }
 ```
 
-## 5. Add tests in `internal/rules/my_new_rule_test.go`
+## 5. Add tests in `internal/rules/my_new_rule_test.go` (required)
 
-Use the `buildContext` helper (defined in `block_order_test.go`):
+The file **must** exist alongside the rule file — one `<rule>_test.go` per
+`<rule>.go`. Use the `buildContext` helper (defined in `block_order_test.go`)
+for in-memory content, or `buildContextFromFile` + `writeFile` (defined in
+`shared_test.go`) when the rule needs a real file on disk.
 
 ```go
 package rules_test
 
 import (
     "testing"
+
     "github.com/bard-works/hcl-linter/internal/config"
+    "github.com/bard-works/hcl-linter/internal/rules"
 )
 
 func TestMyNewRule(t *testing.T) {
@@ -104,18 +111,31 @@ func TestMyNewRule(t *testing.T) {
         // HCL content here
     `, cfg)
 
-    rule := MyNewRule{}
-    issues := rule.Check(ctx)
+    issues := rules.MyNewRule{}.Check(ctx)
     if len(issues) != 1 {
         t.Errorf("expected 1 issue, got %d", len(issues))
     }
 }
 ```
 
-## 6. Run tests
+Cover at minimum: a happy path (no issues), one violating input, and any
+config toggle the rule exposes (e.g. a `require_X` sub-flag). If the rule
+implements `Fix`, add a round-trip test asserting the fixed output.
+
+## 6. Run tests and confirm coverage
 
 ```bash
 go test ./...
 ```
 
-All must be green before considering the rule done.
+All tests must be green, and the new rule file should contribute
+meaningfully to coverage. Spot-check with:
+
+```bash
+go test -coverprofile=coverage.out -coverpkg=./... ./...
+go tool cover -func=coverage.out | grep my_new_rule
+```
+
+The rule's `Check` (and `Fix`, if present) should be above ~80%. If it's
+0%, the rule isn't being hit by any test — fix the test before calling the
+rule done.

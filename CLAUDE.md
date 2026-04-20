@@ -89,6 +89,11 @@ When adding or modifying a rule in `internal/rules/`:
 - **Check is read-only; Fix mutates.** `Check(ctx) []linter.Issue` must not
   touch `ctx.Content`. `Fix(ctx) ([]byte, bool, error)` returns the new bytes,
   a `changed` bool (false = no-op, return original content), and an error.
+- **Every rule has a matching `_test.go`.** For every
+  `internal/rules/<rule>.go`, there must be an `internal/rules/<rule>_test.go`
+  that exercises `Check` (and `Fix`, if present). A test living in another
+  file doesn't count — keep them co-located so "is this rule tested?" is a
+  filesystem question. The `/add-rule` command enforces this in step 5.
 
 ## Config format
 
