@@ -2,7 +2,8 @@
 
 ## Project
 
-A configurable linter and auto-fixer for Terragrunt HCL files. Written in Go.
+A configurable HCL 2 linter and auto-fixer, written in Go. The core rules are
+HCL-generic; Terragrunt- and Terraform-specific rule sets ship as built-ins.
 Module: `github.com/bard-works/hcl-linter`
 
 ## Commands

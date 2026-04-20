@@ -1,11 +1,15 @@
 # HCL Linter - Specification
 
-A configurable linter for Terragrunt HCL files that enforces consistency standards across large codebases.
+A configurable HCL linter that enforces consistency standards across large
+codebases. The core rules (block ordering, formatting, naming, required fields,
+blank lines, required blocks, key-value validation, etc.) work against any
+HCL 2 file. Additional rule sets ship for Terragrunt and Terraform.
 
 ## Goals
 
-- Enforce block ordering, formatting, naming, required fields, blank lines, required blocks, and Terragrunt-specific validations
-- Configurable rules per filename pattern (terragrunt.hcl, root.hcl, service.hcl)
+- Enforce block ordering, formatting, naming, required fields, blank lines, required blocks, and key-value validations for any HCL 2 file
+- Ship built-in rule sets for Terragrunt and Terraform concerns (dependency paths, include paths, remote state, function usage, etc.)
+- Configurable rules per filename pattern (e.g. `terragrunt.hcl`, `root.hcl`, `service.hcl`, or any filename your project uses)
 - Auto-fix capability for formatable issues
 - Extensible config system with user-defined configurations
 - Fast processing with configurable concurrency

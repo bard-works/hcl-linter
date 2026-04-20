@@ -34,7 +34,7 @@ func (r TerragruntFunctionsRule) Check(ctx *Context) []linter.Issue {
 		return nil
 	}
 
-	_ = hclsyntax.Walk(body, &tgFunctionWalker{
+	_ = hclsyntax.Walk(body, &functionCallWalker{
 		issues:  &issues,
 		fileDir: fileDir,
 		cfg:     cfg,
@@ -43,13 +43,13 @@ func (r TerragruntFunctionsRule) Check(ctx *Context) []linter.Issue {
 	return issues
 }
 
-type tgFunctionWalker struct {
+type functionCallWalker struct {
 	issues  *[]linter.Issue
 	fileDir string
 	cfg     *config.TerragruntFunctionsConfig
 }
 
-func (w *tgFunctionWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
+func (w *functionCallWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
 	funcCall, ok := node.(*hclsyntax.FunctionCallExpr)
 	if !ok {
 		return nil
@@ -58,20 +58,20 @@ func (w *tgFunctionWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
 	switch funcCall.Name {
 	case "find_in_parent_folders":
 		if w.cfg.FindInParentFoldersExists {
-			checkTgFindInParentFolders(w.issues, w.fileDir, funcCall)
+			checkFindInParentFolders(w.issues, w.fileDir, funcCall)
 		}
 	case "get_env":
 		if w.cfg.GetEnvHasDefault {
-			checkTgGetEnvHasDefault(w.issues, funcCall)
+			checkGetEnvHasDefault(w.issues, funcCall)
 		}
 	}
 
 	return nil
 }
 
-func (w *tgFunctionWalker) Exit(_ hclsyntax.Node) hcl.Diagnostics { return nil }
+func (w *functionCallWalker) Exit(_ hclsyntax.Node) hcl.Diagnostics { return nil }
 
-func checkTgFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall *hclsyntax.FunctionCallExpr) {
+func checkFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall *hclsyntax.FunctionCallExpr) {
 	defaultFile := "terragrunt.hcl"
 	var filename string
 
@@ -84,7 +84,7 @@ func checkTgFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall
 		}
 	}
 
-	if tgFindInParent(fileDir, filename) == "" {
+	if findFileInAncestors(fileDir, filename) == "" {
 		msg := "find_in_parent_folders() could not find terragrunt.hcl in parent directories"
 		if filename != defaultFile {
 			msg = fmt.Sprintf("find_in_parent_folders(%q) could not find file in parent directories", filename)
@@ -98,7 +98,7 @@ func checkTgFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall
 	}
 }
 
-func checkTgGetEnvHasDefault(issues *[]linter.Issue, funcCall *hclsyntax.FunctionCallExpr) {
+func checkGetEnvHasDefault(issues *[]linter.Issue, funcCall *hclsyntax.FunctionCallExpr) {
 	if len(funcCall.Args) < 2 {
 		*issues = append(*issues, linter.Issue{
 			Severity: linter.SeverityWarning,
@@ -109,7 +109,7 @@ func checkTgGetEnvHasDefault(issues *[]linter.Issue, funcCall *hclsyntax.Functio
 	}
 }
 
-func tgFindInParent(dir, filename string) string {
+func findFileInAncestors(dir, filename string) string {
 	current := dir
 	for {
 		testPath := filepath.Join(current, filename)

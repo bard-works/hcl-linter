@@ -29,7 +29,7 @@ var (
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "hcl-linter",
-		Short: "A configurable linter for Terragrunt HCL files",
+		Short: "A configurable HCL linter with built-in rule sets for Terragrunt and Terraform",
 		Run: func(cmd *cobra.Command, _ []string) {
 			_ = cmd.Help()
 		},

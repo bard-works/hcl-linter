@@ -149,19 +149,19 @@ terraform {
 `), "test.hcl")
 
 	body := file.Body.(*hclsyntax.Body)
-	tfBody := body.Blocks[0].Body
+	blockBody := body.Blocks[0].Body
 
-	remote := GetBlockNestedBlocks(tfBody, "remote_state")
+	remote := GetBlockNestedBlocks(blockBody, "remote_state")
 	if len(remote) != 1 {
 		t.Errorf("expected 1 remote_state, got %d", len(remote))
 	}
 
-	hooks := GetBlockNestedBlocks(tfBody, "before_hook")
+	hooks := GetBlockNestedBlocks(blockBody, "before_hook")
 	if len(hooks) != 2 {
 		t.Errorf("expected 2 before_hooks, got %d", len(hooks))
 	}
 
-	_ = GetBlockNestedBlocks(tfBody, "*")
+	_ = GetBlockNestedBlocks(blockBody, "*")
 }
 
 func TestGetTopLevelAttributes(t *testing.T) {

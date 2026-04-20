@@ -4,7 +4,7 @@
   <img src="docs/assets/hcl-linter-banner.png" alt="HCL Linter" width="680"/>
 </p>
 
-A configurable linter for Terragrunt HCL files that enforces consistency standards across large codebases.
+A configurable HCL linter that enforces consistency standards across large codebases. Ships with built-in rule sets for Terragrunt and Terraform, and works against any HCL 2 file.
 
 [![CI](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/bard-works/hcl-linter)](https://github.com/bard-works/hcl-linter)
