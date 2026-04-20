@@ -65,6 +65,24 @@ HCL only — JSON support was intentionally removed. Config files live in
 `.hcl-linter/` and are matched by filename (`terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`,
 fallback to `.hcl-linter/default.hcl`).
 
+## Cross-platform paths
+
+CI runs on Ubuntu, macOS, and Windows (see `.github/workflows/ci.yml`). Tests and
+code that assume POSIX separators will pass locally and fail on Windows.
+
+- Never concatenate `/` into a path. Use `filepath.Join(a, b)` — not `a + "/" + b`.
+- Comparing paths from `filepath.Join`/`filepath.Dir` against string literals is
+  a bug: `filepath.Join("/a", "b")` is `\a\b` on Windows. In tests either build
+  the expected value the same way, or normalize with `filepath.ToSlash` on both
+  sides before comparing.
+- For a POSIX literal in test input, wrap it in `filepath.FromSlash("/a/b")` so
+  it becomes `\a\b` on Windows.
+- When embedding an OS path into HCL string content in tests, wrap it in
+  `filepath.ToSlash(p)`. HCL strings treat `\` as an escape character, so raw
+  Windows paths (`C:\Users\…`) break the parse. HCL, `filepath.IsAbs`, and
+  `os.Stat` on Windows all accept forward slashes, so the forward-slash form
+  round-trips cleanly.
+
 ## Test conventions
 
 - Config files and lint-target files are both named `terragrunt.hcl` in tests.
