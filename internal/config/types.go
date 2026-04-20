@@ -220,4 +220,3 @@ type BlankLinesConfig struct {
 	Enabled      bool `json:"enabled"`
 	WithinBlocks bool `json:"within_blocks"`
 }
-
