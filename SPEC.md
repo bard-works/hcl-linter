@@ -846,6 +846,58 @@ By default, the linter automatically detects the optimal concurrency level based
 
 Higher concurrency speeds up processing of large file sets but uses more memory.
 
+### Coloured Output
+
+Output is colourised when stdout is an interactive terminal. Control with the
+global `--color` flag:
+
+- `--color=auto` (default) — on when stdout is a TTY, `NO_COLOR` is unset, and `TERM` is not `dumb`
+- `--color=always` — force colour on (use when piping into a colour-aware pager, e.g. `less -R`)
+- `--color=never` — disable colour entirely
+
+Auto mode also honours the `NO_COLOR` env var (https://no-color.org): any
+non-empty value disables colour. Explicit `--color=always` overrides `NO_COLOR`.
+
+#### Debugging colour output
+
+**Inspect raw escape codes.** The ANSI escape prefix is `\x1b[` (often shown as
+`^[[` or `\033[`). To see what's actually on the wire:
+
+```bash
+hcl-linter lint ./ --color=always | od -c | head -20
+```
+
+Look for sequences like `\033[31;1m` (red+bold, errors), `\033[33m` (yellow,
+warnings), `\033[32m` (green, success), `\033[36;1m` (cyan+bold, file paths),
+`\033[36m` (cyan, rule names), `\033[2m` (faint, location suffixes). Each run
+is terminated by `\033[0m` or an attribute-specific unset like `\033[22m`.
+
+Note: on some distros `cat -v` is aliased to `bat`; use `/usr/bin/cat -v` or
+`od -c` to bypass the alias.
+
+**Colour missing when expected:**
+
+- `echo $NO_COLOR` — any non-empty value disables colour in auto mode. Unset it with `unset NO_COLOR` or pass `--color=always`.
+- `echo $TERM` — `dumb` disables colour. Expected values: `xterm-256color`, `screen-256color`, `tmux-256color`, etc.
+- `[ -t 1 ] && echo tty || echo not-tty` — confirms whether stdout is a TTY.
+- Use `--color=always` to force colour regardless of detection.
+
+**Colour appears garbled in a pager (`^[[31m...`):** the pager isn't passing
+ANSI codes through. Use `less -R` or set `PAGER="less -R"`.
+
+**Colour bleeding into redirected files / logs:** use `--color=never`, or
+don't pass `--color=always` — auto mode already strips colour for non-TTY
+output.
+
+**Implementation:** colour handling lives in `internal/termcolor/`. Semantic
+helpers (`Error`, `Warning`, `Success`, `Path`, `Rule`, `Location`) wrap
+strings via `github.com/fatih/color`. `SetMode` is called once per invocation
+from cobra's `PersistentPreRunE`. One subtlety: `fatih/color.New()` bakes a
+per-instance `noColor` flag at construction time if `NO_COLOR` was set in env,
+so `SetMode` must resync each cached `*Color` via `EnableColor()` /
+`DisableColor()` — toggling the package-level `color.NoColor` alone is not
+sufficient. This is regression-tested in `termcolor_test.go`.
+
 ## Exit Codes
 
 - `0`: All files pass

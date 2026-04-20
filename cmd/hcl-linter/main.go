@@ -12,6 +12,7 @@ import (
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/engine"
 	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
 
 var (
@@ -20,6 +21,7 @@ var (
 	flagFilter      []string
 	flagConcurrency int
 	flagFormat      bool
+	flagColor       string
 
 	Version   = "dev"
 	BuildDate = "unknown"
@@ -37,6 +39,9 @@ func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "hcl-linter",
 		Short: "A configurable HCL linter with built-in rule sets for Terragrunt and Terraform",
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			return termcolor.SetMode(flagColor)
+		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			_ = cmd.Help()
 		},
@@ -46,6 +51,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVarP(&flagConfigSrc, "config-source", "c", "", "Config source: explicit path, or auto-detect from cwd/home/project")
 	rootCmd.PersistentFlags().StringArrayVar(&flagFilter, "filter", nil, "Filter files by name pattern (glob supported, can be specified multiple times)")
 	rootCmd.PersistentFlags().IntVar(&flagConcurrency, "concurrency", 0, "Max number of concurrent workers (0 = auto-detect based on CPU count, or use HCL_LINTER_MAX_CONCURRENCY env var)")
+	rootCmd.PersistentFlags().StringVar(&flagColor, "color", termcolor.ModeAuto, "Colour output: auto, always, never")
 
 	lintCmd := &cobra.Command{
 		Use:   "lint [path]",
@@ -108,11 +114,11 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 	loader, configResult := getLoader()
 
 	if configResult.Source == config.ConfigSourceNone {
-		fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
+		fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
 	} else {
 		fmt.Printf("Config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
 		if configResult.WarningMsg != "" {
-			fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
+			fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
 		}
 		warnConfigIssues(configResult.SourcePath)
 	}
@@ -148,10 +154,10 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 				relPath = file
 			}
 			if !loader.HasConfigForFile(file) {
-				fmt.Printf("Warning: No config found for %s, skipping\n", relPath)
+				fmt.Printf("%s No config found for %s, skipping\n", termcolor.Warning("Warning:"), relPath)
 				continue
 			}
-			fmt.Printf("Warning: No specific config for %s, using defaults\n", relPath)
+			fmt.Printf("%s No specific config for %s, using defaults\n", termcolor.Warning("Warning:"), relPath)
 		}
 		filesToLint = append(filesToLint, file)
 	}
@@ -175,15 +181,12 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 				if err != nil {
 					relPath = result.File
 				}
-				fmt.Printf("\n%s:\n", relPath)
+				fmt.Printf("\n%s:\n", termcolor.Path(relPath))
 				for _, issue := range result.Issues {
 					if issue.Severity == linter.SeverityError {
 						hasErrors = true
 					}
-					fmt.Printf("  [%s] %s: %s\n", issue.Severity, issue.Rule, issue.Message)
-					if flagVerbose && issue.Location.Filename != "" {
-						fmt.Printf("    at %s:%d\n", issue.Location.Filename, issue.Location.Start.Line)
-					}
+					printIssue(issue)
 				}
 			}
 		}
@@ -198,7 +201,7 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 	if totalIssues > 0 {
 		fmt.Printf("Total: %d issue(s) in %d file(s)\n", totalIssues, errorFiles)
 	} else {
-		fmt.Println("All files pass!")
+		fmt.Println(termcolor.Success("All files pass!"))
 	}
 
 	if hasErrors {
@@ -221,11 +224,11 @@ func run(_ *cobra.Command, args []string, checkMode, fixMode bool) error {
 	loader, configResult := getLoader()
 
 	if configResult.Source == config.ConfigSourceNone {
-		fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
+		fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
 	} else {
 		fmt.Printf("Using config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
 		if configResult.WarningMsg != "" {
-			fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
+			fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
 		}
 		warnConfigIssues(configResult.SourcePath)
 	}
@@ -330,10 +333,10 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 				relPath = file
 			}
 			if !loader.HasConfigForFile(file) {
-				fmt.Printf("Warning: No config found for %s, skipping\n", relPath)
+				fmt.Printf("%s No config found for %s, skipping\n", termcolor.Warning("Warning:"), relPath)
 				continue
 			}
-			fmt.Printf("Warning: No specific config for %s, using defaults\n", relPath)
+			fmt.Printf("%s No specific config for %s, using defaults\n", termcolor.Warning("Warning:"), relPath)
 		}
 		filesToLint = append(filesToLint, file)
 	}
@@ -355,16 +358,12 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 			if err != nil {
 				relPath = result.File
 			}
-			fmt.Printf("\n%s:\n", relPath)
+			fmt.Printf("\n%s:\n", termcolor.Path(relPath))
 			for _, issue := range result.Issues {
-				severity := issue.Severity
 				if issue.Severity == linter.SeverityError {
 					hasErrors = true
 				}
-				fmt.Printf("  [%s] %s: %s\n", severity, issue.Rule, issue.Message)
-				if flagVerbose && issue.Location.Filename != "" {
-					fmt.Printf("    at %s:%d\n", issue.Location.Filename, issue.Location.Start.Line)
-				}
+				printIssue(issue)
 			}
 		}
 	}
@@ -385,7 +384,7 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 	if totalIssues > 0 {
 		fmt.Printf("\nTotal: %d issue(s) in %d file(s)\n", totalIssues, len(allResults))
 	} else {
-		fmt.Println("All files pass!")
+		fmt.Println(termcolor.Success("All files pass!"))
 	}
 
 	if checkMode && hasErrors {
@@ -434,24 +433,13 @@ func runFormatMode(_ *cobra.Command, args []string) error {
 
 	totalChanges := 0
 	for _, result := range results {
-		relPath, _ := filepath.Rel(".", result.File)
-		if relPath == "" {
-			relPath = result.File
-		}
-		if result.Error != nil {
-			fmt.Printf("Error fixing %s: %v\n", relPath, result.Error)
-			continue
-		}
-		if result.Changes > 0 {
-			fmt.Printf("Fixed %s: %d change(s)\n", relPath, result.Changes)
-			totalChanges += result.Changes
-		}
+		totalChanges += printFixResult(result)
 	}
 
 	if totalChanges > 0 {
 		fmt.Printf("\nTotal: %d change(s) applied\n", totalChanges)
 	} else {
-		fmt.Println("No changes needed")
+		fmt.Println(termcolor.Success("No changes needed"))
 	}
 
 	return nil
@@ -468,7 +456,7 @@ func runFixMode(loader *config.Loader, files []string) error {
 			if relPath == "" {
 				relPath = file
 			}
-			fmt.Printf("Warning: No config found for %s, skipping\n", relPath)
+			fmt.Printf("%s No config found for %s, skipping\n", termcolor.Warning("Warning:"), relPath)
 			continue
 		}
 		if !hasSpecificConfig {
@@ -476,7 +464,7 @@ func runFixMode(loader *config.Loader, files []string) error {
 			if relPath == "" {
 				relPath = file
 			}
-			fmt.Printf("Warning: No specific config for %s, using defaults\n", relPath)
+			fmt.Printf("%s No specific config for %s, using defaults\n", termcolor.Warning("Warning:"), relPath)
 		}
 		filesToFix = append(filesToFix, file)
 	}
@@ -493,24 +481,13 @@ func runFixMode(loader *config.Loader, files []string) error {
 
 	totalChanges := 0
 	for _, result := range results {
-		relPath, _ := filepath.Rel(".", result.File)
-		if relPath == "" {
-			relPath = result.File
-		}
-		if result.Error != nil {
-			fmt.Printf("Error fixing %s: %v\n", relPath, result.Error)
-			continue
-		}
-		if result.Changes > 0 {
-			fmt.Printf("Fixed %s: %d change(s)\n", relPath, result.Changes)
-			totalChanges += result.Changes
-		}
+		totalChanges += printFixResult(result)
 	}
 
 	if totalChanges > 0 {
 		fmt.Printf("\nTotal: %d change(s) applied\n", totalChanges)
 	} else {
-		fmt.Println("No changes needed")
+		fmt.Println(termcolor.Success("No changes needed"))
 	}
 
 	return nil
@@ -532,12 +509,12 @@ func runValidateConfig(_ *cobra.Command, args []string) error {
 
 	issues := config.ValidateDir(result.SourcePath)
 	if len(issues) == 0 {
-		fmt.Println("Config OK")
+		fmt.Println(termcolor.Success("Config OK"))
 		return nil
 	}
 
 	for _, issue := range issues {
-		fmt.Fprintf(os.Stderr, "  error: %s\n", issue)
+		fmt.Fprintf(os.Stderr, "  %s %s\n", termcolor.Error("error:"), issue)
 	}
 	return fmt.Errorf("%d config issue(s) found", len(issues))
 }
@@ -551,8 +528,42 @@ func warnConfigIssues(configDir string) {
 	}
 	issues := config.ValidateDir(configDir)
 	for _, issue := range issues {
-		fmt.Fprintf(os.Stderr, "Config warning: %s\n", issue)
+		fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Config warning:"), issue)
 	}
+}
+
+// printIssue renders a single lint issue with severity colouring and an
+// optional faint location suffix in verbose mode.
+func printIssue(issue linter.Issue) {
+	label := fmt.Sprintf("[%s]", issue.Severity)
+	if issue.Severity == linter.SeverityError {
+		label = termcolor.Error(label)
+	} else {
+		label = termcolor.Warning(label)
+	}
+	fmt.Printf("  %s %s: %s\n", label, termcolor.Rule(issue.Rule), issue.Message)
+	if flagVerbose && issue.Location.Filename != "" {
+		fmt.Printf("    %s\n", termcolor.Location(
+			fmt.Sprintf("at %s:%d", issue.Location.Filename, issue.Location.Start.Line)))
+	}
+}
+
+// printFixResult renders a single fix result (error or change count) and
+// returns the change count contributed to the running total.
+func printFixResult(result *engine.FixResult) int {
+	relPath, _ := filepath.Rel(".", result.File)
+	if relPath == "" {
+		relPath = result.File
+	}
+	if result.Error != nil {
+		fmt.Printf("%s %s: %v\n", termcolor.Error("Error fixing"), relPath, result.Error)
+		return 0
+	}
+	if result.Changes > 0 {
+		fmt.Printf("Fixed %s: %d change(s)\n", relPath, result.Changes)
+		return result.Changes
+	}
+	return 0
 }
 
 func findHCLFiles(root string) []string {

@@ -203,15 +203,21 @@ During normal `lint`, `check`, and `fix` runs the same checks run automatically 
 --filter             Filter files by name pattern (glob supported)
 --concurrency        Max concurrent workers (default: CPU count)
 --verbose, -v        Show detailed output
+--color              Colour output: auto (default), always, never
 
 # fix-only flag:
 --format             Apply default formatting without requiring config rules
 ```
 
+In `--color=auto` (the default), colour is enabled only when stdout is a TTY
+and neither `NO_COLOR` nor `TERM=dumb` is set. Use `--color=always` to force
+colour through pipes (e.g. `less -R`) or `--color=never` to disable it.
+
 ## Environment Variables
 
 - `HCL_LINTER_CONFIG_DIR` - Path to config directory
 - `HCL_LINTER_MAX_CONCURRENCY` - Max concurrent workers
+- `NO_COLOR` - When set to any non-empty value, disables coloured output in `--color=auto` mode (see https://no-color.org)
 
 ## Full Documentation
 
