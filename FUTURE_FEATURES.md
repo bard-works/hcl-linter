@@ -3,6 +3,41 @@
 Planned features for hcl-linter. Open items are grouped by priority; shipped
 features are listed under **Implemented**; dropped ideas under **Deprecated**.
 
+## Top Priority
+
+### 20. `init` Command — Bootstrap Config for a Directory
+
+`hcl-linter init` helps a user set up a working `.hcl-linter/` for the
+current project without hand-writing HCL from scratch.
+
+- Walk the cwd for `.hcl` / `.tf` files, skipping hidden dirs (same rules
+  as `findHCLFiles`).
+- Group by **unique filename** (e.g. `terragrunt.hcl`, `root.hcl`,
+  `service.hcl`) — one config file per unique name is the natural mapping
+  given the existing per-filename config-matching model.
+- Print the detected filenames and the proposed layout, then write:
+  - `.hcl-linter/default.hcl` — sensible baseline (block_order, array_format,
+    blank_lines enabled with safe defaults)
+  - `.hcl-linter/<name>.hcl` per unique filename — `extends = "default"`
+    with an empty `rules {}` override block as a starting point
+- Flags:
+  - `--dry-run` — print proposed files to stdout without writing
+  - `--force` — overwrite existing `.hcl-linter/` contents (default: refuse
+    if the directory is non-empty, print what was found)
+- Output should nudge the user toward `validate-config` and `fix --dry-run`
+  as the next steps.
+
+Design notes:
+
+- Reuse `findHCLFiles` from `cmd/hcl-linter/main.go`; don't duplicate the
+  walker.
+- The default template must pass `validate-config` out of the box — all
+  enabled rules need their required fields set.
+- Compose cleanly with `extends` (Implemented #7): per-filename configs
+  start as thin overrides, not copies of the default.
+- No interactive prompts in v1 — keep it non-interactive so it's
+  scriptable in CI / Makefiles. Interactive polish can come later.
+
 ## Lower Priority
 
 ### 10. Git Hook Integration
