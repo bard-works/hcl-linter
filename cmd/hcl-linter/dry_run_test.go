@@ -84,7 +84,7 @@ const blankLinesConfig = `rules {
 // blank_lines fix will collapse.
 const misformattedContent = "locals {\n\n\n  foo = \"bar\"\n}\n"
 
-// cleanContent is already in canonical form — fix produces no changes.
+// cleanContent is already in canonical form - fix produces no changes.
 const cleanContent = "locals {\n  foo = \"bar\"\n}\n"
 
 func TestFixDryRunPrintsDiffForMisformattedFile(t *testing.T) {

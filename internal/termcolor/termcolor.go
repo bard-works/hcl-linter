@@ -31,7 +31,7 @@ var (
 	// cached *Color instances reused across calls. fatih/color bakes a
 	// per-instance noColor flag at New() time if NO_COLOR was set, so we
 	// must re-sync each instance whenever SetMode changes the effective
-	// state — otherwise the global color.NoColor toggle is ignored.
+	// state - otherwise the global color.NoColor toggle is ignored.
 	cachedColours = []*color.Color{errCol, warnCol, okCol, pathCol, ruleCol, locCol}
 )
 

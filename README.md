@@ -103,7 +103,7 @@ rules {
 Use `extends` to inherit from another config in the same directory. Child rules override the base rule block entirely; unset rules are inherited as-is.
 
 ```hcl
-# .hcl-linter/terragrunt.hcl — inherits all rules from default, overrides block_order
+# .hcl-linter/terragrunt.hcl - inherits all rules from default, overrides block_order
 extends = "default"
 
 rules {
@@ -176,7 +176,7 @@ inputs = {
 
 ## Validating Config Files
 
-Config files are plain HCL — typos in rule block names (e.g. `blokc_order`) are silently ignored by the parser. Use `validate-config` to catch these before they cause silent no-ops:
+Config files are plain HCL - typos in rule block names (e.g. `blokc_order`) are silently ignored by the parser. Use `validate-config` to catch these before they cause silent no-ops:
 
 ```bash
 hcl-linter validate-config
@@ -185,10 +185,10 @@ hcl-linter validate-config /path/to/.hcl-linter
 
 Exits non-zero and prints errors if any config file contains:
 
-- **Unknown rule blocks** — block names that don't match any known rule (likely a typo)
-- **Enabled rules with missing required fields** — e.g. `block_order` with no `order` list, `name_validation` with no `pattern`
+- **Unknown rule blocks** - block names that don't match any known rule (likely a typo)
+- **Enabled rules with missing required fields** - e.g. `block_order` with no `order` list, `name_validation` with no `pattern`
 
-During normal `lint`, `check`, and `fix` runs the same checks run automatically and print warnings to stderr — no separate step needed in CI unless you want a hard failure.
+During normal `lint`, `check`, and `fix` runs the same checks run automatically and print warnings to stderr - no separate step needed in CI unless you want a hard failure.
 
 ## CLI Options
 
@@ -216,10 +216,10 @@ colour through pipes (e.g. `less -R`) or `--color=never` to disable it.
 
 ## Full Documentation
 
-- [docs/rules.md](docs/rules.md) — every rule, its config fields, rule IDs, and default severities
-- [docs/configuration.md](docs/configuration.md) — config file format, source precedence, and `extends` inheritance
-- [docs/cli.md](docs/cli.md) — command reference, flags, exit codes, and coloured output
-- [docs/architecture.md](docs/architecture.md) — internal package layout and data flow
+- [docs/rules.md](docs/rules.md) - every rule, its config fields, rule IDs, and default severities
+- [docs/configuration.md](docs/configuration.md) - config file format, source precedence, and `extends` inheritance
+- [docs/cli.md](docs/cli.md) - command reference, flags, exit codes, and coloured output
+- [docs/architecture.md](docs/architecture.md) - internal package layout and data flow
 
 ## Contributing
 

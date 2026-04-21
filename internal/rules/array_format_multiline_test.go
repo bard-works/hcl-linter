@@ -9,7 +9,7 @@ import (
 
 // FixArrays's multiline-input branch (collectMultilineArray / needsMultilineFix /
 // fixMultilineArray) fires when the input is already a multi-line array but the
-// items are missing trailing commas — the fixer rewrites it with trailing commas.
+// items are missing trailing commas - the fixer rewrites it with trailing commas.
 func TestFixArraysMultilineInputMissingCommas(t *testing.T) {
 	input := `list = [
   "a"

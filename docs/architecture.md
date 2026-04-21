@@ -24,21 +24,21 @@ internal/
 ├── rules/
 │   ├── rule.go              # Rule, Fixer interfaces; Context struct
 │   ├── registry.go          # Registry: Register / Enabled / All
-│   ├── block_order.go       # BlockOrderRule       — Check + Fix
-│   ├── array_format.go      # ArrayFormatRule      — Check + Fix
-│   ├── blank_lines.go       # BlankLinesRule       — Fix only
-│   ├── name_validation.go   # NameValidationRule   — Check + Fix
-│   ├── required_fields.go   # RequiredFieldsRule   — Check + Fix
-│   ├── required_blocks.go   # RequiredBlocksRule   — Check
-│   ├── duplicates.go        # DuplicatesRule       — Check
-│   ├── dependency_paths.go  # DependencyPathsRule  — Check
-│   ├── include_paths.go     # IncludePathsRule     — Check
-│   ├── remote_state.go      # RemoteStateRule      — Check
-│   ├── hcl_functions.go     # HCLFunctionsRule     — Check
-│   ├── terraform_block.go   # TerraformBlockRule   — Check
-│   ├── key_value.go         # KeyValueRule         — Check
-│   ├── count_foreach.go     # CountForEachRule     — Check
-│   ├── dependency_outputs.go# DependencyOutputsRule — Check
+│   ├── block_order.go       # BlockOrderRule       - Check + Fix
+│   ├── array_format.go      # ArrayFormatRule      - Check + Fix
+│   ├── blank_lines.go       # BlankLinesRule       - Fix only
+│   ├── name_validation.go   # NameValidationRule   - Check + Fix
+│   ├── required_fields.go   # RequiredFieldsRule   - Check + Fix
+│   ├── required_blocks.go   # RequiredBlocksRule   - Check
+│   ├── duplicates.go        # DuplicatesRule       - Check
+│   ├── dependency_paths.go  # DependencyPathsRule  - Check
+│   ├── include_paths.go     # IncludePathsRule     - Check
+│   ├── remote_state.go      # RemoteStateRule      - Check
+│   ├── hcl_functions.go     # HCLFunctionsRule     - Check
+│   ├── terraform_block.go   # TerraformBlockRule   - Check
+│   ├── key_value.go         # KeyValueRule         - Check
+│   ├── count_foreach.go     # CountForEachRule     - Check
+│   ├── dependency_outputs.go# DependencyOutputsRule - Check
 │   └── helpers.go           # Shared helpers
 ├── config/
 │   ├── loader.go            # Config discovery and loading
@@ -120,7 +120,7 @@ next one runs.
   from cobra's `PersistentPreRunE`. One subtlety: `fatih/color.New()`
   bakes a per-instance `noColor` flag at construction time if `NO_COLOR`
   was set in env, so `SetMode` must resync each cached `*Color` via
-  `EnableColor()` / `DisableColor()` — toggling the package-level
+  `EnableColor()` / `DisableColor()` - toggling the package-level
   `color.NoColor` alone is not sufficient. This is regression-tested in
   `termcolor_test.go`.
 
@@ -151,9 +151,9 @@ Version is managed via the `VERSION` file:
 
 Version info is injected at build time via ldflags:
 
-- `main.Version` — from VERSION file
-- `main.BuildDate` — build timestamp
-- `main.GitCommit` — git SHA
+- `main.Version` - from VERSION file
+- `main.BuildDate` - build timestamp
+- `main.GitCommit` - git SHA
 
 ### Release workflow
 

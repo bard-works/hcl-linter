@@ -9,7 +9,7 @@ import (
 )
 
 // RemoteStateRule validates `remote_state` blocks nested inside the top-level
-// `terraform` block — specifically, that the `backend` attribute is set when
+// `terraform` block - specifically, that the `backend` attribute is set when
 // `require_backend` is configured.
 type RemoteStateRule struct{}
 

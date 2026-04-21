@@ -1,6 +1,6 @@
 Add a new lint rule to the engine. The rule name is provided as $ARGUMENTS (e.g. `/add-rule MyNewRule`).
 
-Steps to follow — work through them in order. Step 5 (tests) is **not optional**:
+Steps to follow - work through them in order. Step 5 (tests) is **not optional**:
 every `internal/rules/<rule>.go` file must have a matching `<rule>_test.go`.
 Treat a rule without tests as incomplete.
 
@@ -55,11 +55,11 @@ func (r MyNewRule) Check(ctx *Context) []diag.Issue {
 ```
 
 Key context fields:
-- `ctx.Blocks` — `[]ast.BlockInfo` top-level blocks
-- `ctx.Attrs` — `[]ast.AttributeInfo` top-level attributes
-- `ctx.File` — `*hcl.File` full parsed file
-- `ctx.FilePath` — absolute file path
-- `ctx.Config` — `*config.Rules`
+- `ctx.Blocks` - `[]ast.BlockInfo` top-level blocks
+- `ctx.Attrs` - `[]ast.AttributeInfo` top-level attributes
+- `ctx.File` - `*hcl.File` full parsed file
+- `ctx.FilePath` - absolute file path
+- `ctx.Config` - `*config.Rules`
 
 ## 3. Register in `internal/engine/engine.go`
 
@@ -88,7 +88,7 @@ if cfg.MyNewRule != nil && cfg.MyNewRule.Enabled {
 
 ## 5. Add tests in `internal/rules/my_new_rule_test.go` (required)
 
-The file **must** exist alongside the rule file — one `<rule>_test.go` per
+The file **must** exist alongside the rule file - one `<rule>_test.go` per
 `<rule>.go`. Use the `buildContext` helper (defined in `block_order_test.go`)
 for in-memory content, or `buildContextFromFile` + `writeFile` (defined in
 `shared_test.go`) when the rule needs a real file on disk.
@@ -137,5 +137,5 @@ go tool cover -func=coverage.out | grep my_new_rule
 ```
 
 The rule's `Check` (and `Fix`, if present) should be above ~80%. If it's
-0%, the rule isn't being hit by any test — fix the test before calling the
+0%, the rule isn't being hit by any test - fix the test before calling the
 rule done.

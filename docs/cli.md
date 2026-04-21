@@ -74,7 +74,7 @@ file without requiring config.
 ## `lint`
 
 Lints every matching file under the given path and prints all issues.
-Exits `0` regardless of issue count — use `check` if you want a non-zero
+Exits `0` regardless of issue count - use `check` if you want a non-zero
 exit on issues.
 
 ## `check`
@@ -108,7 +108,7 @@ introducing config-based rules. Config-based `array_format` and
 
 Runs the same Fix pipeline as `fix` but prints a unified diff to stdout per
 changed file instead of writing. Exits non-zero (`1`) if any file would be
-changed. Composes with `--format`. Intended for CI pre-commit enforcement —
+changed. Composes with `--format`. Intended for CI pre-commit enforcement -
 fail the build when committed files aren't byte-identical to what the fixer
 would produce.
 
@@ -133,7 +133,7 @@ hcl-linter validate-config /path/to/.hcl-linter
 
 **Checks performed:**
 
-- **Unknown rule blocks** — any block name inside `rules {}` that doesn't
+- **Unknown rule blocks** - any block name inside `rules {}` that doesn't
   match a known rule is reported as an error. This catches silent typos:
   the HCL parser ignores unrecognised blocks, so `blokc_order {}` would
   silently do nothing without this check.
@@ -188,9 +188,9 @@ memory.
 Output is colourised when stdout is an interactive terminal. Control with
 the global `--color` flag:
 
-- `--color=auto` (default) — on when stdout is a TTY, `NO_COLOR` is unset, and `TERM` is not `dumb`
-- `--color=always` — force colour on (use when piping into a colour-aware pager, e.g. `less -R`)
-- `--color=never` — disable colour entirely
+- `--color=auto` (default) - on when stdout is a TTY, `NO_COLOR` is unset, and `TERM` is not `dumb`
+- `--color=always` - force colour on (use when piping into a colour-aware pager, e.g. `less -R`)
+- `--color=never` - disable colour entirely
 
 Auto mode also honours the `NO_COLOR` env var (https://no-color.org): any
 non-empty value disables colour. Explicit `--color=always` overrides
@@ -216,23 +216,23 @@ or `od -c` to bypass the alias.
 
 **Colour missing when expected:**
 
-- `echo $NO_COLOR` — any non-empty value disables colour in auto mode. Unset with `unset NO_COLOR` or pass `--color=always`.
-- `echo $TERM` — `dumb` disables colour. Expected values: `xterm-256color`, `screen-256color`, `tmux-256color`, etc.
-- `[ -t 1 ] && echo tty || echo not-tty` — confirms whether stdout is a TTY.
+- `echo $NO_COLOR` - any non-empty value disables colour in auto mode. Unset with `unset NO_COLOR` or pass `--color=always`.
+- `echo $TERM` - `dumb` disables colour. Expected values: `xterm-256color`, `screen-256color`, `tmux-256color`, etc.
+- `[ -t 1 ] && echo tty || echo not-tty` - confirms whether stdout is a TTY.
 - Use `--color=always` to force colour regardless of detection.
 
 **Colour appears garbled in a pager (`^[[31m...`):** the pager isn't
 passing ANSI codes through. Use `less -R` or set `PAGER="less -R"`.
 
 **Colour bleeding into redirected files / logs:** use `--color=never`,
-or don't pass `--color=always` — auto mode already strips colour for
+or don't pass `--color=always` - auto mode already strips colour for
 non-TTY output.
 
 ## Environment variables
 
-- `HCL_LINTER_CONFIG_DIR` — Path to custom config directory (priority 2; see [configuration.md](configuration.md#config-source-precedence))
-- `HCL_LINTER_MAX_CONCURRENCY` — Max number of concurrent workers (overrides `--concurrency` flag)
-- `NO_COLOR` — When set to any non-empty value, disables coloured output in `--color=auto` mode (see https://no-color.org)
+- `HCL_LINTER_CONFIG_DIR` - Path to custom config directory (priority 2; see [configuration.md](configuration.md#config-source-precedence))
+- `HCL_LINTER_MAX_CONCURRENCY` - Max number of concurrent workers (overrides `--concurrency` flag)
+- `NO_COLOR` - When set to any non-empty value, disables coloured output in `--color=auto` mode (see https://no-color.org)
 
 ## Exit codes
 

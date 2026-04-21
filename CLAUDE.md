@@ -1,4 +1,4 @@
-# HCL Linter — Claude Context
+# HCL Linter - Claude Context
 
 ## Project
 
@@ -25,7 +25,7 @@ Always run `go test ./...` after any code change before reporting done.
 cmd/hcl-linter/main.go        # CLI (cobra): lint, check, fix, version commands
 internal/engine/              # Engine: entry point for all lint and fix operations
 internal/rules/               # Rule implementations (Rule/Fixer interface)
-internal/config/              # config loading — HCL only, file-based matching
+internal/config/              # config loading - HCL only, file-based matching
 internal/diag/                # types only: Issue, Result, Severity
 internal/ast/                 # HCL parse helpers
 .hcl-linter/                  # example configs shipped with the project
@@ -69,7 +69,7 @@ When adding or modifying a rule in `internal/rules/`:
 - **Register it.** Implement `Rule` (`Name() / Enabled(cfg) / Check(ctx) []Issue`)
   and add it to `engine.New()` via `reg.Register(...)`. A rule that isn't
   registered is dead code. Implement `Fixer` only when the issue is
-  auto-fixable — most rules are `Check`-only.
+  auto-fixable - most rules are `Check`-only.
 - **Use `internal/ast` helpers, not `hcl/v2` directly.** Reach for
   `ast.GetTopLevelBlocks`, `ast.GetBlockAttributes`,
   `ast.GetBlockNestedBlocks`. Rules should not walk `hclsyntax.Body` by hand
@@ -85,19 +85,19 @@ When adding or modifying a rule in `internal/rules/`:
   `Check` runs only when `Enabled` returns true, but still read config fields
   defensively.
 - **Severity constants.** Emit `diag.SeverityError` or `diag.SeverityWarning`
-  — never raw strings.
+  - never raw strings.
 - **Check is read-only; Fix mutates.** `Check(ctx) []diag.Issue` must not
   touch `ctx.Content`. `Fix(ctx) ([]byte, bool, error)` returns the new bytes,
   a `changed` bool (false = no-op, return original content), and an error.
 - **Every rule has a matching `_test.go`.** For every
   `internal/rules/<rule>.go`, there must be an `internal/rules/<rule>_test.go`
   that exercises `Check` (and `Fix`, if present). A test living in another
-  file doesn't count — keep them co-located so "is this rule tested?" is a
+  file doesn't count - keep them co-located so "is this rule tested?" is a
   filesystem question. The `/add-rule` command enforces this in step 5.
 
 ## Config format
 
-HCL only — JSON support was intentionally removed. Config files live in
+HCL only - JSON support was intentionally removed. Config files live in
 `.hcl-linter/` and are matched by filename (`terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`,
 fallback to `.hcl-linter/default.hcl`).
 
@@ -106,7 +106,7 @@ fallback to `.hcl-linter/default.hcl`).
 CI runs on Ubuntu, macOS, and Windows (see `.github/workflows/ci.yml`). Tests and
 code that assume POSIX separators will pass locally and fail on Windows.
 
-- Never concatenate `/` into a path. Use `filepath.Join(a, b)` — not `a + "/" + b`.
+- Never concatenate `/` into a path. Use `filepath.Join(a, b)` - not `a + "/" + b`.
 - Comparing paths from `filepath.Join`/`filepath.Dir` against string literals is
   a bug: `filepath.Join("/a", "b")` is `\a\b` on Windows. In tests either build
   the expected value the same way, or normalize with `filepath.ToSlash` on both
@@ -161,7 +161,7 @@ Implemented via `Engine.FormatFixFile` / `Engine.FormatFixFiles` in `internal/en
 ## Do not
 
 - Re-introduce JSON config support anywhere
-- Add comments explaining *what* code does — only add a comment when the *why* is non-obvious
+- Add comments explaining *what* code does - only add a comment when the *why* is non-obvious
 - Create `.md` documentation files unless explicitly asked
 - Add error handling for scenarios that can't happen
 - Suggest or implement features not explicitly requested
