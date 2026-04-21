@@ -166,7 +166,7 @@ func TestMatchesFilter(t *testing.T) {
 func TestFindHCLFiles(t *testing.T) {
 	// This test would require creating temp directories with HCL files
 	// For now, just test the function exists and can be called
-	t.Run("function exists", func(t *testing.T) {
+	t.Run("function exists", func(_ *testing.T) {
 		result := findHCLFiles("/tmp")
 		// Result might be empty or contain files, just verify it doesn't panic
 		_ = result

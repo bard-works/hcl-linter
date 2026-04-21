@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -90,10 +91,7 @@ func (r *Rules) IsEnabled() bool {
 }
 
 type Loader struct {
-	configDir  string
-	source     ConfigSource
-	sourcePath string
-	projectDir string
+	configDir string
 }
 
 func NewLoader(configDir string) *Loader {
@@ -332,7 +330,7 @@ func LoadConfigDir(configDir string) (*Loader, error) {
 	if configDir == "" {
 		loader, result := NewLoaderWithDiscovery("")
 		if result.Source == ConfigSourceNone {
-			return nil, fmt.Errorf("config directory does not exist")
+			return nil, errors.New("config directory does not exist")
 		}
 		return loader, nil
 	}
