@@ -9,6 +9,48 @@ A configurable HCL linter that enforces consistency standards across large codeb
 [![CI](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/bard-works/hcl-linter)](https://github.com/bard-works/hcl-linter)
 
+## Why `hcl-linter`?
+
+Infrastructure code written in HCL tends to drift over time. Different teams adopt different conventions, formatting varies between editors, and subtle issues often slip through code review. What starts as flexibility quickly turns into inconsistency, noise, and risk.
+
+`hcl-linter` brings that under control.
+
+It gives teams a way to **define clear standards once** and enforce them everywhere-independently of IDEs, local tooling, or individual preferences.
+
+## Who is this for?
+
+- **Platform / Infrastructure teams** that want consistent standards across services and repositories  
+- **Engineering teams using HCL files** at scale  
+- **Organizations with multiple contributors and mixed development environments**
+
+If multiple people are modifying HCL files, consistency will eventually become a problem-this tool exists to solve that.
+
+## What problems does it solve?
+
+- **Inconsistent structure** → Enforce block ordering and required blocks  
+- **Style drift** → Normalize formatting (arrays, spacing, layout)  
+- **Naming chaos** → Apply predictable naming conventions  
+- **Hidden misconfigurations** → Catch invalid paths, missing outputs, incorrect patterns  
+- **Review fatigue** → Remove low-value comments about formatting and conventions  
+
+Instead of relying on reviewers to enforce rules manually, `hcl-linter` makes them automatic and repeatable.
+
+## How it helps your team
+
+- **Faster reviews** - less time spent on style, more on architecture  
+- **Cleaner diffs** - formatting is consistent, changes are meaningful  
+- **Lower onboarding cost** - new engineers don’t need to learn implicit rules  
+- **Stronger governance** - standards are enforced, not suggested  
+- **Tooling independence** - works the same across all editors and platforms  
+
+## Easy to adopt
+
+- Works out of the box with zero config (`fix --format`)  
+- Uses HCL for configuration-no new language to learn  
+- Supports inheritance (`extends`) for scalable rule management  
+- Integrates cleanly with CI (`check`, `fix --dry-run`)  
+- Gradual adoption: start with formatting, then enforce stricter rules  
+
 ## Features
 
 - **Block ordering** - Enforce consistent ordering of top-level and nested blocks
