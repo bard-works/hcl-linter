@@ -8,6 +8,7 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 - Configurable rules per filename pattern (terragrunt.hcl, root.hcl, service.hcl)
 - Auto-fix capability for formatable issues
 - Extensible config system with user-defined configurations
+- Fast processing with configurable concurrency
 
 ## Configuration
 
@@ -126,7 +127,7 @@ actions = [
 
 ### 3. Blank Lines (`blank_lines`)
 
-**Purpose:** Remove unnecessary blank lines within blocks for cleaner formatting.
+**Purpose:** Clean up blank lines within blocks for consistent formatting.
 
 **Configuration:**
 ```json
@@ -139,7 +140,10 @@ actions = [
 ```
 
 **Behavior:**
-- `within_blocks: true` - Removes blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
+- `within_blocks: true` - Cleans blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
+- Removes blank lines at the beginning (after `{`) and end (before `}`) of blocks
+- Reduces consecutive duplicate blank lines to a single blank line
+- Single blank lines between attributes are preserved
 - Blank lines between top-level blocks are preserved
 - Nested blocks (e.g., `before_hook` inside `terraform`) are also cleaned
 
@@ -150,6 +154,7 @@ inputs = {
 
   repository = "test"
 
+
   tags = "value"
 
 }
@@ -157,6 +162,7 @@ inputs = {
 # After
 inputs = {
   repository = "test"
+
   tags = "value"
 }
 ```
@@ -275,6 +281,9 @@ hcl-linter --verbose lint ./
 # Use custom config directory
 hcl-linter --config-source /path/to/custom-config lint ./
 
+# Set concurrency (number of concurrent workers)
+hcl-linter --concurrency 4 lint ./
+
 # Print version information
 hcl-linter version
 ```
@@ -284,6 +293,17 @@ hcl-linter version
 ### Environment Variables
 
 - `HCL_LINTER_CONFIG_DIR`: Path to custom config directory
+- `HCL_LINTER_MAX_CONCURRENCY`: Max number of concurrent workers (overrides `--concurrency` flag)
+
+### Concurrency
+
+By default, the linter automatically detects the optimal concurrency level based on CPU count. You can override this:
+
+- CLI flag: `--concurrency <number>`
+- Environment variable: `HCL_LINTER_MAX_CONCURRENCY`
+- Config: `{"max_concurrency": <number>}` in rules (lowest priority)
+
+Higher concurrency speeds up processing of large file sets but uses more memory.
 
 ## Exit Codes
 

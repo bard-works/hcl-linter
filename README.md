@@ -1,0 +1,99 @@
+# HCL Linter
+
+A configurable linter for Terragrunt HCL files that enforces consistency standards across large codebases.
+
+[![CI](https://github.com/papaya/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/papaya/hcl-linter/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/papaya/hcl-linter)](https://github.com/papaya/hcl-linter)
+
+## Features
+
+- Enforce block ordering, formatting, naming, required fields, blank lines, and required blocks
+- Auto-fix capability for formatable issues
+- Configurable rules per filename pattern
+- Fast processing with configurable concurrency
+
+## Install
+
+### Homebrew
+
+```bash
+brew install papaya/tap/hcl-linter
+```
+
+### Binary Download
+
+Download pre-built binaries from the [latest release](https://github.com/papaya/hcl-linter/releases/latest).
+
+### Build from Source
+
+```bash
+go install github.com/papaya/hcl-linter@latest
+```
+
+## Quick Start
+
+```bash
+# Lint all files
+hcl-linter lint ./
+
+# Check and exit 1 if issues found
+hcl-linter check ./
+
+# Auto-fix issues
+hcl-linter fix ./
+```
+
+## Configuration
+
+Create a `.hcl-linter/` directory with config files:
+
+```
+.hcl-linter/
+├── default.json       # Base config for all files
+├── terragrunt.json   # Rules for terragrunt.hcl
+└── root.json         # Rules for root.hcl
+```
+
+Example `default.json`:
+
+```json
+{
+  "rules": {
+    "block_order": {
+      "enabled": true,
+      "order": ["include", "locals", "terraform", "dependency", "inputs"]
+    },
+    "required_blocks": {
+      "required": [
+        {
+          "type": "terraform",
+          "count": "once",
+          "error": "missing terraform block"
+        }
+      ]
+    }
+  }
+}
+```
+
+## CLI Options
+
+```bash
+--config-source, -c   Config source path
+--filter             Filter files by name pattern (glob supported)
+--concurrency        Max concurrent workers (default: CPU count)
+--verbose, -v        Show detailed output
+```
+
+## Environment Variables
+
+- `HCL_LINTER_CONFIG_DIR` - Path to config directory
+- `HCL_LINTER_MAX_CONCURRENCY` - Max concurrent workers
+
+## Full Documentation
+
+See [SPEC.md](SPEC.md) for complete documentation including all rules and configuration options.
+
+## License
+
+MIT

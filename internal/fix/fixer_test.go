@@ -377,9 +377,21 @@ func TestFixBlankLinesWithinBlocks(t *testing.T) {
 			checkContains: "repository = \"test\"",
 		},
 		{
-			name: "single blank line between attributes",
+			name: "single blank line between attributes - preserved",
 			input: `inputs = {
   repository = "test"
+
+  tags = "value"
+}
+`,
+			expectChange:  false,
+			checkContains: "tags = \"value\"",
+		},
+		{
+			name: "multiple blank lines reduced to one",
+			input: `inputs = {
+  repository = "test"
+
 
   tags = "value"
 }
@@ -571,6 +583,65 @@ func TestFixBlankLinesDisabled(t *testing.T) {
 
 	if result.Changes > 0 {
 		t.Errorf("expected no changes when disabled, got %d", result.Changes)
+	}
+}
+
+func TestFixFilesConcurrent(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	files := []string{
+		createHCLFile(t, tmpDir, "file1.hcl", "inputs = {\n\n  a = \"b\"\n\n}\n"),
+		createHCLFile(t, tmpDir, "file2.hcl", "inputs = {\n\n  c = \"d\"\n\n}\n"),
+		createHCLFile(t, tmpDir, "file3.hcl", "inputs = {\n\n  e = \"f\"\n\n}\n"),
+	}
+
+	results := fixer.FixFiles(files, 2)
+
+	if len(results) != 3 {
+		t.Errorf("expected 3 results, got %d", len(results))
+	}
+
+	for _, result := range results {
+		if result == nil {
+			t.Error("expected non-nil result")
+		}
+	}
+}
+
+func TestFixFilesNoConcurrency(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	file := createHCLFile(t, tmpDir, "test.hcl", "inputs = {\n\n  a = \"b\"\n\n}\n")
+
+	results := fixer.FixFiles([]string{file}, 0)
+	if len(results) != 1 {
+		t.Errorf("expected 1 result, got %d", len(results))
 	}
 }
 
@@ -849,17 +920,23 @@ include "root" {
 
 	lines := strings.Split(result.Content, "\n")
 	braceLevel := 0
+	prevWasBlank := false
 	for i, line := range lines {
 		for _, ch := range line {
-			if ch == '{' {
+			switch ch {
+			case '{':
 				braceLevel++
-			} else if ch == '}' {
+			case '}':
 				braceLevel--
 			}
 		}
-		if line == "" && i > 0 && i < len(lines)-1 && braceLevel > 0 {
-			t.Errorf("unexpected blank line at index %d (inside block with depth %d)", i, braceLevel)
+		isBlank := strings.TrimSpace(line) == ""
+		if isBlank && i > 0 && i < len(lines)-1 && braceLevel > 0 {
+			if prevWasBlank {
+				t.Errorf("unexpected duplicate blank line at index %d (inside block with depth %d)", i, braceLevel)
+			}
 		}
+		prevWasBlank = isBlank
 	}
 }
 

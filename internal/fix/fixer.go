@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/papaya/hcl-linter/internal/ast"
@@ -718,6 +720,7 @@ func removeBlankLinesWithinBlock(lines []string) []string {
 		return lines
 	}
 	var result []string
+	var lastWasBlank bool
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		isLastLine := i == len(lines)-1
@@ -732,14 +735,58 @@ func removeBlankLinesWithinBlock(lines []string) []string {
 			if nextTrimmed == "}" || strings.HasPrefix(nextTrimmed, "}") {
 				continue
 			}
-			if isBlockHeader && len(result) == 0 {
+			if isBlockHeader {
 				continue
+			}
+			if !lastWasBlank {
+				result = append(result, line)
+				lastWasBlank = true
 			}
 		} else {
 			result = append(result, line)
+			lastWasBlank = false
 		}
 	}
 	return result
+}
+
+func (f *Fixer) FixFiles(paths []string, maxConcurrency int) []*FixResult {
+	if maxConcurrency <= 0 {
+		maxConcurrency = runtime.NumCPU()
+	}
+
+	sem := make(chan struct{}, maxConcurrency)
+	var wg sync.WaitGroup
+	results := make(chan *FixResult, len(paths))
+
+	for _, path := range paths {
+		wg.Add(1)
+		go func(p string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			result, err := f.FixFile(p)
+			if err != nil {
+				result = &FixResult{
+					File:  p,
+					Error: err,
+				}
+			}
+			results <- result
+		}(path)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	var allResults []*FixResult
+	for r := range results {
+		allResults = append(allResults, r)
+	}
+	return allResults
 }
 
 var _ = hclsyntax.TupleConsExpr{}

@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	flagVerbose   bool
-	flagConfigSrc string
-	flagFilter    []string
+	flagVerbose     bool
+	flagConfigSrc   string
+	flagFilter      []string
+	flagConcurrency int
 
 	Version   = "dev"
 	BuildDate = "unknown"
@@ -35,6 +36,7 @@ func main() {
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Show detailed output")
 	rootCmd.PersistentFlags().StringVarP(&flagConfigSrc, "config-source", "c", "", "Config source: explicit path, or auto-detect from cwd/home/project")
 	rootCmd.PersistentFlags().StringArrayVar(&flagFilter, "filter", nil, "Filter files by name pattern (glob supported, can be specified multiple times)")
+	rootCmd.PersistentFlags().IntVar(&flagConcurrency, "concurrency", 0, "Max number of concurrent workers (0 = auto-detect based on CPU count, or use HCL_LINTER_MAX_CONCURRENCY env var)")
 
 	lintCmd := &cobra.Command{
 		Use:   "lint [path]",
@@ -193,9 +195,7 @@ func matchGlob(filename, pattern string) bool {
 func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 	l := linter.NewLinter(loader)
 
-	hasErrors := false
-	var allResults []*linter.Result
-
+	var filesToLint []string
 	for _, file := range files {
 		hasSpecificConfig := loader.HasSpecificConfigForFile(file)
 		if !hasSpecificConfig {
@@ -209,21 +209,25 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 			}
 			fmt.Printf("Warning: No specific config for %s, using defaults\n", relPath)
 		}
+		filesToLint = append(filesToLint, file)
+	}
 
-		result, err := l.LintFile(file)
-		if err != nil {
-			if flagVerbose {
-				fmt.Printf("Skipping %s: %v\n", file, err)
-			}
-			continue
-		}
+	maxConcurrency := flagConcurrency
+	if maxConcurrency <= 0 {
+		maxConcurrency = config.GetMaxConcurrency(nil)
+	}
+	if flagVerbose && len(filesToLint) > 1 {
+		fmt.Printf("Linting %d files with concurrency %d\n", len(filesToLint), maxConcurrency)
+	}
 
-		allResults = append(allResults, result)
+	allResults := l.LintFiles(filesToLint, maxConcurrency)
 
+	hasErrors := false
+	for _, result := range allResults {
 		if flagVerbose || len(result.Issues) > 0 {
-			relPath, _ := filepath.Rel(".", file)
+			relPath, _ := filepath.Rel(".", result.File)
 			if relPath == "" {
-				relPath = file
+				relPath = result.File
 			}
 			fmt.Printf("\n%s:\n", relPath)
 			for _, issue := range result.Issues {
@@ -268,31 +272,48 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 func runFixMode(loader *config.Loader, files []string) error {
 	fixer := fix.NewFixer(loader)
 
-	totalChanges := 0
+	var filesToFix []string
 	for _, file := range files {
 		hasSpecificConfig := loader.HasSpecificConfigForFile(file)
-		relPath, _ := filepath.Rel(".", file)
-		if relPath == "" {
-			relPath = file
-		}
-
 		if !loader.HasConfigForFile(file) {
+			relPath, _ := filepath.Rel(".", file)
+			if relPath == "" {
+				relPath = file
+			}
 			fmt.Printf("Warning: No config found for %s, skipping\n", relPath)
 			continue
 		}
-
 		if !hasSpecificConfig {
+			relPath, _ := filepath.Rel(".", file)
+			if relPath == "" {
+				relPath = file
+			}
 			fmt.Printf("Warning: No specific config for %s, using defaults\n", relPath)
 		}
+		filesToFix = append(filesToFix, file)
+	}
 
-		result, err := fixer.FixFile(file)
-		if err != nil {
-			fmt.Printf("Error fixing %s: %v\n", file, err)
+	maxConcurrency := flagConcurrency
+	if maxConcurrency <= 0 {
+		maxConcurrency = config.GetMaxConcurrency(nil)
+	}
+	if flagVerbose && len(filesToFix) > 1 {
+		fmt.Printf("Fixing %d files with concurrency %d\n", len(filesToFix), maxConcurrency)
+	}
+
+	results := fixer.FixFiles(filesToFix, maxConcurrency)
+
+	totalChanges := 0
+	for _, result := range results {
+		relPath, _ := filepath.Rel(".", result.File)
+		if relPath == "" {
+			relPath = result.File
+		}
+		if result.Error != nil {
+			fmt.Printf("Error fixing %s: %v\n", relPath, result.Error)
 			continue
 		}
-
 		if result.Changes > 0 {
-			relPath, _ := filepath.Rel(".", file)
 			fmt.Printf("Fixed %s: %d change(s)\n", relPath, result.Changes)
 			totalChanges += result.Changes
 		}
