@@ -28,7 +28,7 @@ func TestPerDir_NestedConfigsWinInLintFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Nested service dir requires [locals, terraform, include] — inverse.
+	// Nested service dir requires [locals, terraform, include] - inverse.
 	svcDir := filepath.Join(root, "svc")
 	svcConfig := filepath.Join(svcDir, ".hcl-linter")
 	if err := os.MkdirAll(svcConfig, 0o755); err != nil {

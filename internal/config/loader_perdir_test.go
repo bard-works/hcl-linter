@@ -126,7 +126,7 @@ func TestPerDir_NestedDefaultHclMatches(t *testing.T) {
 
 // TestPerDir_ExtendsResolvesInNestedDir verifies that `extends = "default"`
 // inside a nested `.hcl-linter/` resolves against files in the *same* nested
-// dir — not the root config dir.
+// dir - not the root config dir.
 func TestPerDir_ExtendsResolvesInNestedDir(t *testing.T) {
 	root := t.TempDir()
 
@@ -229,7 +229,7 @@ func TestPerDir_HasSpecificConfigForFile(t *testing.T) {
 }
 
 // TestPerDir_ResolveCacheIsConcurrencySafe exercises the cache under
-// concurrent LoadForFile calls — the engine uses LintFiles with worker
+// concurrent LoadForFile calls - the engine uses LintFiles with worker
 // goroutines, so the cache must be safe.
 func TestPerDir_ResolveCacheIsConcurrencySafe(t *testing.T) {
 	root := t.TempDir()
@@ -260,7 +260,7 @@ func TestPerDir_ResolveCacheIsConcurrencySafe(t *testing.T) {
 }
 
 // TestPerDir_NestedMustBeActualHclLinter guards against accidentally
-// matching a dir literally named ".hcl-linter" somewhere unexpected — the
+// matching a dir literally named ".hcl-linter" somewhere unexpected - the
 // walk must test for dir with a usable config file, not just presence.
 func TestPerDir_NestedMustBeActualHclLinter(t *testing.T) {
 	root := t.TempDir()

@@ -139,7 +139,7 @@ func (l *Loader) resolveConfigDirForFile(filename string) string {
 
 // walkForConfigDir searches from start upward for the closest `.hcl-linter/`
 // with a match for baseName or a default.hcl. The walk is bounded by the
-// parent of the root configDir — files outside that subtree skip the walk
+// parent of the root configDir - files outside that subtree skip the walk
 // entirely and use the root directly. This keeps behaviour predictable for
 // callers that pass bare filenames and avoids leaking filesystem structure
 // above the configured project root.
