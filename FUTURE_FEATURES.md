@@ -3,41 +3,6 @@
 Planned features for hcl-linter. Open items are grouped by priority; shipped
 features are listed under **Implemented**; dropped ideas under **Deprecated**.
 
-## Top Priority
-
-### 20. `init` Command — Bootstrap Config for a Directory
-
-`hcl-linter init` helps a user set up a working `.hcl-linter/` for the
-current project without hand-writing HCL from scratch.
-
-- Walk the cwd for `.hcl` / `.tf` files, skipping hidden dirs (same rules
-  as `findHCLFiles`).
-- Group by **unique filename** (e.g. `terragrunt.hcl`, `root.hcl`,
-  `service.hcl`) — one config file per unique name is the natural mapping
-  given the existing per-filename config-matching model.
-- Print the detected filenames and the proposed layout, then write:
-  - `.hcl-linter/default.hcl` — sensible baseline (block_order, array_format,
-    blank_lines enabled with safe defaults)
-  - `.hcl-linter/<name>.hcl` per unique filename — `extends = "default"`
-    with an empty `rules {}` override block as a starting point
-- Flags:
-  - `--dry-run` — print proposed files to stdout without writing
-  - `--force` — overwrite existing `.hcl-linter/` contents (default: refuse
-    if the directory is non-empty, print what was found)
-- Output should nudge the user toward `validate-config` and `fix --dry-run`
-  as the next steps.
-
-Design notes:
-
-- Reuse `findHCLFiles` from `cmd/hcl-linter/main.go`; don't duplicate the
-  walker.
-- The default template must pass `validate-config` out of the box — all
-  enabled rules need their required fields set.
-- Compose cleanly with `extends` (Implemented #7): per-filename configs
-  start as thin overrides, not copies of the default.
-- No interactive prompts in v1 — keep it non-interactive so it's
-  scriptable in CI / Makefiles. Interactive polish can come later.
-
 ## Lower Priority
 
 ### 10. Git Hook Integration
@@ -182,6 +147,22 @@ prints a unified diff per file that would change, and exits non-zero if
 any diff is produced. Composes with `--format`. Uses
 `github.com/hexops/gotextdiff` for unified-diff generation. See
 `cmd/hcl-linter/diff.go` and [docs/cli.md → `fix --dry-run` flag](docs/cli.md#fix---dry-run-flag).
+
+### 20. `init` Command — Bootstrap Config for a Directory ✅
+
+`hcl-linter init [path]` walks the target for `.hcl` / `.tf` files (skipping
+hidden dirs via `findHCLFiles`), groups them by unique basename, and writes:
+
+- `.hcl-linter/default.hcl` — baseline with `block_order`, `array_format`,
+  and `blank_lines` enabled with safe defaults. Passes `validate-config`
+  out of the box.
+- `.hcl-linter/<name>.hcl` per unique basename — a thin
+  `extends = "default"` override with an empty `rules {}` starter block.
+
+Flags: `--dry-run` prints the proposed layout to stdout without writing;
+`--force` overwrites an existing non-empty `.hcl-linter/` (the default
+refuses and lists what was found). See
+[docs/cli.md → `init`](docs/cli.md#init) and `cmd/hcl-linter/init.go`.
 
 ### 19. Coloured Terminal Output ✅
 

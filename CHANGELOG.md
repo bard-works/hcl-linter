@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `fix --dry-run` prints a unified diff per file and exits non-zero if any
   file would be changed. Composes with `--format`. Intended for CI
   pre-commit enforcement.
+- `init` command scaffolds a `.hcl-linter/` directory for a project. Walks
+  the target for `.hcl`/`.tf` files, groups by unique basename, and writes
+  a `default.hcl` baseline plus one `extends = "default"` override per
+  unique name. Supports `--dry-run` and `--force`.
 
 ## [0.1.0] - 2026-04-21
 

@@ -108,6 +108,9 @@ hcl-linter fix ./ --format
 
 # Preview changes without writing; exits non-zero if any file would change
 hcl-linter fix ./ --dry-run
+
+# Bootstrap a .hcl-linter/ config directory for the current project
+hcl-linter init
 ```
 
 ## Configuration

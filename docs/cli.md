@@ -10,7 +10,8 @@
    - [`fix --format` flag](#fix---format-flag)
    - [`fix --dry-run` flag](#fix---dry-run-flag)
 6. [`validate-config`](#validate-config-command)
-7. [`version`](#version)
+7. [`init`](#init)
+8. [`version`](#version)
 8. [Target file filtering (`--filter`)](#target-file-filtering---filter)
 9. [Concurrency](#concurrency)
 10. [Coloured output](#coloured-output)
@@ -54,6 +55,10 @@ hcl-linter version
 # Validate config files for typos and misconfigurations
 hcl-linter validate-config
 hcl-linter validate-config /path/to/.hcl-linter
+
+# Bootstrap a .hcl-linter/ directory for the project
+hcl-linter init
+hcl-linter init ./my-project --dry-run
 ```
 
 **Note:** Files without a matching config (e.g. `something-special.hcl`
@@ -150,6 +155,38 @@ hcl-linter validate-config /path/to/.hcl-linter
 automatically and print any issues as warnings to stderr. The dedicated
 subcommand is useful in CI where you want a hard failure on config
 problems.
+
+## `init`
+
+Bootstraps a `.hcl-linter/` config directory for the current project.
+
+```bash
+hcl-linter init                    # uses cwd
+hcl-linter init ./my-project
+hcl-linter init . --dry-run        # preview without writing
+hcl-linter init . --force          # overwrite existing .hcl-linter/
+```
+
+Walks the target directory for `.hcl` / `.tf` files (skipping hidden dirs),
+groups them by unique basename, then writes:
+
+- `.hcl-linter/default.hcl` — baseline template with `block_order`,
+  `array_format`, and `blank_lines` enabled with safe defaults.
+- `.hcl-linter/<name>.hcl` per unique basename — a thin
+  `extends = "default"` override with an empty `rules {}` block, ready for
+  per-filename customisation.
+
+**Flags:**
+
+- `--dry-run` — print the proposed layout and file contents to stdout; no
+  files are written.
+- `--force` — overwrite existing `.hcl-linter/` contents. Without this flag,
+  `init` refuses when the target `.hcl-linter/` directory is non-empty and
+  lists what it found.
+
+The generated layout is designed to pass `validate-config` unchanged - run
+`hcl-linter validate-config` and `hcl-linter fix ./ --dry-run` as suggested
+next steps.
 
 ## `version`
 

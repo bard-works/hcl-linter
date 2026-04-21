@@ -58,6 +58,7 @@ func resetFlags(t *testing.T) {
 	flagConcurrency = 0
 	flagFormat = false
 	flagDryRun = false
+	flagInitForce = false
 	t.Cleanup(func() {
 		flagVerbose = false
 		flagConfigSrc = ""
