@@ -161,8 +161,8 @@ Colourise lint output for readability in interactive terminals.
 Implementation: `internal/termcolor` wraps `fatih/color` with semantic
 helpers (Error/Warning/Success/Path/Rule/Location). Global `--color` flag
 with `auto` (default), `always`, `never`. Auto honours `NO_COLOR` and
-`TERM=dumb`; explicit `always` overrides both. See SPEC.md → "Coloured
-Output" for debugging.
+`TERM=dumb`; explicit `always` overrides both. See
+[docs/cli.md → Coloured output](docs/cli.md#coloured-output) for debugging.
 
 ---
 

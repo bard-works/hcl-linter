@@ -46,7 +46,7 @@ Download pre-built binaries from the [latest release](https://github.com/bard-wo
 ### Build from Source
 
 ```bash
-go install github.com/bard-works/hcl-linter@latest
+go install github.com/bard-works/hcl-linter/cmd/hcl-linter@latest
 ```
 
 ## Quick Start
@@ -171,15 +171,6 @@ inputs = {
 }
 ```
 
-```hcl
-rules {
-  blank_lines {
-    enabled       = true
-    within_blocks = true
-  }
-}
-```
-
 ## Validating Config Files
 
 Config files are plain HCL — typos in rule block names (e.g. `blokc_order`) are silently ignored by the parser. Use `validate-config` to catch these before they cause silent no-ops:
@@ -221,7 +212,18 @@ colour through pipes (e.g. `less -R`) or `--color=never` to disable it.
 
 ## Full Documentation
 
-See [SPEC.md](SPEC.md) for complete documentation including all rules and configuration options.
+- [docs/rules.md](docs/rules.md) — every rule, its config fields, rule IDs, and default severities
+- [docs/configuration.md](docs/configuration.md) — config file format, source precedence, and `extends` inheritance
+- [docs/cli.md](docs/cli.md) — command reference, flags, exit codes, and coloured output
+- [docs/architecture.md](docs/architecture.md) — internal package layout and data flow
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, rule conventions, and PR guidelines.
+
+## Security
+
+Please report vulnerabilities privately via [GitHub Security Advisories](https://github.com/bard-works/hcl-linter/security/advisories). See [SECURITY.md](SECURITY.md).
 
 ## License
 
