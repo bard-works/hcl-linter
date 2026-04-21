@@ -134,7 +134,14 @@ any issues are found.
 ```bash
 hcl-linter validate-config
 hcl-linter validate-config /path/to/.hcl-linter
+hcl-linter validate-config . --recursive   # validate every nested .hcl-linter/
 ```
+
+**`--recursive` flag:** walks the target path and validates every
+`.hcl-linter/` directory found (skipping hidden siblings). Exits non-zero if
+any directory contains config issues. Useful when per-directory overrides
+are in play — see
+[configuration.md → Per-directory overrides](configuration.md#per-directory-overrides).
 
 **Checks performed:**
 

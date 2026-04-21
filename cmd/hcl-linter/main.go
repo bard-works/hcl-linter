@@ -16,13 +16,14 @@ import (
 )
 
 var (
-	flagVerbose     bool
-	flagConfigSrc   string
-	flagFilter      []string
-	flagConcurrency int
-	flagFormat      bool
-	flagDryRun      bool
-	flagColor       string
+	flagVerbose           bool
+	flagConfigSrc         string
+	flagFilter            []string
+	flagConcurrency       int
+	flagFormat            bool
+	flagDryRun            bool
+	flagColor             string
+	flagValidateRecursive bool
 
 	Version   = "dev"
 	BuildDate = "unknown"
@@ -77,11 +78,12 @@ func newRootCmd() *cobra.Command {
 	fixCmd.Flags().BoolVar(&flagFormat, "format", false, "Apply default formatting (block ordering, array formatting, blank line normalization) without requiring config rules")
 	fixCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "Show what fix would change (unified diff) without writing; exit non-zero if any changes needed")
 	validateConfigCmd := &cobra.Command{
-		Use:   "validate-config [config-dir]",
+		Use:   "validate-config [path]",
 		Short: "Validate .hcl-linter config files for unknown rules and misconfigurations",
 		Args:  cobra.MaximumNArgs(1),
 		RunE:  runValidateConfig,
 	}
+	validateConfigCmd.Flags().BoolVar(&flagValidateRecursive, "recursive", false, "Validate every .hcl-linter/ directory found under the target path")
 	initCmd := &cobra.Command{
 		Use:           "init [path]",
 		Short:         "Bootstrap a .hcl-linter/ config directory for the project",
@@ -488,6 +490,10 @@ func runFixMode(loader *config.Loader, files []string) error {
 }
 
 func runValidateConfig(_ *cobra.Command, args []string) error {
+	if flagValidateRecursive {
+		return runValidateConfigRecursive(args)
+	}
+
 	var configDir string
 	if len(args) == 1 {
 		configDir = args[0]
@@ -511,6 +517,71 @@ func runValidateConfig(_ *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "  %s %s\n", termcolor.Error("error:"), issue)
 	}
 	return fmt.Errorf("%d config issue(s) found", len(issues))
+}
+
+func runValidateConfigRecursive(args []string) error {
+	root := "."
+	if len(args) == 1 {
+		root = args[0]
+	}
+
+	info, err := os.Stat(root)
+	if err != nil {
+		return fmt.Errorf("path error: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("--recursive target must be a directory: %s", root)
+	}
+
+	dirs := findHCLLinterDirs(root)
+	if len(dirs) == 0 {
+		return fmt.Errorf("no .hcl-linter/ directories found under %s", root)
+	}
+
+	var totalIssues int
+	for _, dir := range dirs {
+		fmt.Printf("Validating config: %s\n", dir)
+		issues := config.ValidateDir(dir)
+		if len(issues) == 0 {
+			fmt.Println("  " + termcolor.Success("OK"))
+			continue
+		}
+		totalIssues += len(issues)
+		for _, issue := range issues {
+			fmt.Fprintf(os.Stderr, "  %s %s\n", termcolor.Error("error:"), issue)
+		}
+	}
+
+	if totalIssues == 0 {
+		return nil
+	}
+	return fmt.Errorf("%d config issue(s) found across %d directory(s)", totalIssues, len(dirs))
+}
+
+// findHCLLinterDirs walks root and returns every `.hcl-linter/` directory
+// found, sorted by path. Does not descend into `.hcl-linter/` itself or
+// other hidden sibling directories (except the .hcl-linter/ match).
+func findHCLLinterDirs(root string) []string {
+	var dirs []string
+	walkFn := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			return nil
+		}
+		name := info.Name()
+		if name == ".hcl-linter" {
+			dirs = append(dirs, path)
+			return filepath.SkipDir
+		}
+		if path != root && strings.HasPrefix(name, ".") {
+			return filepath.SkipDir
+		}
+		return nil
+	}
+	_ = filepath.Walk(root, walkFn)
+	return dirs
 }
 
 // warnConfigIssues prints config validation warnings to stderr. Called at

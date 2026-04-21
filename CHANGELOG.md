@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the target for `.hcl`/`.tf` files, groups by unique basename, and writes
   a `default.hcl` baseline plus one `extends = "default"` override per
   unique name. Supports `--dry-run` and `--force`.
+- Per-directory config overrides: a `.hcl-linter/` anywhere in the source
+  tree overrides rules for files beneath it. Closer config wins; the root
+  config is the fallback. Walk is bounded by the parent of the root
+  `.hcl-linter/`.
+- `validate-config --recursive` walks a path and validates every
+  `.hcl-linter/` directory found.
 
 ## [0.1.0] - 2026-04-21
 

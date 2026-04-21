@@ -9,9 +9,10 @@ files being linted) and are matched to targets by filename.
 1. [Directory layout](#directory-layout)
 2. [Config source precedence](#config-source-precedence)
 3. [Config file matching](#config-file-matching)
-4. [Config inheritance (`extends`)](#config-inheritance-extends)
-5. [Full schema example](#full-schema-example)
-6. [Validating your config](#validating-your-config)
+4. [Per-directory overrides](#per-directory-overrides)
+5. [Config inheritance (`extends`)](#config-inheritance-extends)
+6. [Full schema example](#full-schema-example)
+7. [Validating your config](#validating-your-config)
 
 ## Directory layout
 
@@ -59,6 +60,53 @@ same directory (see below).
 
 Use `fix --format` to apply opinionated default formatting without
 requiring any config. See [cli.md](cli.md#fix---format-flag) for details.
+
+## Per-directory overrides
+
+A `.hcl-linter/` directory placed anywhere in the source tree overrides
+rules for files beneath it. Useful in monorepos where different services
+or subprojects have different conventions.
+
+**How it works:** for each target file, the linter walks upward from the
+file's directory looking for the closest `.hcl-linter/` that contains a
+usable config (either `<basename>.hcl` or `default.hcl`). That config wins.
+If nothing is found on the walk, the globally-resolved root config from
+[Config source precedence](#config-source-precedence) is used as the
+fallback.
+
+**Closer wins — there is no implicit cross-directory merging.** The nested
+config replaces the root config wholesale for matching files. If you want
+to share rules between the root and a nested config, use `extends` inside
+the nested config (relative paths like `extends = "../default"` work),
+or duplicate the shared rule blocks.
+
+**Example — monorepo with one service that uses a stricter block order:**
+
+```
+repo/
+├── .hcl-linter/
+│   └── default.hcl             # Root rules: standard order
+├── services/
+│   ├── payments/
+│   │   ├── .hcl-linter/
+│   │   │   └── terragrunt.hcl  # Stricter order for the payments service
+│   │   └── terragrunt.hcl
+│   └── orders/
+│       └── terragrunt.hcl      # Uses the root config (no override here)
+```
+
+When linting `services/payments/terragrunt.hcl` the nested
+`services/payments/.hcl-linter/terragrunt.hcl` wins. The root config is
+used unchanged for every other file.
+
+**Bounding:** the walk is bounded by the parent of the root
+`.hcl-linter/` directory. Files outside that subtree use the root config
+directly and do not trigger a walk.
+
+**Validating every config in a tree:** use
+`hcl-linter validate-config --recursive [path]` to check every
+`.hcl-linter/` found under the target path. See
+[cli.md → `validate-config`](cli.md#validate-config-command).
 
 ## Config inheritance (`extends`)
 

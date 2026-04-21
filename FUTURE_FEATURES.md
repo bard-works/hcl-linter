@@ -28,14 +28,6 @@ Prompt for each fix individually.
 - Review changes before applying
 - Skip specific fixes
 
-### 15. Per-Directory Config Override
-
-Allow a `.hcl-linter/` directory anywhere in the tree to override rules for files beneath it.
-
-- Closer config wins; root config is the fallback
-- Same `extends` mechanism for inheritance
-- Useful in monorepos where different services have different conventions
-
 ### 16. Rule Severity Override
 
 Let users promote warnings to errors or demote errors to warnings per rule in config.
@@ -147,6 +139,22 @@ prints a unified diff per file that would change, and exits non-zero if
 any diff is produced. Composes with `--format`. Uses
 `github.com/hexops/gotextdiff` for unified-diff generation. See
 `cmd/hcl-linter/diff.go` and [docs/cli.md → `fix --dry-run` flag](docs/cli.md#fix---dry-run-flag).
+
+### 15. Per-Directory Config Override ✅
+
+A `.hcl-linter/` directory anywhere in the source tree overrides rules for
+files beneath it. For each target file, the loader walks upward from the
+file's directory looking for the closest `.hcl-linter/` that contains a
+usable config (`<basename>.hcl` or `default.hcl`); that config wins
+wholesale. If nothing is found, the globally-discovered root config is
+used. The walk is bounded by the parent of the root `.hcl-linter/` so
+files outside the project tree skip it entirely.
+
+No implicit cross-directory merging — closer wins. Users share rules via
+`extends` within a nested dir or by duplicating blocks. `validate-config
+--recursive` walks a path and validates every nested `.hcl-linter/` found.
+See [docs/configuration.md → Per-directory overrides](docs/configuration.md#per-directory-overrides)
+and `internal/config/loader.go`.
 
 ### 20. `init` Command — Bootstrap Config for a Directory ✅
 
