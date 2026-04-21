@@ -5,7 +5,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type BlankLinesRule struct{}
@@ -16,7 +16,7 @@ func (r BlankLinesRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.BlankLines != nil && cfg.BlankLines.Enabled && cfg.BlankLines.WithinBlocks
 }
 
-func (r BlankLinesRule) Check(_ *Context) []linter.Issue { return nil }
+func (r BlankLinesRule) Check(_ *Context) []diag.Issue { return nil }
 
 func (r BlankLinesRule) Fix(ctx *Context) ([]byte, bool, error) {
 	contentStr := string(ctx.Content)

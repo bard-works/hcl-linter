@@ -26,7 +26,7 @@ cmd/hcl-linter/main.go        # CLI (cobra): lint, check, fix, version commands
 internal/engine/              # Engine: entry point for all lint and fix operations
 internal/rules/               # Rule implementations (Rule/Fixer interface)
 internal/config/              # config loading — HCL only, file-based matching
-internal/linter/              # types only: Issue, Result, Severity
+internal/diag/                # types only: Issue, Result, Severity
 internal/ast/                 # HCL parse helpers
 .hcl-linter/                  # example configs shipped with the project
 ```
@@ -84,9 +84,9 @@ When adding or modifying a rule in `internal/rules/`:
   ```
   `Check` runs only when `Enabled` returns true, but still read config fields
   defensively.
-- **Severity constants.** Emit `linter.SeverityError` or `linter.SeverityWarning`
+- **Severity constants.** Emit `diag.SeverityError` or `diag.SeverityWarning`
   — never raw strings.
-- **Check is read-only; Fix mutates.** `Check(ctx) []linter.Issue` must not
+- **Check is read-only; Fix mutates.** `Check(ctx) []diag.Issue` must not
   touch `ctx.Content`. `Fix(ctx) ([]byte, bool, error)` returns the new bytes,
   a `changed` bool (false = no-op, return original content), and an error.
 - **Every rule has a matching `_test.go`.** For every

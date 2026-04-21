@@ -7,7 +7,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 // DependencyPathsRule validates that `config_path` attributes on `dependency`
@@ -20,8 +20,8 @@ func (r DependencyPathsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.DependencyPaths != nil && cfg.DependencyPaths.Enabled
 }
 
-func (r DependencyPathsRule) Check(ctx *Context) []linter.Issue {
-	var issues []linter.Issue
+func (r DependencyPathsRule) Check(ctx *Context) []diag.Issue {
+	var issues []diag.Issue
 	fileDir := filepath.Dir(ctx.FilePath)
 
 	for _, block := range ctx.Blocks {
@@ -43,8 +43,8 @@ func (r DependencyPathsRule) Check(ctx *Context) []linter.Issue {
 			if len(block.Labels) > 0 {
 				label = block.Labels[0]
 			}
-			issues = append(issues, linter.Issue{
-				Severity: linter.SeverityError,
+			issues = append(issues, diag.Issue{
+				Severity: diag.SeverityError,
 				Rule:     "dependency_path_exists",
 				Message:  fmt.Sprintf("dependency %q: config_path %q does not exist", label, pathStr),
 				Location: configPath.Range(),

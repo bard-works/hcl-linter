@@ -9,7 +9,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type ArrayFormatRule struct{}
@@ -20,8 +20,8 @@ func (r ArrayFormatRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.ArrayFormat != nil && cfg.ArrayFormat.Enabled
 }
 
-func (r ArrayFormatRule) Check(ctx *Context) []linter.Issue {
-	var issues []linter.Issue
+func (r ArrayFormatRule) Check(ctx *Context) []diag.Issue {
+	var issues []diag.Issue
 	checkArrayFormatBlocks(&issues, ctx.Blocks)
 	return issues
 }
@@ -252,7 +252,7 @@ func fixMultilineArray(lines []string, firstLine string, sortItems bool) string 
 
 // --- Check helpers ---
 
-func checkArrayFormatBlocks(issues *[]linter.Issue, blocks []ast.BlockInfo) {
+func checkArrayFormatBlocks(issues *[]diag.Issue, blocks []ast.BlockInfo) {
 	for _, block := range blocks {
 		if len(block.Block.Body.Attributes) > 0 {
 			for _, attr := range block.Block.Body.Attributes {
@@ -265,7 +265,7 @@ func checkArrayFormatBlocks(issues *[]linter.Issue, blocks []ast.BlockInfo) {
 	}
 }
 
-func checkExprArrayFormat(issues *[]linter.Issue, expr hclsyntax.Expression) {
+func checkExprArrayFormat(issues *[]diag.Issue, expr hclsyntax.Expression) {
 	switch e := expr.(type) {
 	case *hclsyntax.TupleConsExpr:
 		if len(e.Exprs) > 1 {
@@ -277,8 +277,8 @@ func checkExprArrayFormat(issues *[]linter.Issue, expr hclsyntax.Expression) {
 				}
 			}
 			if allStrings {
-				*issues = append(*issues, linter.Issue{
-					Severity: linter.SeverityWarning,
+				*issues = append(*issues, diag.Issue{
+					Severity: diag.SeverityWarning,
 					Rule:     "array_format",
 					Message:  "tuple of string literals should be written as a list for better readability",
 				})

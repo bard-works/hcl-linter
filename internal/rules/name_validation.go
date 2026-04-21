@@ -9,7 +9,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type NameValidationRule struct{}
@@ -20,9 +20,9 @@ func (r NameValidationRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.NameValidation != nil && cfg.NameValidation.Enabled
 }
 
-func (r NameValidationRule) Check(ctx *Context) []linter.Issue {
+func (r NameValidationRule) Check(ctx *Context) []diag.Issue {
 	cfg := ctx.Config.NameValidation
-	var issues []linter.Issue
+	var issues []diag.Issue
 
 	var allowedBlocks map[string]bool
 	if len(cfg.Blocks) > 0 {
@@ -37,8 +37,8 @@ func (r NameValidationRule) Check(ctx *Context) []linter.Issue {
 		var err error
 		pattern, err = regexp.Compile(cfg.Pattern)
 		if err != nil {
-			issues = append(issues, linter.Issue{
-				Severity: linter.SeverityError,
+			issues = append(issues, diag.Issue{
+				Severity: diag.SeverityError,
 				Rule:     "name_validation",
 				Message:  fmt.Sprintf("name_validation pattern %q is invalid: %v", cfg.Pattern, err),
 				Location: hcl.Range{},
@@ -90,7 +90,7 @@ func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameV
 	return content, hasChanges
 }
 
-func nameValidationRecursive(issues *[]linter.Issue, blocks []ast.BlockInfo, allowedBlocks map[string]bool, pattern *regexp.Regexp) {
+func nameValidationRecursive(issues *[]diag.Issue, blocks []ast.BlockInfo, allowedBlocks map[string]bool, pattern *regexp.Regexp) {
 	for _, block := range blocks {
 		if len(block.Labels) > 0 && (allowedBlocks == nil || allowedBlocks[block.Type]) {
 			name := block.Labels[0]
@@ -104,8 +104,8 @@ func nameValidationRecursive(issues *[]linter.Issue, blocks []ast.BlockInfo, all
 				msg = fmt.Sprintf("invalid name %q: must contain only lowercase letters, numbers, and underscores, and must start with a letter", name)
 			}
 			if !valid {
-				*issues = append(*issues, linter.Issue{
-					Severity: linter.SeverityError,
+				*issues = append(*issues, diag.Issue{
+					Severity: diag.SeverityError,
 					Rule:     "name_validation",
 					Message:  msg,
 					Location: block.Block.TypeRange,

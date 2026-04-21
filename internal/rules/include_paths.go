@@ -7,7 +7,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 // IncludePathsRule validates that `path` attributes on `include` blocks
@@ -20,8 +20,8 @@ func (r IncludePathsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.IncludePaths != nil && cfg.IncludePaths.Enabled
 }
 
-func (r IncludePathsRule) Check(ctx *Context) []linter.Issue {
-	var issues []linter.Issue
+func (r IncludePathsRule) Check(ctx *Context) []diag.Issue {
+	var issues []diag.Issue
 	fileDir := filepath.Dir(ctx.FilePath)
 
 	for _, block := range ctx.Blocks {
@@ -39,8 +39,8 @@ func (r IncludePathsRule) Check(ctx *Context) []linter.Issue {
 		}
 		resolved := resolveRelativePath(fileDir, pathStr)
 		if _, err := os.Stat(resolved); os.IsNotExist(err) {
-			issues = append(issues, linter.Issue{
-				Severity: linter.SeverityError,
+			issues = append(issues, diag.Issue{
+				Severity: diag.SeverityError,
 				Rule:     "include_path_exists",
 				Message:  fmt.Sprintf("include path %q does not exist", pathStr),
 				Location: path.Range(),

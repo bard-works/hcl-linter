@@ -13,7 +13,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type DependencyOutputsRule struct{}
@@ -24,8 +24,8 @@ func (r DependencyOutputsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.DependencyOutputs != nil && cfg.DependencyOutputs.Enabled
 }
 
-func (r DependencyOutputsRule) Check(ctx *Context) []linter.Issue {
-	var issues []linter.Issue
+func (r DependencyOutputsRule) Check(ctx *Context) []diag.Issue {
+	var issues []diag.Issue
 	visited := make(map[string]bool)
 
 	for _, block := range ctx.Blocks {
@@ -48,7 +48,7 @@ type depMockOutput struct {
 	Type  string `json:"type"`
 }
 
-func depCheckOutputRefs(issues *[]linter.Issue, block ast.BlockInfo, currentFilePath string, visited map[string]bool) {
+func depCheckOutputRefs(issues *[]diag.Issue, block ast.BlockInfo, currentFilePath string, visited map[string]bool) {
 	depName := block.Labels[0]
 	depPath := depGetPath(block.Block.Body)
 	if depPath == "" {
@@ -60,8 +60,8 @@ func depCheckOutputRefs(issues *[]linter.Issue, block ast.BlockInfo, currentFile
 	absDep, _ := filepath.Abs(depFullPath)
 
 	if visited[absDep] {
-		*issues = append(*issues, linter.Issue{
-			Severity: linter.SeverityWarning,
+		*issues = append(*issues, diag.Issue{
+			Severity: diag.SeverityWarning,
 			Rule:     "dependency_outputs",
 			Message:  fmt.Sprintf("circular dependency detected for %q", depName),
 			Location: block.Block.TypeRange,
@@ -72,8 +72,8 @@ func depCheckOutputRefs(issues *[]linter.Issue, block ast.BlockInfo, currentFile
 
 	outputs, mockOuts := depGetOutputs(depFullPath)
 	if outputs == nil && len(mockOuts) == 0 {
-		*issues = append(*issues, linter.Issue{
-			Severity: linter.SeverityWarning,
+		*issues = append(*issues, diag.Issue{
+			Severity: diag.SeverityWarning,
 			Rule:     "dependency_outputs",
 			Message:  fmt.Sprintf("cannot validate dependency %q: outputs not found in %s", depName, depPath),
 			Location: block.Block.TypeRange,
@@ -164,7 +164,7 @@ func depParseMockOutputs(content []byte) map[string]depMockOutput {
 	return mock.Outputs
 }
 
-func depCheckInputsOutputRefs(_ *[]linter.Issue, body hcl.Body, outputs map[string]depOutputDef, mockOuts map[string]depMockOutput, depName, depPath string) {
+func depCheckInputsOutputRefs(_ *[]diag.Issue, body hcl.Body, outputs map[string]depOutputDef, mockOuts map[string]depMockOutput, depName, depPath string) {
 	attrs, _ := body.JustAttributes()
 	for _, attr := range attrs {
 		val, diags := attr.Expr.Value(nil)

@@ -6,7 +6,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type RequiredFieldsRule struct{}
@@ -17,8 +17,8 @@ func (r RequiredFieldsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.RequiredFields != nil
 }
 
-func (r RequiredFieldsRule) Check(ctx *Context) []linter.Issue {
-	var issues []linter.Issue
+func (r RequiredFieldsRule) Check(ctx *Context) []diag.Issue {
+	var issues []diag.Issue
 	checkRequiredFields(&issues, ctx.Blocks, ctx.Config.RequiredFields)
 	return issues
 }
@@ -50,14 +50,14 @@ func FixRequiredFields(content string, blocks []ast.BlockInfo, cfg *config.Requi
 	return content, changed
 }
 
-func checkRequiredFields(issues *[]linter.Issue, blocks []ast.BlockInfo, cfg *config.RequiredFieldsConfig) {
+func checkRequiredFields(issues *[]diag.Issue, blocks []ast.BlockInfo, cfg *config.RequiredFieldsConfig) {
 	for _, block := range blocks {
 		if block.Type == "include" {
 			if cfg.Include != nil && cfg.Include.Expose {
 				attrs := ast.GetBlockAttributes(block.Block.Body)
 				if _, ok := attrs["expose"]; !ok {
-					*issues = append(*issues, linter.Issue{
-						Severity:     linter.SeverityError,
+					*issues = append(*issues, diag.Issue{
+						Severity:     diag.SeverityError,
 						Rule:         "required_fields",
 						Message:      fmt.Sprintf("include block %q missing required field 'expose'", block.Labels),
 						Location:     block.Block.TypeRange,

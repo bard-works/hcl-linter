@@ -5,7 +5,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type DuplicatesRule struct{}
@@ -16,13 +16,13 @@ func (r DuplicatesRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.Duplicates != nil && cfg.Duplicates.Enabled
 }
 
-func (r DuplicatesRule) Check(ctx *Context) []linter.Issue {
-	var issues []linter.Issue
+func (r DuplicatesRule) Check(ctx *Context) []diag.Issue {
+	var issues []diag.Issue
 	checkDuplicates(&issues, ctx.Blocks, ctx.Config.Duplicates)
 	return issues
 }
 
-func checkDuplicates(issues *[]linter.Issue, blocks []ast.BlockInfo, cfg *config.DuplicatesConfig) {
+func checkDuplicates(issues *[]diag.Issue, blocks []ast.BlockInfo, cfg *config.DuplicatesConfig) {
 	var allowedTypes map[string]bool
 	if cfg != nil && len(cfg.Blocks) > 0 {
 		allowedTypes = make(map[string]bool, len(cfg.Blocks))
@@ -43,8 +43,8 @@ func checkDuplicates(issues *[]linter.Issue, blocks []ast.BlockInfo, cfg *config
 				identifier = block.Labels[0]
 			}
 			if seen[block.Type][identifier] {
-				*issues = append(*issues, linter.Issue{
-					Severity: linter.SeverityError,
+				*issues = append(*issues, diag.Issue{
+					Severity: diag.SeverityError,
 					Rule:     "duplicates",
 					Message:  fmt.Sprintf("duplicate %s block with name/label %q", block.Type, identifier),
 					Location: block.Block.TypeRange,

@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/diag"
 	"github.com/bard-works/hcl-linter/internal/engine"
-	"github.com/bard-works/hcl-linter/internal/linter"
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
 
@@ -183,7 +183,7 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 				}
 				fmt.Printf("\n%s:\n", termcolor.Path(relPath))
 				for _, issue := range result.Issues {
-					if issue.Severity == linter.SeverityError {
+					if issue.Severity == diag.SeverityError {
 						hasErrors = true
 					}
 					printIssue(issue)
@@ -360,7 +360,7 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 			}
 			fmt.Printf("\n%s:\n", termcolor.Path(relPath))
 			for _, issue := range result.Issues {
-				if issue.Severity == linter.SeverityError {
+				if issue.Severity == diag.SeverityError {
 					hasErrors = true
 				}
 				printIssue(issue)
@@ -534,9 +534,9 @@ func warnConfigIssues(configDir string) {
 
 // printIssue renders a single lint issue with severity colouring and an
 // optional faint location suffix in verbose mode.
-func printIssue(issue linter.Issue) {
+func printIssue(issue diag.Issue) {
 	label := fmt.Sprintf("[%s]", issue.Severity)
-	if issue.Severity == linter.SeverityError {
+	if issue.Severity == diag.SeverityError {
 		label = termcolor.Error(label)
 	} else {
 		label = termcolor.Warning(label)

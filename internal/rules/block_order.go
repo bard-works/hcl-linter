@@ -7,7 +7,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type BlockOrderRule struct{}
@@ -18,8 +18,8 @@ func (r BlockOrderRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.BlockOrder != nil && cfg.BlockOrder.Enabled
 }
 
-func (r BlockOrderRule) Check(ctx *Context) []linter.Issue {
-	var issues []linter.Issue
+func (r BlockOrderRule) Check(ctx *Context) []diag.Issue {
+	var issues []diag.Issue
 	checkBlockOrderIssues(&issues, ctx.Blocks, ctx.Config.BlockOrder)
 	return issues
 }
@@ -106,7 +106,7 @@ func FixBlockOrder(content string, blocks []ast.BlockInfo, cfg *config.BlockOrde
 	return strings.Join(resultLines, "\n") + "\n"
 }
 
-func checkBlockOrderIssues(issues *[]linter.Issue, blocks []ast.BlockInfo, cfg *config.BlockOrderConfig) {
+func checkBlockOrderIssues(issues *[]diag.Issue, blocks []ast.BlockInfo, cfg *config.BlockOrderConfig) {
 	orderMap := make(map[string]int)
 	for i, name := range cfg.Order {
 		orderMap[name] = i
@@ -122,8 +122,8 @@ func checkBlockOrderIssues(issues *[]linter.Issue, blocks []ast.BlockInfo, cfg *
 			pos = idx
 		}
 		if pos < lastPos && lastPos < len(cfg.Order) {
-			*issues = append(*issues, linter.Issue{
-				Severity: linter.SeverityError,
+			*issues = append(*issues, diag.Issue{
+				Severity: diag.SeverityError,
 				Rule:     "block_order",
 				Message:  fmt.Sprintf("block type %q appears out of order. Expected: %v", block.Type, expectedOrder),
 				Location: block.Block.TypeRange,
@@ -137,7 +137,7 @@ func checkBlockOrderIssues(issues *[]linter.Issue, blocks []ast.BlockInfo, cfg *
 	}
 }
 
-func checkNestedBlockOrderIssues(issues *[]linter.Issue, blocks []ast.BlockInfo, nestedOrder map[string][]string) {
+func checkNestedBlockOrderIssues(issues *[]diag.Issue, blocks []ast.BlockInfo, nestedOrder map[string][]string) {
 	for _, block := range blocks {
 		order, ok := nestedOrder[block.Type]
 		if !ok {
@@ -169,8 +169,8 @@ func checkNestedBlockOrderIssues(issues *[]linter.Issue, blocks []ast.BlockInfo,
 				if orderMap[currType] < orderMap[prevType] {
 					pairKey := currType + ":" + prevType
 					if !reportedPairs[pairKey] {
-						*issues = append(*issues, linter.Issue{
-							Severity: linter.SeverityError,
+						*issues = append(*issues, diag.Issue{
+							Severity: diag.SeverityError,
 							Rule:     "block_order",
 							Message:  fmt.Sprintf("nested block %q should come before %q inside %q block", currType, prevType, block.Type),
 							Location: nestedBlocks[i].TypeRange,

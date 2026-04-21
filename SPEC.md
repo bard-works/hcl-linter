@@ -1016,7 +1016,7 @@ internal/
 type Rule interface {
     Name()    string
     Enabled(cfg *config.Rules) bool
-    Check(ctx *Context) []linter.Issue
+    Check(ctx *Context) []diag.Issue
 }
 
 // Rules that can auto-correct also implement Fixer.

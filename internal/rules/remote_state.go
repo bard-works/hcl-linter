@@ -5,7 +5,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 // RemoteStateRule validates `remote_state` blocks nested inside the top-level
@@ -19,7 +19,7 @@ func (r RemoteStateRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.RemoteState != nil && cfg.RemoteState.Enabled
 }
 
-func (r RemoteStateRule) Check(ctx *Context) []linter.Issue {
+func (r RemoteStateRule) Check(ctx *Context) []diag.Issue {
 	cfg := ctx.Config.RemoteState
 	if !cfg.RequireBackend {
 		return nil
@@ -30,7 +30,7 @@ func (r RemoteStateRule) Check(ctx *Context) []linter.Issue {
 		return nil
 	}
 
-	var issues []linter.Issue
+	var issues []diag.Issue
 	for _, block := range file.Blocks {
 		if block.Type != "terraform" {
 			continue
@@ -49,8 +49,8 @@ func (r RemoteStateRule) Check(ctx *Context) []linter.Issue {
 		attrs := ast.GetBlockAttributes(remoteStateBlock.Body)
 		backend, ok := attrs["backend"]
 		if !ok || hclStringValue(backend) == "" {
-			issues = append(issues, linter.Issue{
-				Severity: linter.SeverityError,
+			issues = append(issues, diag.Issue{
+				Severity: diag.SeverityError,
 				Rule:     "remote_state_backend_required",
 				Message:  "remote_state block missing required 'backend' attribute",
 				Location: remoteStateBlock.TypeRange,

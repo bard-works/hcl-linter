@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 // HCLFunctionsRule validates HCL function calls. Currently recognizes
@@ -22,13 +22,13 @@ func (r HCLFunctionsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.HCLFunctions != nil && cfg.HCLFunctions.Enabled
 }
 
-func (r HCLFunctionsRule) Check(ctx *Context) []linter.Issue {
+func (r HCLFunctionsRule) Check(ctx *Context) []diag.Issue {
 	cfg := ctx.Config.HCLFunctions
 	if !cfg.FindInParentFoldersExists && !cfg.GetEnvHasDefault {
 		return nil
 	}
 
-	var issues []linter.Issue
+	var issues []diag.Issue
 	fileDir := filepath.Dir(ctx.FilePath)
 
 	body, ok := ctx.File.Body.(*hclsyntax.Body)
@@ -46,7 +46,7 @@ func (r HCLFunctionsRule) Check(ctx *Context) []linter.Issue {
 }
 
 type functionCallWalker struct {
-	issues  *[]linter.Issue
+	issues  *[]diag.Issue
 	fileDir string
 	cfg     *config.HCLFunctionsConfig
 }
@@ -73,7 +73,7 @@ func (w *functionCallWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
 
 func (w *functionCallWalker) Exit(_ hclsyntax.Node) hcl.Diagnostics { return nil }
 
-func checkFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall *hclsyntax.FunctionCallExpr) {
+func checkFindInParentFolders(issues *[]diag.Issue, fileDir string, funcCall *hclsyntax.FunctionCallExpr) {
 	defaultFile := "terragrunt.hcl"
 	var filename string
 
@@ -91,8 +91,8 @@ func checkFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall *
 		if len(funcCall.Args) == 0 {
 			msg = "find_in_parent_folders() could not find terragrunt.hcl in parent directories"
 		}
-		*issues = append(*issues, linter.Issue{
-			Severity: linter.SeverityError,
+		*issues = append(*issues, diag.Issue{
+			Severity: diag.SeverityError,
 			Rule:     "find_in_parent_folders_exists",
 			Message:  msg,
 			Location: funcCall.Range(),
@@ -100,10 +100,10 @@ func checkFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall *
 	}
 }
 
-func checkGetEnvHasDefault(issues *[]linter.Issue, funcCall *hclsyntax.FunctionCallExpr) {
+func checkGetEnvHasDefault(issues *[]diag.Issue, funcCall *hclsyntax.FunctionCallExpr) {
 	if len(funcCall.Args) < 2 {
-		*issues = append(*issues, linter.Issue{
-			Severity: linter.SeverityWarning,
+		*issues = append(*issues, diag.Issue{
+			Severity: diag.SeverityWarning,
 			Rule:     "get_env_has_default",
 			Message:  "get_env() should have a default value as second argument",
 			Location: funcCall.Range(),

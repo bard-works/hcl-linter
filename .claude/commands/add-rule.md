@@ -30,7 +30,7 @@ package rules
 
 import (
     "github.com/bard-works/hcl-linter/internal/config"
-    "github.com/bard-works/hcl-linter/internal/linter"
+    "github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type MyNewRule struct{}
@@ -41,11 +41,11 @@ func (r MyNewRule) Enabled(cfg *config.Rules) bool {
     return cfg != nil && cfg.MyNewRule != nil && cfg.MyNewRule.Enabled
 }
 
-func (r MyNewRule) Check(ctx *Context) []linter.Issue {
+func (r MyNewRule) Check(ctx *Context) []diag.Issue {
     if ctx.Config.MyNewRule == nil {
         return nil
     }
-    var issues []linter.Issue
+    var issues []diag.Issue
     // implement check logic using ctx.Blocks, ctx.Attrs, ctx.File, ctx.FilePath
     return issues
 }
