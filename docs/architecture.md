@@ -54,38 +54,38 @@ internal/
 ## Data flow
 
 ```
-                    ┌─────────────────────────────────┐
-                    │           CLI (cobra)            │
-                    │    lint / check / fix / version  │
-                    └────────────────┬────────────────┘
-                                     │ path(s)
-                    ┌────────────────▼────────────────┐
-                    │             Engine              │
-                    │  buildContext(path)              │
-                    │    ├─ Config Loader              │
-                    │    │    LoadForFile → *Rules     │
-                    │    ├─ AST Parser                 │
-                    │    │    ParseFile → *hcl.File    │
-                    │    │    GetTopLevelBlocks/Attrs  │
-                    │    └─ → Context{FilePath,        │
-                    │           Content, File,         │
-                    │           Blocks, Attrs, Config} │
-                    └────────────────┬────────────────┘
-                                     │ ctx
-                    ┌────────────────▼────────────────┐
-                    │    Registry.Enabled(cfg)        │
-                    │    returns rules where           │
-                    │    rule.Enabled(cfg) == true     │
-                    └──┬───────┬──────┬──────┬────────┘
-                       │       │      │      │
-              ┌────────▼──┐ ┌──▼──┐ ┌─▼──┐ ┌▼──────┐
-              │BlockOrder │ │Name │ │ … │ │Dep    │
-              │Check / Fix│ │Valid│ │   │ │Outputs│
-              └───────────┘ └─────┘ └───┘ └───────┘
-                       │       │      │      │
-                    ┌──▼───────▼──────▼──────▼──────┐
-                    │  []Issue (lint) or []byte (fix)│
-                    └────────────────────────────────┘
+      ┌─────────────────────────────────┐
+      │          CLI (cobra)            │
+      │   lint / check / fix / version  │
+      └────────────────┬────────────────┘
+                       │ path(s)
+      ┌────────────────▼────────────────┐
+      │             Engine              │
+      │  buildContext(path)             │
+      │    ├─ Config Loader             │
+      │    │    LoadForFile → *Rules    │
+      │    ├─ AST Parser                │
+      │    │   ParseFile → *hcl.File    │
+      │    │   GetTopLevelBlocks/Attrs  │
+      │    └─ → Context{FilePath,       │
+      │          Content, File,         │
+      │          Blocks, Attrs, Config} │
+      └────────────────┬────────────────┘
+                       │ ctx
+      ┌────────────────▼────────────────┐
+      │    Registry.Enabled(cfg)        │
+      │    returns rules where          │
+      │    rule.Enabled(cfg) == true    │
+      └──┬───────┬──────┬──────┬────────┘
+         │       │      │      │
+┌────────▼──┐ ┌──▼──┐ ┌─▼──┐ ┌▼──────┐
+│BlockOrder │ │Name │ │ …  │ │Dep    │
+│Check / Fix│ │Valid│ │    │ │Outputs│
+└───────────┘ └─────┘ └────┘ └───────┘
+         │       │      │      │
+      ┌──▼───────▼──────▼──────▼────────┐
+      │  []Issue (lint) or []byte (fix) │
+      └─────────────────────────────────┘
 ```
 
 ## Rule and Fixer interfaces
