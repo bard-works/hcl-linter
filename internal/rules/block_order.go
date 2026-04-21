@@ -32,7 +32,7 @@ func (r BlockOrderRule) Fix(ctx *Context) ([]byte, bool, error) {
 	return []byte(newContent), true, nil
 }
 
-// FixBlockOrder reorders blocks according to cfg. Exported for use by the legacy fixer.
+// FixBlockOrder reorders blocks according to cfg.
 func FixBlockOrder(content string, blocks []ast.BlockInfo, cfg *config.BlockOrderConfig) string {
 	lines := strings.Split(content, "\n")
 

@@ -74,7 +74,7 @@ When adding or modifying a rule in `internal/rules/`:
   `ast.GetTopLevelBlocks`, `ast.GetBlockAttributes`,
   `ast.GetBlockNestedBlocks`. Rules should not walk `hclsyntax.Body` by hand
   except where an existing helper can't express what's needed (the
-  `remote_state` nested-block walk in `terragrunt.go` is the rare exception).
+  `remote_state` nested-block walk in `remote_state.go` is the rare exception).
 - **Guard config access.** Both `Enabled()` and `Check()` should nil-check the
   way other rules do:
   ```go

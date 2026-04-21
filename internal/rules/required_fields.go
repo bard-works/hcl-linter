@@ -32,7 +32,6 @@ func (r RequiredFieldsRule) Fix(ctx *Context) ([]byte, bool, error) {
 }
 
 // FixRequiredFields adds missing required attributes to blocks.
-// Exported for use by the legacy fixer during migration.
 func FixRequiredFields(content string, blocks []ast.BlockInfo, cfg *config.RequiredFieldsConfig) (string, bool) {
 	if cfg == nil || cfg.Include == nil || !cfg.Include.Expose {
 		return content, false

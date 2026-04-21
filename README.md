@@ -134,12 +134,12 @@ Enable rules in your config:
 ```hcl
 rules {
   blank_lines {
-    enabled        = true
+    enabled       = true
     within_blocks = true
   }
 
   array_format {
-    enabled            = true
+    enabled             = true
     multiline_threshold = 2
   }
 

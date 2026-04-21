@@ -956,17 +956,20 @@ internal/
 │   ├── required_fields.go   # RequiredFieldsRule  — Check + Fix
 │   ├── required_blocks.go   # RequiredBlocksRule  — Check
 │   ├── duplicates.go        # DuplicatesRule      — Check
-│   ├── terragrunt.go        # TerragruntRule      — Check
-│   ├── terragrunt_functions.go  # TerragruntFunctionsRule — Check
+│   ├── dependency_paths.go  # DependencyPathsRule — Check
+│   ├── include_paths.go     # IncludePathsRule    — Check
+│   ├── remote_state.go      # RemoteStateRule     — Check
+│   ├── hcl_functions.go     # HCLFunctionsRule    — Check
 │   ├── terraform_block.go   # TerraformBlockRule  — Check
 │   ├── key_value.go         # KeyValueRule        — Check
 │   ├── count_foreach.go     # CountForEachRule    — Check
-│   └── dependency_outputs.go # DependencyOutputsRule — Check
+│   ├── dependency_outputs.go # DependencyOutputsRule — Check
+│   └── helpers.go           # Shared helpers
 ├── config/
 │   ├── loader.go            # Config discovery and loading
 │   ├── hcl.go               # HCL config parser + extends resolution
 │   └── types.go             # Config structs (Rules, BlockOrderConfig, …)
-├── linter/
+├── diag/
 │   └── result.go            # Types only: Issue, Result, Severity
 └── ast/
     └── parser.go            # HCL parse helpers (blocks, attributes, expressions)

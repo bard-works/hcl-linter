@@ -61,7 +61,7 @@ func (r NameValidationRule) Fix(ctx *Context) ([]byte, bool, error) {
 }
 
 // FixNameValidation replaces hyphens with underscores in block labels that
-// violate the name pattern. Exported for use by the legacy fixer.
+// violate the name pattern.
 func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameValidationConfig) (string, bool) {
 	pattern := cfg.Pattern
 	if pattern == "" {

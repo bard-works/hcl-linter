@@ -37,7 +37,6 @@ func (r ArrayFormatRule) Fix(ctx *Context) ([]byte, bool, error) {
 
 // FixArrays converts single-line arrays with 2+ items to multiline format.
 // When sortItems is true, items are sorted alphabetically.
-// Exported for use by the legacy fixer during migration.
 func FixArrays(content string, sortItems bool) (string, int) {
 	lines := strings.Split(content, "\n")
 	changes := 0
