@@ -92,3 +92,47 @@ func GetBlockNestedBlocks(body hcl.Body, blockType string) []*hcl.Block {
 	content, _, _ := body.PartialContent(schema)
 	return content.Blocks
 }
+
+type AttributeInfo struct {
+	Name      string
+	Expr      hcl.Expression
+	StartLine int
+	EndLine   int
+}
+
+func GetTopLevelAttributes(file *hcl.File) []AttributeInfo {
+	var attrs []AttributeInfo
+
+	if syntaxBody, ok := file.Body.(*hclsyntax.Body); ok {
+		for name, attr := range syntaxBody.Attributes {
+			attrRange := attr.Expr.Range()
+			startLine := attrRange.Start.Line - 1
+			endLine := attrRange.End.Line - 1
+			attrs = append(attrs, AttributeInfo{
+				Name:      name,
+				Expr:      attr.Expr,
+				StartLine: startLine,
+				EndLine:   endLine,
+			})
+		}
+	}
+
+	return attrs
+}
+
+func IsObjectAttribute(expr hcl.Expression) bool {
+	_, ok := expr.(*hclsyntax.ObjectConsExpr)
+	return ok
+}
+
+func GetAttributeRange(expr hcl.Expression) (startLine, endLine int) {
+	if obj, ok := expr.(*hclsyntax.ObjectConsExpr); ok {
+		r := obj.Range()
+		startLine = r.Start.Line - 1
+		endLine = r.End.Line - 1
+		return
+	}
+	startLine = expr.Range().Start.Line - 1
+	endLine = expr.Range().End.Line - 1
+	return
+}

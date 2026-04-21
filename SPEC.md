@@ -4,7 +4,7 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 
 ## Goals
 
-- Enforce block ordering, formatting, naming, and required fields
+- Enforce block ordering, formatting, naming, required fields, blank lines, and required blocks
 - Configurable rules per filename pattern (terragrunt.hcl, root.hcl, service.hcl)
 - Auto-fix capability for formatable issues
 - Extensible config system with user-defined configurations
@@ -52,6 +52,10 @@ If falling back to project defaults (no user config found), a warning is display
       "enabled": true,
       "multiline_threshold": 2
     },
+    "blank_lines": {
+      "enabled": true,
+      "within_blocks": true
+    },
     "name_validation": {
       "enabled": true,
       "pattern": "^[a-z][a-z0-9_]*$",
@@ -65,6 +69,15 @@ If falling back to project defaults (no user config found), a warning is display
       "include": {
         "expose": true
       }
+    },
+    "required_blocks": {
+      "required": [
+        {
+          "type": "terraform",
+          "count": "once",
+          "error": "missing terraform block"
+        }
+      ]
     }
   }
 }
@@ -111,7 +124,44 @@ actions = [
 - Arrays with non-quoted items (e.g., `dependency.x.outputs.y`) are left unchanged
 - Empty arrays remain unchanged
 
-### 3. Name Validation (`name_validation`)
+### 3. Blank Lines (`blank_lines`)
+
+**Purpose:** Remove unnecessary blank lines within blocks for cleaner formatting.
+
+**Configuration:**
+```json
+{
+  "blank_lines": {
+    "enabled": true,
+    "within_blocks": true
+  }
+}
+```
+
+**Behavior:**
+- `within_blocks: true` - Removes blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
+- Blank lines between top-level blocks are preserved
+- Nested blocks (e.g., `before_hook` inside `terraform`) are also cleaned
+
+**Example:**
+```hcl
+# Before
+inputs = {
+
+  repository = "test"
+
+  tags = "value"
+
+}
+
+# After
+inputs = {
+  repository = "test"
+  tags = "value"
+}
+```
+
+### 4. Name Validation (`name_validation`)
 
 **Purpose:** Ensure consistent naming conventions.
 
@@ -128,7 +178,7 @@ include "vault-azuread" {}
 include "vault_azuread" {}
 ```
 
-### 4. Duplicate Detection (`duplicates`)
+### 5. Duplicate Detection (`duplicates`)
 
 **Purpose:** Detect duplicate blocks.
 
@@ -143,7 +193,7 @@ dependency "vpc" {}
 dependency "vpc" {}  # ERROR: duplicate
 ```
 
-### 5. Required Fields (`required_fields`)
+### 6. Required Fields (`required_fields`)
 
 **Purpose:** Enforce required attributes per block type.
 
@@ -161,6 +211,44 @@ dependency "vpc" {}  # ERROR: duplicate
 **Checks:**
 - When block exists, required attributes must be present
 - Boolean `true` means attribute must exist with any value
+
+### 7. Required Blocks (`required_blocks`)
+
+**Purpose:** Enforce that certain block types must exist in the file.
+
+**Configuration:**
+```json
+{
+  "required_blocks": {
+    "required": [
+      {
+        "type": "terraform",
+        "count": "once",
+        "error": "missing terraform block"
+      }
+    ]
+  }
+}
+```
+
+**Supported count values:**
+- `once` - Block must appear exactly once
+
+**Checks:**
+- Reports error if required block is missing or appears more than once
+- Error message is customizable per block type
+- File-pattern based (applies only to files matching the config)
+
+**Example:**
+```hcl
+# With config requiring terraform block:
+# OK
+terraform {}
+
+# ERROR: missing terraform block
+include "root" {}
+locals {}
+```
 
 ## CLI
 
