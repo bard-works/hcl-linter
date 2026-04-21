@@ -63,6 +63,9 @@ hcl-linter fix ./
 
 # Apply default formatting without any config required
 hcl-linter fix ./ --format
+
+# Preview changes without writing; exits non-zero if any file would change
+hcl-linter fix ./ --dry-run
 ```
 
 ## Configuration
@@ -196,8 +199,9 @@ During normal `lint`, `check`, and `fix` runs the same checks run automatically 
 --verbose, -v        Show detailed output
 --color              Colour output: auto (default), always, never
 
-# fix-only flag:
+# fix-only flags:
 --format             Apply default formatting without requiring config rules
+--dry-run            Show diff without writing; exit 1 if any changes needed
 ```
 
 In `--color=auto` (the default), colour is enabled only when stdout is a TTY

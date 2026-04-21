@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1431,5 +1432,71 @@ func TestFixFilesReturnsSortedResults(t *testing.T) {
 		if results[i-1].File > results[i].File {
 			t.Errorf("results not sorted: %s > %s", results[i-1].File, results[i].File)
 		}
+	}
+}
+
+func TestFixFileDryRunDoesNotWrite(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	setupTestConfig(t, tmpDir, `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`)
+
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+	eng.DryRun = true
+
+	original := "inputs = {\n\n  a = \"b\"\n\n}\n"
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", original)
+
+	result, err := eng.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+	if result.Changes == 0 {
+		t.Fatal("expected Changes > 0; misformatted input should require fixing")
+	}
+	if result.Content == original {
+		t.Error("expected result.Content to differ from original input")
+	}
+
+	onDisk, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("could not re-read file: %v", err)
+	}
+	if !bytes.Equal(onDisk, []byte(original)) {
+		t.Errorf("dry-run unexpectedly wrote to disk.\nwant:\n%s\ngot:\n%s", original, string(onDisk))
+	}
+}
+
+func TestFormatFixFileDryRunDoesNotWrite(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+	eng.DryRun = true
+
+	original := `arr = ["charlie", "alpha", "bravo"]` + "\n"
+	file := createHCLFile(t, tmpDir, "format_test.hcl", original)
+
+	result, err := eng.FormatFixFile(file)
+	if err != nil {
+		t.Fatalf("FormatFixFile failed: %v", err)
+	}
+	if result.Changes == 0 {
+		t.Fatal("expected Changes > 0; inline array should be expanded")
+	}
+	if result.Content == original {
+		t.Error("expected result.Content to differ from original input")
+	}
+
+	onDisk, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("could not re-read file: %v", err)
+	}
+	if !bytes.Equal(onDisk, []byte(original)) {
+		t.Errorf("dry-run unexpectedly wrote to disk.\nwant:\n%s\ngot:\n%s", original, string(onDisk))
 	}
 }

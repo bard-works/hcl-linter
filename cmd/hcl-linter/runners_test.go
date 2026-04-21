@@ -57,12 +57,14 @@ func resetFlags(t *testing.T) {
 	flagFilter = nil
 	flagConcurrency = 0
 	flagFormat = false
+	flagDryRun = false
 	t.Cleanup(func() {
 		flagVerbose = false
 		flagConfigSrc = ""
 		flagFilter = nil
 		flagConcurrency = 0
 		flagFormat = false
+		flagDryRun = false
 	})
 }
 

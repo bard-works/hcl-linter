@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `fix --dry-run` prints a unified diff per file and exits non-zero if any
+  file would be changed. Composes with `--format`. Intended for CI
+  pre-commit enforcement.
+
 ## [0.1.0] — 2026-04-21
 
 Initial public release.

@@ -8,6 +8,7 @@
 4. [`check`](#check)
 5. [`fix`](#fix)
    - [`fix --format` flag](#fix---format-flag)
+   - [`fix --dry-run` flag](#fix---dry-run-flag)
 6. [`validate-config`](#validate-config-command)
 7. [`version`](#version)
 8. [Target file filtering (`--filter`)](#target-file-filtering---filter)
@@ -102,6 +103,23 @@ files without requiring any config to be present:
 This is useful for one-off formatting or bootstrapping a codebase before
 introducing config-based rules. Config-based `array_format` and
 `blank_lines` rules are also applied if a config exists for the file.
+
+### `fix --dry-run` flag
+
+Runs the same Fix pipeline as `fix` but prints a unified diff to stdout per
+changed file instead of writing. Exits non-zero (`1`) if any file would be
+changed. Composes with `--format`. Intended for CI pre-commit enforcement —
+fail the build when committed files aren't byte-identical to what the fixer
+would produce.
+
+```bash
+hcl-linter fix ./ --dry-run
+hcl-linter fix ./ --format --dry-run   # config-free formatting check
+```
+
+Differs from `check`: `check` reports rule violations; `--dry-run` reports
+byte-level formatting drift, including drift introduced by fix-only rules
+like `blank_lines` that have no `Check` phase.
 
 ## `validate-config` command
 
@@ -221,5 +239,5 @@ non-TTY output.
 | Code | Meaning                                              |
 | ---- | ---------------------------------------------------- |
 | `0`  | Success (no issues, or `lint` completed regardless)  |
-| `1`  | Issues found (`check`) or config validation failed (`validate-config`) |
+| `1`  | Issues found (`check`), config validation failed (`validate-config`), or `fix --dry-run` detected files that would be changed |
 | `2`  | Configuration error (missing/unparseable config)     |

@@ -21,6 +21,7 @@ var (
 	flagFilter      []string
 	flagConcurrency int
 	flagFormat      bool
+	flagDryRun      bool
 	flagColor       string
 
 	Version   = "dev"
@@ -66,12 +67,15 @@ func newRootCmd() *cobra.Command {
 		RunE:  runCheck,
 	}
 	fixCmd := &cobra.Command{
-		Use:   "fix [path]",
-		Short: "Auto-fix HCL files",
-		Args:  cobra.ExactArgs(1),
-		RunE:  runFix,
+		Use:           "fix [path]",
+		Short:         "Auto-fix HCL files",
+		Args:          cobra.ExactArgs(1),
+		RunE:          runFix,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 	fixCmd.Flags().BoolVar(&flagFormat, "format", false, "Apply default formatting (block ordering, array formatting, blank line normalization) without requiring config rules")
+	fixCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "Show what fix would change (unified diff) without writing; exit non-zero if any changes needed")
 	validateConfigCmd := &cobra.Command{
 		Use:   "validate-config [config-dir]",
 		Short: "Validate .hcl-linter config files for unknown rules and misconfigurations",
@@ -420,6 +424,7 @@ func runFormatMode(_ *cobra.Command, args []string) error {
 	}
 
 	eng := engine.New(loader)
+	eng.DryRun = flagDryRun
 
 	maxConcurrency := flagConcurrency
 	if maxConcurrency <= 0 {
@@ -430,23 +435,13 @@ func runFormatMode(_ *cobra.Command, args []string) error {
 	}
 
 	results := eng.FormatFixFiles(files, maxConcurrency)
-
-	totalChanges := 0
-	for _, result := range results {
-		totalChanges += printFixResult(result)
-	}
-
-	if totalChanges > 0 {
-		fmt.Printf("\nTotal: %d change(s) applied\n", totalChanges)
-	} else {
-		fmt.Println(termcolor.Success("No changes needed"))
-	}
-
-	return nil
+	totalChanges, wouldChange := handleFixResults(results, flagDryRun)
+	return finalizeFixRun(totalChanges, wouldChange, flagDryRun)
 }
 
 func runFixMode(loader *config.Loader, files []string) error {
 	eng := engine.New(loader)
+	eng.DryRun = flagDryRun
 
 	var filesToFix []string
 	for _, file := range files {
@@ -478,19 +473,8 @@ func runFixMode(loader *config.Loader, files []string) error {
 	}
 
 	results := eng.FixFiles(filesToFix, maxConcurrency)
-
-	totalChanges := 0
-	for _, result := range results {
-		totalChanges += printFixResult(result)
-	}
-
-	if totalChanges > 0 {
-		fmt.Printf("\nTotal: %d change(s) applied\n", totalChanges)
-	} else {
-		fmt.Println(termcolor.Success("No changes needed"))
-	}
-
-	return nil
+	totalChanges, wouldChange := handleFixResults(results, flagDryRun)
+	return finalizeFixRun(totalChanges, wouldChange, flagDryRun)
 }
 
 func runValidateConfig(_ *cobra.Command, args []string) error {
@@ -564,6 +548,58 @@ func printFixResult(result *engine.FixResult) int {
 		return result.Changes
 	}
 	return 0
+}
+
+// handleFixResults prints either the standard written-file summary or, in
+// dry-run mode, a unified diff per file. Returns (totalChanges, wouldChange):
+// totalChanges is the number of files reported as changed; wouldChange is true
+// iff dry-run found at least one file that differs.
+func handleFixResults(results []*engine.FixResult, dryRun bool) (totalChanges int, wouldChange bool) {
+	for _, result := range results {
+		relPath, _ := filepath.Rel(".", result.File)
+		if relPath == "" {
+			relPath = result.File
+		}
+
+		if result.Error != nil {
+			fmt.Printf("%s %s: %v\n", termcolor.Error("Error fixing"), relPath, result.Error)
+			continue
+		}
+
+		if !dryRun {
+			totalChanges += printFixResult(result)
+			continue
+		}
+
+		before, err := os.ReadFile(result.File)
+		if err != nil {
+			fmt.Printf("%s %s: %v\n", termcolor.Error("Error reading"), relPath, err)
+			continue
+		}
+		if printDiff(relPath, string(before), result.Content) {
+			wouldChange = true
+			totalChanges++
+		}
+	}
+	return totalChanges, wouldChange
+}
+
+// finalizeFixRun prints the trailing summary (or dry-run error) common to
+// runFixMode and runFormatMode.
+func finalizeFixRun(totalChanges int, wouldChange, dryRun bool) error {
+	if dryRun {
+		if wouldChange {
+			return fmt.Errorf("dry run: %d file(s) would be changed", totalChanges)
+		}
+		fmt.Println(termcolor.Success("No changes needed"))
+		return nil
+	}
+	if totalChanges > 0 {
+		fmt.Printf("\nTotal: %d change(s) applied\n", totalChanges)
+	} else {
+		fmt.Println(termcolor.Success("No changes needed"))
+	}
+	return nil
 }
 
 func findHCLFiles(root string) []string {

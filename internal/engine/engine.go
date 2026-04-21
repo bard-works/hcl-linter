@@ -20,6 +20,11 @@ import (
 type Engine struct {
 	configLoader *config.Loader
 	registry     *rules.Registry
+
+	// DryRun, when true, skips writing fix results to disk. FixResult.Content
+	// still carries the proposed bytes so callers can diff them against the
+	// original file.
+	DryRun bool
 }
 
 type FixResult struct {
@@ -220,7 +225,7 @@ func (e *Engine) FixFile(path string) (*FixResult, error) {
 		}
 	}
 
-	if result.Changes > 0 {
+	if result.Changes > 0 && !e.DryRun {
 		if err := os.WriteFile(path, []byte(contentStr), 0o644); err != nil {
 			return nil, err
 		}
@@ -326,7 +331,7 @@ func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 		result.Changes++
 	}
 
-	if result.Changes > 0 {
+	if result.Changes > 0 && !e.DryRun {
 		if err := os.WriteFile(path, []byte(contentStr), 0o644); err != nil {
 			return nil, err
 		}

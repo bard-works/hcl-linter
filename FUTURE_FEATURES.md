@@ -28,14 +28,6 @@ Prompt for each fix individually.
 - Review changes before applying
 - Skip specific fixes
 
-### 14. Fix Dry-Run / Diff Output
-
-Show what `fix` would change without writing files.
-
-- `hcl-linter fix ./ --dry-run` prints a unified diff to stdout
-- Useful in CI to surface formatting drift without auto-applying changes
-- Exit non-zero if any changes would be made (enforces "committed files must be formatted")
-
 ### 15. Per-Directory Config Override
 
 Allow a `.hcl-linter/` directory anywhere in the tree to override rules for files beneath it.
@@ -147,6 +139,14 @@ rules {
 `hcl-linter validate-config` detects unknown rule blocks and enabled rules
 with missing required fields. Warnings also surface at startup during
 `lint`/`check`/`fix`.
+
+### 14. Fix Dry-Run / Diff Output ✅
+
+`hcl-linter fix <path> --dry-run` runs the fix pipeline without writing,
+prints a unified diff per file that would change, and exits non-zero if
+any diff is produced. Composes with `--format`. Uses
+`github.com/hexops/gotextdiff` for unified-diff generation. See
+`cmd/hcl-linter/diff.go` and [docs/cli.md → `fix --dry-run` flag](docs/cli.md#fix---dry-run-flag).
 
 ### 19. Coloured Terminal Output ✅
 
