@@ -43,9 +43,8 @@ Configs are loaded from the first source that exists, in this order:
 merging across source locations. Within a single config directory, use
 `extends` for inheritance (see below).
 
-The applied config source is printed at startup for transparency. If the
-linter falls back to project defaults (no user config found), a warning is
-displayed.
+The resolved config source is printed at startup. If no user config is
+found and the linter falls back to project defaults, a warning is printed.
 
 ## Config file matching
 

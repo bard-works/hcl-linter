@@ -118,20 +118,18 @@ introducing config-based rules. Config-based `array_format` and
 
 ### `fix --dry-run` flag
 
-Runs the same Fix pipeline as `fix` but prints a unified diff to stdout per
-changed file instead of writing. Exits non-zero (`1`) if any file would be
-changed. Composes with `--format`. Intended for CI pre-commit enforcement -
-fail the build when committed files aren't byte-identical to what the fixer
-would produce.
+Runs the fix pipeline but prints a unified diff per changed file instead
+of writing. Exits `1` if any file would change. Composes with `--format`.
 
 ```bash
 hcl-linter fix ./ --dry-run
 hcl-linter fix ./ --format --dry-run   # config-free formatting check
 ```
 
-Differs from `check`: `check` reports rule violations; `--dry-run` reports
-byte-level formatting drift, including drift introduced by fix-only rules
-like `blank_lines` that have no `Check` phase.
+Not the same as `check`: `check` reports rule violations, `--dry-run`
+reports byte-level drift — including drift from fix-only rules like
+`blank_lines` that have no `Check` phase. Use `--dry-run` in CI to fail
+the build when committed files don't match the fixer's output.
 
 ## `validate-config` command
 
@@ -267,14 +265,9 @@ Matched files:
 
 ## Concurrency
 
-By default, the linter automatically detects the optimal concurrency
-level based on CPU count. You can override this:
-
-- CLI flag: `--concurrency <number>`
-- Environment variable: `HCL_LINTER_MAX_CONCURRENCY` (overrides the flag)
-
-Higher concurrency speeds up processing of large file sets but uses more
-memory.
+Defaults to CPU count. Override with `--concurrency <n>` or
+`HCL_LINTER_MAX_CONCURRENCY` (the env var wins over the flag). Higher
+values trade memory for throughput on large trees.
 
 ## Coloured output
 

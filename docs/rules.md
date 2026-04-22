@@ -53,9 +53,9 @@ dependency outputs) ship as built-ins.
 
 ### 1. Block Order (`block_order`)
 
-**Purpose:** Enforce consistent ordering of top-level blocks.
-
 **Rule ID:** `block_order` - **Severity:** error
+
+Enforces the order of top-level (and optionally nested) blocks.
 
 **Behavior:**
 
@@ -128,9 +128,9 @@ terraform {
 
 ### 2. Array Format (`array_format`)
 
-**Purpose:** Normalize array formatting.
-
 **Rule ID:** `array_format` - **Severity:** warning
+
+Single-item arrays stay inline; 2+ items are expanded to one per line with trailing commas.
 
 **Rules:**
 
@@ -151,9 +151,9 @@ actions = [
 
 ### 3. Blank Lines (`blank_lines`)
 
-**Purpose:** Clean up blank lines within blocks for consistent formatting.
-
 **Rule ID:** _(fix-only; no issues emitted during lint/check)_
+
+Cleans blank lines inside blocks and object attributes. Fix-only — there is no `Check` phase.
 
 **Configuration:**
 
@@ -198,9 +198,9 @@ inputs = {
 
 ### 4. Name Validation (`name_validation`)
 
-**Purpose:** Ensure consistent naming conventions.
-
 **Rule ID:** `name_validation` - **Severity:** error
+
+Block labels must match a regex. Default: `^[a-z][a-z0-9_]*$` (snake_case, no hyphens).
 
 **Checks:**
 
@@ -219,9 +219,9 @@ include "my_vpc" {}
 
 ### 5. Duplicate Detection (`duplicates`)
 
-**Purpose:** Detect duplicate blocks.
-
 **Rule ID:** `duplicates` - **Severity:** error
+
+Flags repeated labels on `dependency` and `include` blocks.
 
 **Checks:**
 
@@ -238,9 +238,9 @@ dependency "vpc" {}  # ERROR: duplicate
 
 ### 6. Required Fields (`required_fields`)
 
-**Purpose:** Enforce required attributes per block type.
-
 **Rule ID:** `required_fields` - **Severity:** error
+
+When a listed block is present, its required attributes must be set. Configured per block type.
 
 **Configuration:**
 
@@ -261,9 +261,9 @@ rules {
 
 ### 7. Required Blocks (`required_blocks`)
 
-**Purpose:** Enforce that certain block types must exist in the file.
-
 **Rule ID:** `required_blocks` - **Severity:** error
+
+A listed block type must appear exactly once per file. Missing or duplicated → error with a configurable message.
 
 **Configuration:**
 
@@ -303,11 +303,9 @@ locals {}
 
 ### 8. Dependency Paths (`dependency_paths`)
 
-**Purpose:** Validate that `config_path` attributes on `dependency` blocks
-resolve to existing directories. Targets the Terragrunt `dependency` block
-shape.
-
 **Rule ID:** `dependency_path_exists` - **Severity:** error
+
+`config_path` on a Terragrunt `dependency` block must resolve to an existing directory.
 
 **Configuration:**
 
@@ -329,11 +327,9 @@ dependency "vpc" {
 
 ### 9. Include Paths (`include_paths`)
 
-**Purpose:** Validate that `path` attributes on `include` blocks resolve to
-existing files or directories. Function-call values (e.g.
-`find_in_parent_folders()`) are skipped.
-
 **Rule ID:** `include_path_exists` - **Severity:** error
+
+`path` on an `include` block must resolve to an existing file or directory. Function-call values (e.g. `find_in_parent_folders()`) are skipped.
 
 **Configuration:**
 
@@ -355,11 +351,9 @@ include "root" {
 
 ### 10. Remote State (`remote_state`)
 
-**Purpose:** Validate `remote_state { }` blocks nested inside the top-level
-`terraform { }` block. When `require_backend = true`, the `backend`
-attribute must be set and non-empty.
-
 **Rule ID:** `remote_state_backend_required` - **Severity:** error
+
+Applies to a `remote_state { }` block nested inside the top-level `terraform { }`. When `require_backend = true`, `backend` must be set and non-empty.
 
 **Configuration:**
 
@@ -387,8 +381,7 @@ terraform {
 
 ### 11. HCL Functions (`hcl_functions`)
 
-**Purpose:** Validate common HCL function calls. Currently recognizes
-Terragrunt's `find_in_parent_folders` and `get_env`.
+Currently recognises Terragrunt's `find_in_parent_folders` and `get_env`.
 
 **Rule IDs and severities:**
 
@@ -430,7 +423,7 @@ locals {
 
 ### 12. Terraform Block (`terraform_block`)
 
-**Purpose:** Validate Terragrunt's `terraform` block configuration.
+Checks on Terragrunt's `terraform { }` block.
 
 **Rule IDs and severities:**
 
@@ -511,8 +504,7 @@ terraform {
 
 ### 13. Key-Value Validation (`key_value`)
 
-**Purpose:** Enforce attribute naming conventions, validate values against
-patterns, and blocklist certain keys.
+Attribute-level checks: naming convention, regex on values, blocklisted keys.
 
 **Rule IDs and severities:**
 
@@ -573,7 +565,7 @@ locals {
 
 ### 14. Count/ForEach Validation (`count_for_each`)
 
-**Purpose:** Detect potential issues with count and for_each expressions.
+Catches `count` / `for_each` patterns that create zero resources or contradict each other.
 
 **Rule IDs and severities:**
 
@@ -618,10 +610,9 @@ resource "aws_instance" "test" {
 
 ### 15. Dependency Output Validation (`dependency_outputs`)
 
-**Purpose:** Validate `dependency.*.outputs.*` references by walking the
-dependency chain.
-
 **Rule ID:** `dependency_outputs` - **Severity:** warning
+
+Resolves `dependency.*.outputs.*` references by walking the dependency chain and reading `output` blocks from each module's `.tf` files.
 
 **Configuration:**
 
