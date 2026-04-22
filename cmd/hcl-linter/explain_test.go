@@ -29,6 +29,24 @@ func TestExplainNoArgs(_ *testing.T) {
 	printExplainTable()
 }
 
+func TestRunExplainNoArgs(t *testing.T) {
+	if err := runExplain(nil, []string{}); err != nil {
+		t.Fatalf("runExplain with no args: %v", err)
+	}
+}
+
+func TestRunExplainKnownRule(t *testing.T) {
+	if err := runExplain(nil, []string{"block_order"}); err != nil {
+		t.Fatalf("runExplain block_order: %v", err)
+	}
+}
+
+func TestRunExplainUnknownRule(t *testing.T) {
+	if err := runExplain(nil, []string{"no_such_rule"}); err == nil {
+		t.Fatal("expected error for unknown rule")
+	}
+}
+
 func TestDocAllRules(t *testing.T) {
 	for _, r := range rules.DefaultRegistry().All() {
 		doc := r.Doc()

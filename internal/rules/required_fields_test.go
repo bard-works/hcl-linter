@@ -67,6 +67,27 @@ func TestRequiredFieldsRuleCheck(t *testing.T) {
 	}
 }
 
+func TestRequiredFieldsFixSingleLineBlock(t *testing.T) {
+	cfg := &config.Rules{
+		RequiredFields: &config.RequiredFieldsConfig{
+			Include: &config.IncludeRequired{Expose: true},
+		},
+	}
+	// Single-line block (startLine == endLine) exercises the addAttributeToBlock inline path
+	content := "include \"root\" { path = \"x\" }\n"
+	ctx := buildContext(t, content, cfg)
+	n, err := rules.RequiredFieldsRule{}.Fix(ctx)
+	if err != nil {
+		t.Fatalf("Fix error: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected Fix to report a change on single-line block")
+	}
+	if !strings.Contains(string(ctx.Content), "expose = true") {
+		t.Errorf("expected expose = true in output:\n%s", string(ctx.Content))
+	}
+}
+
 func TestRequiredFieldsRuleFix(t *testing.T) {
 	cfg := &config.Rules{
 		RequiredFields: &config.RequiredFieldsConfig{

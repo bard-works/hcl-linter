@@ -54,6 +54,18 @@ func TestBlankLinesRuleFix(t *testing.T) {
 			changed: false,
 			want:    "inputs = {\n  a = \"x\"\n  b = \"y\"\n}\n",
 		},
+		{
+			name:    "removes blank line before closing brace in top-level block",
+			content: "terraform {\n  source = \"./m\"\n\n}\n",
+			changed: true,
+			want:    "terraform {\n  source = \"./m\"\n}\n",
+		},
+		{
+			name:    "no change for already-clean top-level block",
+			content: "terraform {\n  source = \"./m\"\n}\n",
+			changed: false,
+			want:    "terraform {\n  source = \"./m\"\n}\n",
+		},
 	}
 
 	r := rules.BlankLinesRule{}
