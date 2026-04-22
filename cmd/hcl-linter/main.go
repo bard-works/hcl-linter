@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/papaya/hcl-linter/internal/config"
-	"github.com/papaya/hcl-linter/internal/fix"
-	"github.com/papaya/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/fix"
+	"github.com/bard-works/hcl-linter/internal/linter"
 	"github.com/spf13/cobra"
 )
 
@@ -83,7 +83,116 @@ func runLint(cmd *cobra.Command, args []string) error {
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
-	return run(cmd, args, true, false)
+	err := runLintModeWithExitCode(cmd, args)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
+	path := args[0]
+
+	loader, configResult := getLoader()
+
+	if configResult.Source == config.ConfigSourceNone {
+		fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
+	} else {
+		fmt.Printf("Config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
+		if configResult.WarningMsg != "" {
+			fmt.Fprintf(os.Stderr, "Warning: %s\n", configResult.WarningMsg)
+		}
+	}
+
+	if loader == nil {
+		loader = &config.Loader{}
+	}
+
+	var files []string
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("path error: %w", err)
+	}
+
+	if info.IsDir() {
+		files = findHCLFiles(path)
+	} else {
+		files = []string{path}
+	}
+
+	if len(flagFilter) > 0 {
+		files = filterFiles(files)
+	}
+
+	l := linter.NewLinter(loader)
+
+	var filesToLint []string
+	for _, file := range files {
+		hasSpecificConfig := loader.HasSpecificConfigForFile(file)
+		if !hasSpecificConfig {
+			relPath, err := filepath.Rel(".", file)
+			if err != nil {
+				relPath = file
+			}
+			if !loader.HasConfigForFile(file) {
+				fmt.Printf("Warning: No config found for %s, skipping\n", relPath)
+				continue
+			}
+			fmt.Printf("Warning: No specific config for %s, using defaults\n", relPath)
+		}
+		filesToLint = append(filesToLint, file)
+	}
+
+	maxConcurrency := flagConcurrency
+	if maxConcurrency <= 0 {
+		maxConcurrency = config.GetMaxConcurrency(nil)
+	}
+
+	fmt.Printf("\nChecking %d file(s)...\n", len(filesToLint))
+
+	allResults := l.LintFiles(filesToLint, maxConcurrency)
+
+	hasErrors := false
+	errorFiles := 0
+	for _, result := range allResults {
+		if len(result.Issues) > 0 {
+			errorFiles++
+			if flagVerbose || len(result.Issues) > 0 {
+				relPath, err := filepath.Rel(".", result.File)
+				if err != nil {
+					relPath = result.File
+				}
+				fmt.Printf("\n%s:\n", relPath)
+				for _, issue := range result.Issues {
+					if issue.Severity == linter.SeverityError {
+						hasErrors = true
+					}
+					fmt.Printf("  [%s] %s: %s\n", issue.Severity, issue.Rule, issue.Message)
+					if flagVerbose && issue.Location.Filename != "" {
+						fmt.Printf("    at %s:%d\n", issue.Location.Filename, issue.Location.Start.Line)
+					}
+				}
+			}
+		}
+	}
+
+	totalIssues := 0
+	for _, r := range allResults {
+		totalIssues += len(r.Issues)
+	}
+
+	fmt.Println(strings.Repeat("-", 40))
+	if totalIssues > 0 {
+		fmt.Printf("Total: %d issue(s) in %d file(s)\n", totalIssues, errorFiles)
+	} else {
+		fmt.Println("All files pass!")
+	}
+
+	if hasErrors {
+		os.Exit(1)
+	}
+
+	return nil
 }
 
 func runFix(cmd *cobra.Command, args []string) error {
@@ -225,8 +334,8 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 	hasErrors := false
 	for _, result := range allResults {
 		if flagVerbose || len(result.Issues) > 0 {
-			relPath, _ := filepath.Rel(".", result.File)
-			if relPath == "" {
+			relPath, err := filepath.Rel(".", result.File)
+			if err != nil {
 				relPath = result.File
 			}
 			fmt.Printf("\n%s:\n", relPath)

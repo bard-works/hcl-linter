@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/papaya/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/config"
 )
 
 func createTestConfigDir(t *testing.T) string {

@@ -2,8 +2,8 @@
 
 A configurable linter for Terragrunt HCL files that enforces consistency standards across large codebases.
 
-[![CI](https://github.com/papaya/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/papaya/hcl-linter/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/papaya/hcl-linter)](https://github.com/papaya/hcl-linter)
+[![CI](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/bard-works/hcl-linter)](https://github.com/bard-works/hcl-linter)
 
 ## Features
 
@@ -17,17 +17,17 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 ### Homebrew
 
 ```bash
-brew install papaya/tap/hcl-linter
+brew install bard-works/tap/hcl-linter
 ```
 
 ### Binary Download
 
-Download pre-built binaries from the [latest release](https://github.com/papaya/hcl-linter/releases/latest).
+Download pre-built binaries from the [latest release](https://github.com/bard-works/hcl-linter/releases/latest).
 
 ### Build from Source
 
 ```bash
-go install github.com/papaya/hcl-linter@latest
+go install github.com/bard-works/hcl-linter@latest
 ```
 
 ## Quick Start
