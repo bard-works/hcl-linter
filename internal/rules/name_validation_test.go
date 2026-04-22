@@ -171,7 +171,7 @@ func TestNameValidationDefaultPatternEdgeCases(t *testing.T) {
 		label       string
 		expectIssue bool
 	}{
-		{"1starts_digit", true},  // !isLowerLetter(name[0])
+		{"1starts_digit", true}, // !isLowerLetter(name[0])
 		{"valid_name", false},
 	}
 	for _, tt := range tests {
