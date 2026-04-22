@@ -153,7 +153,7 @@ actions = [
 
 **Rule ID:** _(fix-only; no issues emitted during lint/check)_
 
-Cleans blank lines inside blocks and object attributes. Fix-only — there is no `Check` phase.
+Cleans blank lines inside blocks and object attributes. Fix-only - there is no `Check` phase.
 
 **Configuration:**
 

@@ -324,7 +324,7 @@ func TestPrintFixResultWithError(t *testing.T) {
 func TestHandleFixResults_DryRunReadError(t *testing.T) {
 	silenceStdout(t)
 
-	// A result pointing to a nonexistent file — ReadFile will fail in dry-run.
+	// A result pointing to a nonexistent file - ReadFile will fail in dry-run.
 	results := []*engine.FixResult{
 		{File: "/nonexistent/path.hcl", Changes: 1, Content: "modified", Success: true},
 	}

@@ -268,7 +268,7 @@ func TestUniqueBasenames(t *testing.T) {
 
 func TestWriteInitFilesError(t *testing.T) {
 	tmp := t.TempDir()
-	// Create a file where the directory should go — MkdirAll will fail
+	// Create a file where the directory should go - MkdirAll will fail
 	blocker := filepath.Join(tmp, "blocked")
 	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)

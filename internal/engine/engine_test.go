@@ -1507,7 +1507,7 @@ func TestBuildContextParseError(t *testing.T) {
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)
 
-	// Unparseable HCL — buildContext should return an error
+	// Unparseable HCL - buildContext should return an error
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", "{{{{invalid hcl")
 	_, err := eng.LintFile(file)
 	if err == nil {

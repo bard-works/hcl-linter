@@ -117,7 +117,7 @@ func TestKeyValueDisallowedKeysNestedBlocks(t *testing.T) {
 	cfg := &config.Rules{
 		KeyValue: &config.KeyValueConfig{Enabled: true, Disallowed: []string{"secret"}},
 	}
-	// Nested block inside terraform {} — exercises the recursion branch in kvCheckDisallowedKeys
+	// Nested block inside terraform {} - exercises the recursion branch in kvCheckDisallowedKeys
 	content := "terraform {\n  before_hook \"h\" {\n    secret = \"leak\"\n  }\n}\n"
 	ctx := buildContext(t, content, cfg)
 	issues := rules.KeyValueRule{}.Check(ctx)

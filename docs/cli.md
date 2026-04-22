@@ -127,7 +127,7 @@ hcl-linter fix ./ --format --dry-run   # config-free formatting check
 ```
 
 Not the same as `check`: `check` reports rule violations, `--dry-run`
-reports byte-level drift — including drift from fix-only rules like
+reports byte-level drift - including drift from fix-only rules like
 `blank_lines` that have no `Check` phase. Use `--dry-run` in CI to fail
 the build when committed files don't match the fixer's output.
 
@@ -145,7 +145,7 @@ hcl-linter validate-config . --recursive   # validate every nested .hcl-linter/
 **`--recursive` flag:** walks the target path and validates every
 `.hcl-linter/` directory found (skipping hidden siblings). Exits non-zero if
 any directory contains config issues. Useful when per-directory overrides
-are in play — see
+are in play - see
 [configuration.md → Per-directory overrides](configuration.md#per-directory-overrides).
 
 **Checks performed:**
@@ -182,17 +182,17 @@ hcl-linter init . --force          # overwrite existing .hcl-linter/
 Walks the target directory for `.hcl` / `.tf` files (skipping hidden dirs),
 groups them by unique basename, then writes:
 
-- `.hcl-linter/default.hcl` — baseline template with `block_order`,
+- `.hcl-linter/default.hcl` - baseline template with `block_order`,
   `array_format`, and `blank_lines` enabled with safe defaults.
-- `.hcl-linter/<name>.hcl` per unique basename — a thin
+- `.hcl-linter/<name>.hcl` per unique basename - a thin
   `extends = "default"` override with an empty `rules {}` block, ready for
   per-filename customisation.
 
 **Flags:**
 
-- `--dry-run` — print the proposed layout and file contents to stdout; no
+- `--dry-run` - print the proposed layout and file contents to stdout; no
   files are written.
-- `--force` — overwrite existing `.hcl-linter/` contents. Without this flag,
+- `--force` - overwrite existing `.hcl-linter/` contents. Without this flag,
   `init` refuses when the target `.hcl-linter/` directory is non-empty and
   lists what it found.
 
@@ -210,7 +210,7 @@ hcl-linter explain block_order   # full detail: config fields, example violation
 hcl-linter explain bogus         # exits 1, prints "unknown rule ..."
 ```
 
-**No-arg output** — one row per rule, aligned with `tabwriter`:
+**No-arg output** - one row per rule, aligned with `tabwriter`:
 
 ```
 RULE                   SEVERITY  FIXABLE  SUMMARY
@@ -219,7 +219,7 @@ block_order            error     yes      Ensures top-level blocks appear in con
 ...
 ```
 
-**Single-rule output** — summary, all config fields, and example snippet:
+**Single-rule output** - summary, all config fields, and example snippet:
 
 ```
 block_order  [error, fixable]
@@ -240,7 +240,7 @@ block_order  [error, fixable]
     terraform {}
 ```
 
-Rule name matching is exact — no fuzzy search.
+Rule name matching is exact - no fuzzy search.
 
 ## `version`
 

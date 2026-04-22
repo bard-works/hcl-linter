@@ -73,13 +73,13 @@ If nothing is found on the walk, the globally-resolved root config from
 [Config source precedence](#config-source-precedence) is used as the
 fallback.
 
-**Closer wins — there is no implicit cross-directory merging.** The nested
+**Closer wins - there is no implicit cross-directory merging.** The nested
 config replaces the root config wholesale for matching files. If you want
 to share rules between the root and a nested config, use `extends` inside
 the nested config (relative paths like `extends = "../default"` work),
 or duplicate the shared rule blocks.
 
-**Example — monorepo with one service that uses a stricter block order:**
+**Example - monorepo with one service that uses a stricter block order:**
 
 ```
 repo/

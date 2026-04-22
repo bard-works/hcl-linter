@@ -17,7 +17,7 @@ user-facing docs see [rules.md](rules.md), [cli.md](cli.md), and
 ## Why this tool exists
 
 HCL is permissive. Two Terragrunt files that do the same thing can look
-entirely different — different block order, different quoting, different
+entirely different - different block order, different quoting, different
 casing on attribute names, inline vs multiline arrays, hooks named with
 hyphens or underscores, paths that point nowhere but parse cleanly. HCL
 itself has no opinion on any of this, and `terraform fmt` / `terragrunt
@@ -26,12 +26,12 @@ hclfmt` only touch whitespace.
 In a codebase with more than one contributor this drift compounds: diffs
 get noisy, reviewers spend time on layout instead of behaviour, and a
 `config_path = "../vpc"` pointing at a moved directory can sit
-unnoticed until a plan fails. The usual fallback — "write it in the style
-guide, enforce in review" — doesn't scale past a few contributors.
+unnoticed until a plan fails. The usual fallback - "write it in the style
+guide, enforce in review" - doesn't scale past a few contributors.
 
 `hcl-linter` exists to move those rules out of human review and into a
 deterministic, fixable check. Not as a replacement for `terraform
-validate` or policy-as-code tools (OPA, Sentinel) — those check semantics
+validate` or policy-as-code tools (OPA, Sentinel) - those check semantics
 after HCL is parsed. This tool checks the file shape: ordering, naming,
 required blocks and attributes, path references, and formatting. The
 things that should never be a review comment.
@@ -40,13 +40,13 @@ things that should never be a review comment.
 
 - Not a formatter in the `terraform fmt` sense. It can auto-fix a fixed
   set of rules (block order, array layout, blank lines, naming), but
-  most rules are `Check`-only by design — auto-"fixing" a missing
+  most rules are `Check`-only by design - auto-"fixing" a missing
   `source` attribute or a non-existent `config_path` would hide bugs,
   not solve them.
 - Not a policy engine. Rules are structural, not about which AWS regions
   are allowed or whether an IAM policy is over-broad. Use OPA / Sentinel
   / Checkov for those.
-- Not a language server. No incremental parse, no LSP protocol — it
+- Not a language server. No incremental parse, no LSP protocol - it
   expects to run on a whole file or a whole tree.
 
 ## Design choices
@@ -68,7 +68,7 @@ written and how the engine behaves.
   could debug. A nested `.hcl-linter/` replaces the parent wholesale;
   sharing happens via `extends` inside a single directory.
 - **Rules self-register.** Each rule calls `Register(...)` from an
-  `init()` in its own file. The engine holds no hand-maintained list —
+  `init()` in its own file. The engine holds no hand-maintained list -
   a rule that isn't registered is dead code, full stop. Priority is an
   integer on the `Rule` interface, so pipeline order is a property of
   the rule, not of the engine.
@@ -79,7 +79,7 @@ written and how the engine behaves.
 - **`fix --dry-run` is the CI enforcement mode, not `check`.** `check`
   reports rule violations; `--dry-run` reports byte-level drift and
   exits non-zero when it finds any. Fix-only rules like `blank_lines`
-  have no `Check` phase, so they'd silently pass a `check` run — that's
+  have no `Check` phase, so they'd silently pass a `check` run - that's
   why `--dry-run` exists.
 
 ## Package layout

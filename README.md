@@ -9,7 +9,7 @@ A configurable linter and auto-fixer for HCL 2. Ships with rule sets for Terragr
 [![CI](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/bard-works/hcl-linter)](https://github.com/bard-works/hcl-linter)
 
-Written for teams with more than one person touching HCL. Enforces block order, naming, required fields, path references, and formatting — the things code review keeps bouncing off. Rules are per-file-pattern and inherit via `extends`. Fixable rules auto-fix; CI uses `check` or `fix --dry-run`.
+Written for teams with more than one person touching HCL. Enforces block order, naming, required fields, path references, and formatting - the things code review keeps bouncing off. Rules are per-file-pattern and inherit via `extends`. Fixable rules auto-fix; CI uses `check` or `fix --dry-run`.
 
 ## Install
 
@@ -28,7 +28,7 @@ Pre-built binaries: [latest release](https://github.com/bard-works/hcl-linter/re
 ```bash
 hcl-linter init                # bootstrap .hcl-linter/ for the current project
 hcl-linter lint ./             # lint (exit 0 regardless)
-hcl-linter check ./            # lint, exit 1 on any issue — use in CI
+hcl-linter check ./            # lint, exit 1 on any issue - use in CI
 hcl-linter fix ./              # apply fixable rules in-place
 hcl-linter fix ./ --format     # apply default formatting, no config needed
 hcl-linter fix ./ --dry-run    # print diff, exit 1 if anything would change
@@ -104,9 +104,9 @@ Applies opinionated defaults without a config file: block order `include → loc
 
 ## Environment
 
-- `HCL_LINTER_CONFIG_DIR` — config directory
-- `HCL_LINTER_MAX_CONCURRENCY` — worker count
-- `NO_COLOR` — disables colour in `--color=auto` (https://no-color.org)
+- `HCL_LINTER_CONFIG_DIR` - config directory
+- `HCL_LINTER_MAX_CONCURRENCY` - worker count
+- `NO_COLOR` - disables colour in `--color=auto` (https://no-color.org)
 
 ## Validating configs
 
@@ -119,10 +119,10 @@ hcl-linter validate-config . --recursive
 
 ## Docs
 
-- [docs/rules.md](docs/rules.md) — every rule, config fields, severity
-- [docs/configuration.md](docs/configuration.md) — config format, precedence, inheritance
-- [docs/cli.md](docs/cli.md) — commands, flags, exit codes, colour
-- [docs/architecture.md](docs/architecture.md) — package layout and data flow
+- [docs/rules.md](docs/rules.md) - every rule, config fields, severity
+- [docs/configuration.md](docs/configuration.md) - config format, precedence, inheritance
+- [docs/cli.md](docs/cli.md) - commands, flags, exit codes, colour
+- [docs/architecture.md](docs/architecture.md) - package layout and data flow
 
 ## Contributing
 

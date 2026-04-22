@@ -53,7 +53,7 @@ func TestCountForEachRule(t *testing.T) {
 		},
 	}
 
-	// Disabled paths — when individual warn flags are false no issues should be emitted
+	// Disabled paths - when individual warn flags are false no issues should be emitted
 	t.Run("count_zero disabled", func(t *testing.T) {
 		disabledCfg := &config.Rules{
 			CountForEach: &config.CountForEachConfig{

@@ -59,7 +59,7 @@ and `text/tabwriter`.
 ### 21. Unified Rule System ✅
 
 `Rule` interface gains `Priority() int`; `Fixer.Fix` now mutates `ctx.Content`
-in place and returns `(int, error)` — the int is the actual number of logical
+in place and returns `(int, error)` - the int is the actual number of logical
 edits, not a binary changed flag. All rules self-register via `func init() {
 Register(...) }` into a global `DefaultRegistry`; `engine.New()` no longer
 maintains a manual list. `engine.FixFile` and `engine.FormatFixFile` run a
@@ -166,21 +166,21 @@ wholesale. If nothing is found, the globally-discovered root config is
 used. The walk is bounded by the parent of the root `.hcl-linter/` so
 files outside the project tree skip it entirely.
 
-No implicit cross-directory merging — closer wins. Users share rules via
+No implicit cross-directory merging - closer wins. Users share rules via
 `extends` within a nested dir or by duplicating blocks. `validate-config
 --recursive` walks a path and validates every nested `.hcl-linter/` found.
 See [docs/configuration.md → Per-directory overrides](docs/configuration.md#per-directory-overrides)
 and `internal/config/loader.go`.
 
-### 20. `init` Command — Bootstrap Config for a Directory ✅
+### 20. `init` Command - Bootstrap Config for a Directory ✅
 
 `hcl-linter init [path]` walks the target for `.hcl` / `.tf` files (skipping
 hidden dirs via `findHCLFiles`), groups them by unique basename, and writes:
 
-- `.hcl-linter/default.hcl` — baseline with `block_order`, `array_format`,
+- `.hcl-linter/default.hcl` - baseline with `block_order`, `array_format`,
   and `blank_lines` enabled with safe defaults. Passes `validate-config`
   out of the box.
-- `.hcl-linter/<name>.hcl` per unique basename — a thin
+- `.hcl-linter/<name>.hcl` per unique basename - a thin
   `extends = "default"` override with an empty `rules {}` starter block.
 
 Flags: `--dry-run` prints the proposed layout to stdout without writing;
