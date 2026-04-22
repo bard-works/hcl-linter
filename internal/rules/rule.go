@@ -18,16 +18,25 @@ type Context struct {
 	Config   *config.Rules
 }
 
+// Priority levels for deterministic fix pipeline ordering.
+const (
+	PriorityStructure = 100
+	PrioritySemantic  = 200
+	PriorityFormat    = 300
+	PriorityFinal     = 400
+)
+
 // Rule is implemented by every lint rule.
 type Rule interface {
 	Name() string
+	Priority() int
 	Enabled(cfg *config.Rules) bool
 	Check(ctx *Context) []diag.Issue
 }
 
 // Fixer is implemented by rules that can auto-correct violations.
-// Fix returns the (possibly modified) file content, whether any change was made, and any error.
+// Fix mutates ctx.Content in place and returns the number of logical edits made (0 = no-op).
 type Fixer interface {
 	Rule
-	Fix(ctx *Context) ([]byte, bool, error)
+	Fix(ctx *Context) (int, error)
 }

@@ -55,6 +55,21 @@ and debugging why a rule isn't firing.
 
 Original priority numbering preserved for stable reference in history and PRs.
 
+### 21. Unified Rule System ✅
+
+`Rule` interface gains `Priority() int`; `Fixer.Fix` now mutates `ctx.Content`
+in place and returns `(int, error)` — the int is the actual number of logical
+edits, not a binary changed flag. All rules self-register via `func init() {
+Register(...) }` into a global `DefaultRegistry`; `engine.New()` no longer
+maintains a manual list. `engine.FixFile` and `engine.FormatFixFile` run a
+shared `runFixPipeline` that calls `registry.Sorted()` (stable sort by
+priority) and re-parses via `refreshContext` after each mutating rule.
+`FormatFixFile` passes a `defaultFormatConfig()` so only the three format rules
+fire. Also fixed a latent bug in `formatMultilineArray` / `fixMultilineArray`
+where key extraction included the `=` sign (producing `arr = = [` for
+top-level attributes); the new stricter re-parse surfaced it.
+See `internal/rules/rule.go`, `registry.go`, and `internal/engine/engine.go`.
+
 ### 1. Terragrunt Function Embedding ✅
 
 Validate Terragrunt function calls in expressions.

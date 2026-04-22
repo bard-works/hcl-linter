@@ -13,7 +13,10 @@ import (
 // `require_backend` is configured.
 type RemoteStateRule struct{}
 
-func (r RemoteStateRule) Name() string { return "remote_state" }
+func (r RemoteStateRule) Name() string  { return "remote_state" }
+func (r RemoteStateRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(RemoteStateRule{}) }
 
 func (r RemoteStateRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.RemoteState != nil && cfg.RemoteState.Enabled

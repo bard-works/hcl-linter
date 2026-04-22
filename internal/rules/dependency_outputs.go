@@ -18,7 +18,10 @@ import (
 
 type DependencyOutputsRule struct{}
 
-func (r DependencyOutputsRule) Name() string { return "dependency_outputs" }
+func (r DependencyOutputsRule) Name() string  { return "dependency_outputs" }
+func (r DependencyOutputsRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(DependencyOutputsRule{}) }
 
 func (r DependencyOutputsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.DependencyOutputs != nil && cfg.DependencyOutputs.Enabled

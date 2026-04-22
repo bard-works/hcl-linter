@@ -14,7 +14,10 @@ import (
 // resolve to existing files or directories.
 type IncludePathsRule struct{}
 
-func (r IncludePathsRule) Name() string { return "include_paths" }
+func (r IncludePathsRule) Name() string  { return "include_paths" }
+func (r IncludePathsRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(IncludePathsRule{}) }
 
 func (r IncludePathsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.IncludePaths != nil && cfg.IncludePaths.Enabled

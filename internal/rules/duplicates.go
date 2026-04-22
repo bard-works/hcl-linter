@@ -10,7 +10,10 @@ import (
 
 type DuplicatesRule struct{}
 
-func (r DuplicatesRule) Name() string { return "duplicates" }
+func (r DuplicatesRule) Name() string  { return "duplicates" }
+func (r DuplicatesRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(DuplicatesRule{}) }
 
 func (r DuplicatesRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.Duplicates != nil && cfg.Duplicates.Enabled

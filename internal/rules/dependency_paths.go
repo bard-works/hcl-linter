@@ -14,7 +14,10 @@ import (
 // blocks resolve to existing directories.
 type DependencyPathsRule struct{}
 
-func (r DependencyPathsRule) Name() string { return "dependency_paths" }
+func (r DependencyPathsRule) Name() string  { return "dependency_paths" }
+func (r DependencyPathsRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(DependencyPathsRule{}) }
 
 func (r DependencyPathsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.DependencyPaths != nil && cfg.DependencyPaths.Enabled

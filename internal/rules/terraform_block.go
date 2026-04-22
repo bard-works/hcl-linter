@@ -15,7 +15,10 @@ import (
 
 type TerraformBlockRule struct{}
 
-func (r TerraformBlockRule) Name() string { return "terraform_block" }
+func (r TerraformBlockRule) Name() string  { return "terraform_block" }
+func (r TerraformBlockRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(TerraformBlockRule{}) }
 
 func (r TerraformBlockRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.TerraformBlock != nil && cfg.TerraformBlock.Enabled

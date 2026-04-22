@@ -16,7 +16,10 @@ import (
 // Terragrunt's `find_in_parent_folders` and `get_env`.
 type HCLFunctionsRule struct{}
 
-func (r HCLFunctionsRule) Name() string { return "hcl_functions" }
+func (r HCLFunctionsRule) Name() string  { return "hcl_functions" }
+func (r HCLFunctionsRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(HCLFunctionsRule{}) }
 
 func (r HCLFunctionsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.HCLFunctions != nil && cfg.HCLFunctions.Enabled

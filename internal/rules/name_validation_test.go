@@ -173,14 +173,14 @@ func TestNameValidationRuleFix(t *testing.T) {
 	ctx := buildContext(t, content, cfg)
 
 	rule := rules.NameValidationRule{}
-	out, changed, err := rule.Fix(ctx)
+	n, err := rule.Fix(ctx)
 	if err != nil {
 		t.Fatalf("Fix error: %v", err)
 	}
-	if !changed {
+	if n == 0 {
 		t.Fatal("expected Fix to report a change")
 	}
-	got := string(out)
+	got := string(ctx.Content)
 	if got == content {
 		t.Errorf("content unchanged after fix:\n%s", got)
 	}

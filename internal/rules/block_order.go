@@ -12,7 +12,10 @@ import (
 
 type BlockOrderRule struct{}
 
-func (r BlockOrderRule) Name() string { return "block_order" }
+func (r BlockOrderRule) Name() string  { return "block_order" }
+func (r BlockOrderRule) Priority() int { return PriorityStructure }
+
+func init() { Register(BlockOrderRule{}) }
 
 func (r BlockOrderRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.BlockOrder != nil && cfg.BlockOrder.Enabled
@@ -24,12 +27,13 @@ func (r BlockOrderRule) Check(ctx *Context) []diag.Issue {
 	return issues
 }
 
-func (r BlockOrderRule) Fix(ctx *Context) ([]byte, bool, error) {
+func (r BlockOrderRule) Fix(ctx *Context) (int, error) {
 	newContent := FixBlockOrder(string(ctx.Content), ctx.Blocks, ctx.Config.BlockOrder)
 	if newContent == string(ctx.Content) {
-		return ctx.Content, false, nil
+		return 0, nil
 	}
-	return []byte(newContent), true, nil
+	ctx.Content = []byte(newContent)
+	return 1, nil
 }
 
 // FixBlockOrder reorders blocks according to cfg.

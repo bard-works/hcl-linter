@@ -14,7 +14,10 @@ import (
 
 type KeyValueRule struct{}
 
-func (r KeyValueRule) Name() string { return "key_value" }
+func (r KeyValueRule) Name() string  { return "key_value" }
+func (r KeyValueRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(KeyValueRule{}) }
 
 func (r KeyValueRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.KeyValue != nil && cfg.KeyValue.Enabled

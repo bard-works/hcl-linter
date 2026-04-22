@@ -11,7 +11,10 @@ import (
 
 type RequiredFieldsRule struct{}
 
-func (r RequiredFieldsRule) Name() string { return "required_fields" }
+func (r RequiredFieldsRule) Name() string  { return "required_fields" }
+func (r RequiredFieldsRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(RequiredFieldsRule{}) }
 
 func (r RequiredFieldsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.RequiredFields != nil
@@ -23,12 +26,13 @@ func (r RequiredFieldsRule) Check(ctx *Context) []diag.Issue {
 	return issues
 }
 
-func (r RequiredFieldsRule) Fix(ctx *Context) ([]byte, bool, error) {
+func (r RequiredFieldsRule) Fix(ctx *Context) (int, error) {
 	newContent, changed := FixRequiredFields(string(ctx.Content), ctx.Blocks, ctx.Config.RequiredFields)
 	if !changed {
-		return ctx.Content, false, nil
+		return 0, nil
 	}
-	return []byte(newContent), true, nil
+	ctx.Content = []byte(newContent)
+	return 1, nil
 }
 
 // FixRequiredFields adds missing required attributes to blocks.

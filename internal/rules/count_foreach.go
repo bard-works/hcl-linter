@@ -12,7 +12,10 @@ import (
 
 type CountForEachRule struct{}
 
-func (r CountForEachRule) Name() string { return "count_for_each" }
+func (r CountForEachRule) Name() string  { return "count_for_each" }
+func (r CountForEachRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(CountForEachRule{}) }
 
 func (r CountForEachRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.CountForEach != nil && cfg.CountForEach.Enabled

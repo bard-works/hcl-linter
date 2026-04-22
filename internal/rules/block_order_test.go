@@ -165,14 +165,14 @@ func TestBlockOrderRuleFix(t *testing.T) {
 	ctx := buildContext(t, content, cfg)
 
 	rule := rules.BlockOrderRule{}
-	out, changed, err := rule.Fix(ctx)
+	n, err := rule.Fix(ctx)
 	if err != nil {
 		t.Fatalf("Fix failed: %v", err)
 	}
-	if !changed {
+	if n == 0 {
 		t.Fatal("expected Fix to report a change")
 	}
-	got := string(out)
+	got := string(ctx.Content)
 	includePos := strings.Index(got, "include")
 	localsPos := strings.Index(got, "locals")
 	terraformPos := strings.Index(got, "terraform")

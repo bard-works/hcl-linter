@@ -9,7 +9,10 @@ import (
 
 type RequiredBlocksRule struct{}
 
-func (r RequiredBlocksRule) Name() string { return "required_blocks" }
+func (r RequiredBlocksRule) Name() string  { return "required_blocks" }
+func (r RequiredBlocksRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(RequiredBlocksRule{}) }
 
 func (r RequiredBlocksRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.RequiredBlocks != nil && len(cfg.RequiredBlocks.Required) > 0
