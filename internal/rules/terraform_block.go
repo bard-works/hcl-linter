@@ -20,6 +20,27 @@ func (r TerraformBlockRule) Priority() int { return PrioritySemantic }
 
 func init() { Register(TerraformBlockRule{}) }
 
+func (r TerraformBlockRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Validates the terraform block for required source, version format, and deprecated fields.",
+		Severity:    "error",
+		Fixable:     false,
+		ConfigBlock: "terraform_block",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "source_required", Type: "bool", Required: false, Default: "false", Doc: "Require the source attribute"},
+			{Name: "version_format", Type: "bool", Required: false, Default: "false", Doc: "Validate required_version constraint syntax"},
+			{Name: "extra_arguments_valid", Type: "bool", Required: false, Default: "false", Doc: "Validate extra_arguments block structure"},
+			{Name: "no_deprecated_fields", Type: "bool", Required: false, Default: "false", Doc: "Warn on deprecated attributes"},
+		},
+		Example: Example{
+			Violation: `terraform {
+  source = ""
+}`,
+		},
+	}
+}
+
 func (r TerraformBlockRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.TerraformBlock != nil && cfg.TerraformBlock.Enabled
 }

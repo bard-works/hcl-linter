@@ -19,6 +19,21 @@ func (r DependencyPathsRule) Priority() int { return PrioritySemantic }
 
 func init() { Register(DependencyPathsRule{}) }
 
+func (r DependencyPathsRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Validates that config_path on dependency blocks points to an existing directory.",
+		Severity:    "error",
+		Fixable:     false,
+		ConfigBlock: "dependency_paths",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+		},
+		Example: Example{
+			Violation: `dependency "vpc" { config_path = "../does-not-exist" }`,
+		},
+	}
+}
+
 func (r DependencyPathsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.DependencyPaths != nil && cfg.DependencyPaths.Enabled
 }

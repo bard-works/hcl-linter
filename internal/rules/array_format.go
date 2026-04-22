@@ -19,6 +19,27 @@ func (r ArrayFormatRule) Priority() int { return PriorityFormat }
 
 func init() { Register(ArrayFormatRule{}) }
 
+func (r ArrayFormatRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Normalizes inline arrays with 2+ items to multiline format.",
+		Severity:    "warning",
+		Fixable:     true,
+		ConfigBlock: "array_format",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "sort", Type: "bool", Required: false, Default: "false", Doc: "Sort array items alphabetically when reformatting"},
+		},
+		Example: Example{
+			Violation: `deps = ["a", "b", "c"]`,
+			Fixed: `deps = [
+  "a",
+  "b",
+  "c",
+]`,
+		},
+	}
+}
+
 func (r ArrayFormatRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.ArrayFormat != nil && cfg.ArrayFormat.Enabled
 }

@@ -104,7 +104,7 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
-	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd, validateConfigCmd, initCmd, versionCmd)
+	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd, validateConfigCmd, initCmd, newExplainCmd(), versionCmd)
 	return rootCmd
 }
 

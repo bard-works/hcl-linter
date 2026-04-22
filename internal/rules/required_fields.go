@@ -16,6 +16,25 @@ func (r RequiredFieldsRule) Priority() int { return PrioritySemantic }
 
 func init() { Register(RequiredFieldsRule{}) }
 
+func (r RequiredFieldsRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Enforces required attributes on specific block types.",
+		Severity:    "error",
+		Fixable:     true,
+		ConfigBlock: "required_fields",
+		ConfigFields: []ConfigField{
+			{Name: "include.expose", Type: "bool", Required: false, Default: "false", Doc: "Require expose = true on every include block"},
+		},
+		Example: Example{
+			Violation: `include "root" { path = find_in_parent_folders() }`,
+			Fixed: `include "root" {
+  path   = find_in_parent_folders()
+  expose = true
+}`,
+		},
+	}
+}
+
 func (r RequiredFieldsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.RequiredFields != nil
 }

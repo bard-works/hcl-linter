@@ -19,6 +19,21 @@ func (r IncludePathsRule) Priority() int { return PrioritySemantic }
 
 func init() { Register(IncludePathsRule{}) }
 
+func (r IncludePathsRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Validates that path on include blocks resolves to an existing file or directory.",
+		Severity:    "error",
+		Fixable:     false,
+		ConfigBlock: "include_paths",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+		},
+		Example: Example{
+			Violation: `include "root" { path = "../missing/root.hcl" }`,
+		},
+	}
+}
+
 func (r IncludePathsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.IncludePaths != nil && cfg.IncludePaths.Enabled
 }

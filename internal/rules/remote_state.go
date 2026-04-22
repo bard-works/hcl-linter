@@ -18,6 +18,26 @@ func (r RemoteStateRule) Priority() int { return PrioritySemantic }
 
 func init() { Register(RemoteStateRule{}) }
 
+func (r RemoteStateRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Requires backend to be set on remote_state blocks nested inside the terraform block.",
+		Severity:    "error",
+		Fixable:     false,
+		ConfigBlock: "remote_state",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "require_backend", Type: "bool", Required: false, Default: "false", Doc: "Require the backend attribute to be set"},
+		},
+		Example: Example{
+			Violation: `terraform {
+  remote_state {
+    config = {}
+  }
+}`,
+		},
+	}
+}
+
 func (r RemoteStateRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.RemoteState != nil && cfg.RemoteState.Enabled
 }

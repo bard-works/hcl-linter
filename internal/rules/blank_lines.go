@@ -15,6 +15,28 @@ func (r BlankLinesRule) Priority() int { return PriorityFinal }
 
 func init() { Register(BlankLinesRule{}) }
 
+func (r BlankLinesRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Removes excess blank lines within blocks and object attributes (fix-only).",
+		Severity:    "warning",
+		Fixable:     true,
+		ConfigBlock: "blank_lines",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "within_blocks", Type: "bool", Required: true, Doc: "Remove blank lines inside block bodies and object attributes"},
+		},
+		Example: Example{
+			Violation: `inputs = {
+  name = "foo"
+
+}`,
+			Fixed: `inputs = {
+  name = "foo"
+}`,
+		},
+	}
+}
+
 func (r BlankLinesRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.BlankLines != nil && cfg.BlankLines.Enabled && cfg.BlankLines.WithinBlocks
 }

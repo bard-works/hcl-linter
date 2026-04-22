@@ -11,8 +11,9 @@
    - [`fix --dry-run` flag](#fix---dry-run-flag)
 6. [`validate-config`](#validate-config-command)
 7. [`init`](#init)
-8. [`version`](#version)
-8. [Target file filtering (`--filter`)](#target-file-filtering---filter)
+8. [`explain`](#explain)
+9. [`version`](#version)
+9. [Target file filtering (`--filter`)](#target-file-filtering---filter)
 9. [Concurrency](#concurrency)
 10. [Coloured output](#coloured-output)
 11. [Environment variables](#environment-variables)
@@ -59,6 +60,12 @@ hcl-linter validate-config /path/to/.hcl-linter
 # Bootstrap a .hcl-linter/ directory for the project
 hcl-linter init
 hcl-linter init ./my-project --dry-run
+
+# List all rules with severity and summary
+hcl-linter explain
+
+# Show full documentation for one rule
+hcl-linter explain block_order
 ```
 
 **Note:** Files without a matching config (e.g. `something-special.hcl`
@@ -194,6 +201,48 @@ groups them by unique basename, then writes:
 The generated layout is designed to pass `validate-config` unchanged - run
 `hcl-linter validate-config` and `hcl-linter fix ./ --dry-run` as suggested
 next steps.
+
+## `explain`
+
+Prints documentation for lint rules.
+
+```bash
+hcl-linter explain               # table of all rules: name, severity, fixable, summary
+hcl-linter explain block_order   # full detail: config fields, example violation/fix
+hcl-linter explain bogus         # exits 1, prints "unknown rule ..."
+```
+
+**No-arg output** — one row per rule, aligned with `tabwriter`:
+
+```
+RULE                   SEVERITY  FIXABLE  SUMMARY
+array_format           warning   yes      Normalizes inline arrays with 2+ items to multiline
+block_order            error     yes      Ensures top-level blocks appear in configured order
+...
+```
+
+**Single-rule output** — summary, all config fields, and example snippet:
+
+```
+block_order  [error, fixable]
+
+  Ensures top-level blocks appear in the configured order.
+
+  Config (rules { block_order { ... } }):
+    enabled        bool       required  Activate the rule
+    order          []string   required  Block types in desired sequence
+    ...
+
+  Example violation:
+    terraform {}
+    include "root" {}
+
+  After fix:
+    include "root" {}
+    terraform {}
+```
+
+Rule name matching is exact — no fuzzy search.
 
 ## `version`
 

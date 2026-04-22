@@ -15,6 +15,23 @@ func (r DuplicatesRule) Priority() int { return PrioritySemantic }
 
 func init() { Register(DuplicatesRule{}) }
 
+func (r DuplicatesRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Detects duplicate block definitions with the same type and label.",
+		Severity:    "error",
+		Fixable:     false,
+		ConfigBlock: "duplicates",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "blocks", Type: "[]string", Required: false, Default: "[]", Doc: "Block types to check; empty = all block types"},
+		},
+		Example: Example{
+			Violation: `dependency "vpc" { config_path = "../vpc" }
+dependency "vpc" { config_path = "../other-vpc" }`,
+		},
+	}
+}
+
 func (r DuplicatesRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.Duplicates != nil && cfg.Duplicates.Enabled
 }

@@ -21,6 +21,23 @@ func (r HCLFunctionsRule) Priority() int { return PrioritySemantic }
 
 func init() { Register(HCLFunctionsRule{}) }
 
+func (r HCLFunctionsRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Validates common Terragrunt HCL function calls (find_in_parent_folders, get_env).",
+		Severity:    "warning",
+		Fixable:     false,
+		ConfigBlock: "hcl_functions",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "find_in_parent_folders_exists", Type: "bool", Required: false, Default: "false", Doc: "Warn when the file argument does not exist in any parent directory"},
+			{Name: "get_env_has_default", Type: "bool", Required: false, Default: "false", Doc: "Warn when get_env() is called without a default value"},
+		},
+		Example: Example{
+			Violation: `locals { env = get_env("MY_VAR") }`,
+		},
+	}
+}
+
 func (r HCLFunctionsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.HCLFunctions != nil && cfg.HCLFunctions.Enabled
 }

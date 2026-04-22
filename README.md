@@ -111,6 +111,10 @@ hcl-linter fix ./ --dry-run
 
 # Bootstrap a .hcl-linter/ config directory for the current project
 hcl-linter init
+
+# List all rules / show full docs for one rule
+hcl-linter explain
+hcl-linter explain block_order
 ```
 
 ## Configuration

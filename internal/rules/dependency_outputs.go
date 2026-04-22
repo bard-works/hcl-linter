@@ -23,6 +23,22 @@ func (r DependencyOutputsRule) Priority() int { return PrioritySemantic }
 
 func init() { Register(DependencyOutputsRule{}) }
 
+func (r DependencyOutputsRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Validates dependency.*.outputs.* references against output blocks in the target module.",
+		Severity:    "error",
+		Fixable:     false,
+		ConfigBlock: "dependency_outputs",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+		},
+		Example: Example{
+			Violation: `dependency "vpc" { config_path = "../vpc" }
+inputs = { cidr = dependency.vpc.outputs.nonexistent }`,
+		},
+	}
+}
+
 func (r DependencyOutputsRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.DependencyOutputs != nil && cfg.DependencyOutputs.Enabled
 }

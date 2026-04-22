@@ -43,17 +43,18 @@ to suppress specific rules on a block or file. Essential for escape hatches
 without changing config. Very common in linters (eslint-disable, golangci
 nolint).
 
-### 18. Rule Statistics / Explain
-
-`hcl-linter explain block_order` prints what the rule checks, what config keys
-it accepts, and an example violation+fix. Helps onboarding new contributors
-and debugging why a rule isn't firing.
-
----
 
 ## Implemented
 
 Original priority numbering preserved for stable reference in history and PRs.
+
+### 18. Rule Statistics / Explain ✅
+
+`hcl-linter explain [rule-name]` prints summary, severity, config fields, and
+example violations. Without an argument it lists all rules in a tabwriter-aligned
+table. Implemented via `Doc() RuleDoc` on the `Rule` interface (compiler-enforced
+for all 15 rules); `cmd/hcl-linter/explain.go` handles rendering with `termcolor`
+and `text/tabwriter`.
 
 ### 21. Unified Rule System ✅
 

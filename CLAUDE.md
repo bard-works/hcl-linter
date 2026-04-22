@@ -66,10 +66,13 @@ Context:         FilePath, Content, File, Blocks, Attrs, Config
 
 When adding or modifying a rule in `internal/rules/`:
 
-- **Register it.** Implement `Rule` (`Name() / Enabled(cfg) / Check(ctx) []Issue`)
-  and add it to `engine.New()` via `reg.Register(...)`. A rule that isn't
+- **Register it.** Implement `Rule` (`Name() / Priority() / Enabled(cfg) / Check(ctx) []Issue / Doc() RuleDoc`)
+  and call `Register(FooRule{})` from an `init()` function in the rule file. A rule that isn't
   registered is dead code. Implement `Fixer` only when the issue is
   auto-fixable - most rules are `Check`-only.
+- **Document it.** Every rule must implement `Doc() RuleDoc` with a non-empty `Summary`,
+  `Severity`, and `ConfigBlock`. Include at least one `ConfigField` entry and an `Example.Violation`
+  where meaningful. `hcl-linter explain` surfaces this data directly.
 - **Use `internal/ast` helpers, not `hcl/v2` directly.** Reach for
   `ast.GetTopLevelBlocks`, `ast.GetBlockAttributes`,
   `ast.GetBlockNestedBlocks`. Rules should not walk `hclsyntax.Body` by hand
@@ -87,8 +90,8 @@ When adding or modifying a rule in `internal/rules/`:
 - **Severity constants.** Emit `diag.SeverityError` or `diag.SeverityWarning`
   - never raw strings.
 - **Check is read-only; Fix mutates.** `Check(ctx) []diag.Issue` must not
-  touch `ctx.Content`. `Fix(ctx) ([]byte, bool, error)` returns the new bytes,
-  a `changed` bool (false = no-op, return original content), and an error.
+  touch `ctx.Content`. `Fix(ctx) (int, error)` mutates `ctx.Content` in place and returns the
+  number of edits made (0 = no-op) and an error.
 - **Every rule has a matching `_test.go`.** For every
   `internal/rules/<rule>.go`, there must be an `internal/rules/<rule>_test.go`
   that exercises `Check` (and `Fix`, if present). A test living in another
