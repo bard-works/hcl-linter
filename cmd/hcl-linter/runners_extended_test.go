@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -313,7 +313,7 @@ func TestPrintFixResultWithError(t *testing.T) {
 
 	result := &engine.FixResult{
 		File:  "/tmp/test.hcl",
-		Error: fmt.Errorf("write failed"),
+		Error: errors.New("write failed"),
 	}
 	n := printFixResult(result)
 	if n != 0 {

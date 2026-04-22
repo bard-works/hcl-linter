@@ -75,7 +75,7 @@ func TestCountForEachRule(t *testing.T) {
 		issues := (rules.CountForEachRule{}).Check(ctx)
 		for _, i := range issues {
 			if i.Rule == "count_zero" {
-				t.Errorf("unexpected count_zero on locals block")
+				t.Error("unexpected count_zero on locals block")
 			}
 		}
 	})
