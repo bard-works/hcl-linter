@@ -246,21 +246,48 @@ Rule name matching is exact - no fuzzy search.
 
 Prints version, build date, and git commit (all injected at build time).
 
-## Target file filtering (`--filter`)
+## Filtering Files
 
-When `--filter` is specified:
+The `--filter` flag uses **glob patterns** with `*` wildcards against filenames (not full paths):
 
-- Filters are matched as glob patterns against the filename (not the full path)
-- Multiple `--filter` flags are combined with OR logic
-- Matching files are printed before processing
-- Non-matching files are silently skipped
+```bash
+# Match all .hcl files
+hcl-linter lint ./ --filter "*.hcl"
 
+# Match multiple patterns (OR logic)
+hcl-linter lint ./ --filter "*.hcl" --filter "*.tf"
+
+# Exact filename match
+hcl-linter lint ./ --filter "terragrunt.hcl"
+
+# Prefix/suffix patterns
+hcl-linter lint ./ --filter "test*.hcl"
 ```
-$ hcl-linter lint ./infra --filter "*.hcl" --filter "*.tf"
-Matched files:
-  ./infra/terragrunt.hcl
-  ./infra/service/main.tf
-  ./infra/shared/vars.hcl
+
+**How it works:**
+- Filters match against `filepath.Base()` (filename only, not full path)
+- `*` is the only wildcard supported (simple prefix/suffix matching around `*`)
+- Multiple `--filter` flags use OR logic
+- Files without a matching config are warned and skipped
+
+### Advanced Filtering with Shell Pre-filtering
+
+For more complex filtering scenarios (recursive patterns, exclusions, etc.), combine hcl-linter with shell commands:
+
+```bash
+# Recursive search with find
+find ./infra -name "*.hcl" -o -name "*.tf" | xargs hcl-linter lint
+
+# Exclude specific files
+for f in *.hcl; do
+  case "$f" in
+    terragrunt.hcl) continue ;;
+    *) hcl-linter lint "$f" ;;
+  esac
+done
+
+# Exclude multiple patterns
+find . -type f \( -name "*.hcl" -o -name "*.tf" \) ! -name "*test*" | xargs hcl-linter lint
 ```
 
 ## Concurrency
