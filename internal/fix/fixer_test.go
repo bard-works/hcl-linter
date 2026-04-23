@@ -278,11 +278,12 @@ func TestFixRequiredFields(t *testing.T) {
 }
 
 func TestFixFileNoConfig(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
-	loader := config.NewLoader(tmpDir)
+	configDir := createFixTestConfigDir(t)
+	loader := config.NewLoader(configDir)
 	fixer := NewFixer(loader)
 
-	file := createHCLFile(t, tmpDir, "noconfig.hcl", "locals {}")
+	srcDir := t.TempDir()
+	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
 
 	_, err := fixer.FixFile(file)
 	if err == nil {
@@ -982,5 +983,219 @@ inputs = {}
 	terraformCount := strings.Count(result.Content, "terraform {")
 	if terraformCount != 1 {
 		t.Errorf("expected 1 terraform block, got %d", terraformCount)
+	}
+}
+
+func TestFixTerraformRealisticBlocks(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			},
+			"block_order": {
+				"enabled": true,
+				"order": ["include", "locals", "terraform", "inputs"]
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `locals {}
+
+include "root" {
+  path = find_in_parent_folders()
+}
+
+terraform {
+
+  source = "../../../modules/ecs-service"
+
+  before_hook "validate" {
+
+    commands = ["validate", "plan"]
+
+  }
+
+  after_hook "apply" {
+
+    commands = ["apply"]
+
+  }
+
+}
+
+inputs = {
+
+  environment = "production"
+
+}
+`
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes == 0 {
+		t.Error("expected changes for blank lines")
+	}
+
+	terraformCount := strings.Count(result.Content, "terraform {")
+	if terraformCount != 1 {
+		t.Errorf("expected 1 terraform block, got %d", terraformCount)
+	}
+
+	if !strings.Contains(result.Content, "before_hook") {
+		t.Error("expected before_hook to be preserved")
+	}
+
+	if !strings.Contains(result.Content, "after_hook") {
+		t.Error("expected after_hook to be preserved")
+	}
+
+	if strings.Contains(result.Content, "source = \"../../../modules/ecs-service\"\n\n\n") {
+		t.Error("multiple blank lines should be reduced to one")
+	}
+}
+
+func TestFixTerraformWithRemoteState(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `terraform {
+
+  source = "../../../modules/ec2"
+
+  remote_state {
+
+    backend = "s3"
+
+    config = {
+
+      bucket = "my-terraform-state"
+
+      key    = "ec2/terraform.tfstate"
+
+      region = "us-east-1"
+
+    }
+
+  }
+
+}
+`
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes == 0 {
+		t.Error("expected changes for blank lines")
+	}
+
+	if !strings.Contains(result.Content, "remote_state") {
+		t.Error("expected remote_state to be preserved")
+	}
+
+	if !strings.Contains(result.Content, "backend = \"s3\"") {
+		t.Error("expected backend config to be preserved")
+	}
+
+	if !strings.Contains(result.Content, "bucket = \"my-terraform-state\"") {
+		t.Error("expected bucket config to be preserved")
+	}
+}
+
+func TestFixTerraformPreservesAllAttributes(t *testing.T) {
+	tmpDir := createFixTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"blank_lines": {
+				"enabled": true,
+				"within_blocks": true
+			}
+		}
+	}`
+	setupFixTestConfig(t, tmpDir, configContent)
+
+	loader := config.NewLoader(tmpDir)
+	fixer := NewFixer(loader)
+
+	input := `terraform {
+
+  source = "../../../modules/service"
+
+  before_hook "before_validate" {
+
+    commands = ["validate"]
+
+  }
+
+  before_hook "before_plan" {
+
+    commands = ["plan"]
+
+  }
+
+  after_hook "after_apply" {
+
+    commands = ["apply", "-auto-approve"]
+
+  }
+
+  terraform {
+    extra_arguments "common" {
+      commands = ["plan", "apply"]
+    }
+  }
+
+}
+`
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := fixer.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	requiredContent := []string{
+		"terraform {",
+		"source = \"../../../modules/service\"",
+		`before_hook "before_validate"`,
+		`before_hook "before_plan"`,
+		`after_hook "after_apply"`,
+		`extra_arguments "common"`,
+		`terraform {`,
+	}
+
+	for _, content := range requiredContent {
+		if !strings.Contains(result.Content, content) {
+			t.Errorf("expected content to contain %q", content)
+		}
 	}
 }

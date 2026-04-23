@@ -229,3 +229,205 @@ func TestConfigSourceString(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadTerragruntConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.json")
+	configContent := `{
+		"rules": {
+			"terragrunt": {
+				"enabled": true,
+				"dependency_path_exists": true,
+				"include_path_exists": true,
+				"remote_state_config": true
+			}
+		}
+	}`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.Terragrunt == nil {
+		t.Fatal("Terragrunt should not be nil")
+	}
+	if !rules.Terragrunt.Enabled {
+		t.Error("Terragrunt.Enabled should be true")
+	}
+	if !rules.Terragrunt.DependencyPathExists {
+		t.Error("Terragrunt.DependencyPathExists should be true")
+	}
+	if !rules.Terragrunt.IncludePathExists {
+		t.Error("Terragrunt.IncludePathExists should be true")
+	}
+	if !rules.Terragrunt.RemoteStateConfig {
+		t.Error("Terragrunt.RemoteStateConfig should be true")
+	}
+}
+
+func TestLoadTerragruntFunctionsConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.json")
+	configContent := `{
+		"rules": {
+			"terragrunt_functions": {
+				"enabled": true,
+				"find_in_parent_folders_exists": true,
+				"get_env_has_default": true
+			}
+		}
+	}`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.TerragruntFunctions == nil {
+		t.Fatal("TerragruntFunctions should not be nil")
+	}
+	if !rules.TerragruntFunctions.Enabled {
+		t.Error("TerragruntFunctions.Enabled should be true")
+	}
+	if !rules.TerragruntFunctions.FindInParentFoldersExists {
+		t.Error("TerragruntFunctions.FindInParentFoldersExists should be true")
+	}
+	if !rules.TerragruntFunctions.GetEnvHasDefault {
+		t.Error("TerragruntFunctions.GetEnvHasDefault should be true")
+	}
+}
+
+func TestLoadTerragruntHCLConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	configContent := `
+rules {
+  terragrunt {
+    enabled = true
+    dependency_path_exists = true
+    include_path_exists = true
+    remote_state_config = false
+  }
+
+  terragrunt_functions {
+    enabled = true
+    find_in_parent_folders_exists = true
+    get_env_has_default = false
+  }
+}
+`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.Terragrunt == nil {
+		t.Fatal("Terragrunt should not be nil")
+	}
+	if !rules.Terragrunt.Enabled {
+		t.Error("Terragrunt.Enabled should be true")
+	}
+	if rules.Terragrunt.RemoteStateConfig {
+		t.Error("Terragrunt.RemoteStateConfig should be false")
+	}
+
+	if rules.TerragruntFunctions == nil {
+		t.Fatal("TerragruntFunctions should not be nil")
+	}
+	if rules.TerragruntFunctions.GetEnvHasDefault {
+		t.Error("TerragruntFunctions.GetEnvHasDefault should be false")
+	}
+}
+
+func TestLoadTerraformBlockConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.json")
+	configContent := `{
+		"rules": {
+			"terraform_block": {
+				"enabled": true,
+				"source_required": true,
+				"version_format": true,
+				"extra_arguments_valid": true,
+				"no_deprecated_fields": true
+			}
+		}
+	}`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.TerraformBlock == nil {
+		t.Fatal("TerraformBlock should not be nil")
+	}
+	if !rules.TerraformBlock.Enabled {
+		t.Error("TerraformBlock.Enabled should be true")
+	}
+	if !rules.TerraformBlock.SourceRequired {
+		t.Error("TerraformBlock.SourceRequired should be true")
+	}
+	if !rules.TerraformBlock.VersionFormat {
+		t.Error("TerraformBlock.VersionFormat should be true")
+	}
+	if !rules.TerraformBlock.ExtraArgumentsValid {
+		t.Error("TerraformBlock.ExtraArgumentsValid should be true")
+	}
+	if !rules.TerraformBlock.NoDeprecatedFields {
+		t.Error("TerraformBlock.NoDeprecatedFields should be true")
+	}
+}
+
+func TestLoadTerraformBlockHCLConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	configContent := `
+rules {
+  terraform_block {
+    enabled = true
+    source_required = true
+    version_format = false
+    extra_arguments_valid = true
+    no_deprecated_fields = false
+  }
+}
+`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	rules, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("LoadForFile failed: %v", err)
+	}
+
+	if rules.TerraformBlock == nil {
+		t.Fatal("TerraformBlock should not be nil")
+	}
+	if !rules.TerraformBlock.Enabled {
+		t.Error("TerraformBlock.Enabled should be true")
+	}
+	if rules.TerraformBlock.VersionFormat {
+		t.Error("TerraformBlock.VersionFormat should be false")
+	}
+}

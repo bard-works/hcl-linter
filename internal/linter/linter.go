@@ -2,6 +2,8 @@ package linter
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -64,6 +66,18 @@ func (l *Linter) LintFile(path string) (*Result, error) {
 
 	if cfg.RequiredBlocks != nil && len(cfg.RequiredBlocks.Required) > 0 {
 		l.checkRequiredBlocks(result, blocks, cfg.RequiredBlocks)
+	}
+
+	if cfg.Terragrunt != nil && cfg.Terragrunt.Enabled {
+		l.checkTerragrunt(result, path, blocks, cfg.Terragrunt)
+	}
+
+	if cfg.TerragruntFunctions != nil && cfg.TerragruntFunctions.Enabled {
+		l.checkTerragruntFunctions(result, path, file, cfg.TerragruntFunctions)
+	}
+
+	if cfg.TerraformBlock != nil && cfg.TerraformBlock.Enabled {
+		l.checkTerraformBlock(result, path, blocks, cfg.TerraformBlock)
 	}
 
 	return result, nil
@@ -348,4 +362,443 @@ func (l *Linter) LintFiles(paths []string, maxConcurrency int) []*Result {
 		allResults = append(allResults, r)
 	}
 	return allResults
+}
+
+func (l *Linter) checkTerragrunt(result *Result, filePath string, blocks []ast.BlockInfo, cfg *config.TerragruntConfig) {
+	if cfg.DependencyPathExists {
+		l.checkDependencyPaths(result, filePath, blocks)
+	}
+	if cfg.IncludePathExists {
+		l.checkIncludePaths(result, filePath, blocks)
+	}
+	if cfg.RemoteStateConfig {
+		l.checkRemoteStateConfig(result, blocks)
+	}
+}
+
+func (l *Linter) checkDependencyPaths(result *Result, filePath string, blocks []ast.BlockInfo) {
+	fileDir := filepath.Dir(filePath)
+
+	for _, block := range blocks {
+		if block.Type != "dependency" {
+			continue
+		}
+
+		attrs := ast.GetBlockAttributes(block.Block.Body)
+		if configPath, ok := attrs["config_path"]; ok {
+			if pathStr := getStringValue(configPath); pathStr != "" {
+				resolvedPath := resolvePath(fileDir, pathStr)
+				if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+					result.Issues = append(result.Issues, Issue{
+						Severity: SeverityError,
+						Rule:     "dependency_path_exists",
+						Message:  fmt.Sprintf("dependency %q: config_path %q does not exist", block.Labels[0], pathStr),
+						Location: configPath.Range(),
+					})
+				}
+			}
+		}
+	}
+}
+
+func (l *Linter) checkIncludePaths(result *Result, filePath string, blocks []ast.BlockInfo) {
+	fileDir := filepath.Dir(filePath)
+
+	for _, block := range blocks {
+		if block.Type != "include" {
+			continue
+		}
+
+		attrs := ast.GetBlockAttributes(block.Block.Body)
+		if path, ok := attrs["path"]; ok {
+			if pathStr := getStringValue(path); pathStr != "" {
+				resolvedPath := resolvePath(fileDir, pathStr)
+				if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+					result.Issues = append(result.Issues, Issue{
+						Severity: SeverityError,
+						Rule:     "include_path_exists",
+						Message:  fmt.Sprintf("include path %q does not exist", pathStr),
+						Location: path.Range(),
+					})
+				}
+			}
+		}
+	}
+}
+
+func (l *Linter) checkRemoteStateConfig(result *Result, blocks []ast.BlockInfo) {
+	for _, block := range blocks {
+		if block.Type != "terraform" {
+			continue
+		}
+
+		nestedBlocks := block.Block.Body.Blocks
+		var hasRemoteState bool
+		var remoteStateBlock *hclsyntax.Block
+
+		for _, nested := range nestedBlocks {
+			if nested.Type == "remote_state" {
+				hasRemoteState = true
+				remoteStateBlock = nested
+				break
+			}
+		}
+
+		if !hasRemoteState {
+			continue
+		}
+
+		attrs := ast.GetBlockAttributes(remoteStateBlock.Body)
+		if backend, ok := attrs["backend"]; ok {
+			backendStr := getStringValue(backend)
+			if backendStr == "" {
+				result.Issues = append(result.Issues, Issue{
+					Severity: SeverityError,
+					Rule:     "remote_state_config",
+					Message:  "remote_state block missing required 'backend' attribute",
+					Location: remoteStateBlock.TypeRange,
+				})
+			}
+		} else {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityError,
+				Rule:     "remote_state_config",
+				Message:  "remote_state block missing required 'backend' attribute",
+				Location: remoteStateBlock.TypeRange,
+			})
+		}
+	}
+}
+
+func getStringValue(expr hcl.Expression) string {
+	val, diags := expr.Value(nil)
+	if diags.HasErrors() {
+		return ""
+	}
+	return val.AsString()
+}
+
+func resolvePath(baseDir, inputPath string) string {
+	if filepath.IsAbs(inputPath) {
+		return inputPath
+	}
+	return filepath.Join(baseDir, inputPath)
+}
+
+func (l *Linter) checkTerragruntFunctions(result *Result, filePath string, file *hcl.File, cfg *config.TerragruntFunctionsConfig) {
+	fileDir := filepath.Dir(filePath)
+
+	if cfg.FindInParentFoldersExists || cfg.GetEnvHasDefault {
+		l.walkAndCheckFunctions(result, fileDir, file, cfg)
+	}
+}
+
+func (l *Linter) walkAndCheckFunctions(result *Result, fileDir string, file *hcl.File, cfg *config.TerragruntFunctionsConfig) {
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return
+	}
+
+	_ = hclsyntax.Walk(body, &functionCheckWalker{
+		result:  result,
+		fileDir: fileDir,
+		cfg:     cfg,
+	})
+}
+
+type functionCheckWalker struct {
+	result  *Result
+	fileDir string
+	cfg     *config.TerragruntFunctionsConfig
+}
+
+func (w *functionCheckWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
+	funcCall, ok := node.(*hclsyntax.FunctionCallExpr)
+	if !ok {
+		return nil
+	}
+
+	switch funcCall.Name {
+	case "find_in_parent_folders":
+		if w.cfg.FindInParentFoldersExists {
+			checkFindInParentFolders(w.result, w.fileDir, funcCall)
+		}
+	case "get_env":
+		if w.cfg.GetEnvHasDefault {
+			checkGetEnvHasDefault(w.result, funcCall)
+		}
+	}
+
+	return nil
+}
+
+func (w *functionCheckWalker) Exit(_ hclsyntax.Node) hcl.Diagnostics {
+	return nil
+}
+
+func checkFindInParentFolders(result *Result, fileDir string, funcCall *hclsyntax.FunctionCallExpr) {
+	if len(funcCall.Args) == 0 {
+		defaultFile := "terragrunt.hcl"
+		path := findInParent(fileDir, defaultFile)
+		if path == "" {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityError,
+				Rule:     "find_in_parent_folders_exists",
+				Message:  "find_in_parent_folders() could not find terragrunt.hcl in parent directories",
+				Location: funcCall.Range(),
+			})
+		}
+		return
+	}
+
+	firstArg := funcCall.Args[0]
+	filename := getStringValue(firstArg)
+	if filename == "" {
+		return
+	}
+
+	path := findInParent(fileDir, filename)
+	if path == "" {
+		result.Issues = append(result.Issues, Issue{
+			Severity: SeverityError,
+			Rule:     "find_in_parent_folders_exists",
+			Message:  fmt.Sprintf("find_in_parent_folders(%q) could not find file in parent directories", filename),
+			Location: funcCall.Range(),
+		})
+	}
+}
+
+func checkGetEnvHasDefault(result *Result, funcCall *hclsyntax.FunctionCallExpr) {
+	if len(funcCall.Args) < 2 {
+		result.Issues = append(result.Issues, Issue{
+			Severity: SeverityWarning,
+			Rule:     "get_env_has_default",
+			Message:  "get_env() should have a default value as second argument",
+			Location: funcCall.Range(),
+		})
+	}
+}
+
+func findInParent(dir, filename string) string {
+	current := dir
+	for {
+		testPath := filepath.Join(current, filename)
+		if _, err := os.Stat(testPath); err == nil {
+			return testPath
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	return ""
+}
+
+func (l *Linter) checkTerraformBlock(result *Result, _ string, blocks []ast.BlockInfo, cfg *config.TerraformBlockConfig) {
+	for _, block := range blocks {
+		if block.Type != "terraform" {
+			continue
+		}
+
+		attrs := ast.GetBlockAttributes(block.Block.Body)
+
+		if cfg.SourceRequired {
+			l.checkTerraformSourceRequired(result, attrs, block.Block)
+		}
+
+		if cfg.VersionFormat {
+			l.checkTerraformVersionFormat(result, attrs, block.Block)
+		}
+
+		if cfg.ExtraArgumentsValid {
+			l.checkTerraformExtraArguments(result, block.Block.Body, block.Block)
+		}
+
+		if cfg.NoDeprecatedFields {
+			l.checkTerraformDeprecatedFields(result, block.Block.Body, block.Block)
+		}
+	}
+}
+
+func (l *Linter) checkTerraformSourceRequired(result *Result, attrs map[string]hcl.Expression, block *hclsyntax.Block) {
+	if _, ok := attrs["source"]; !ok {
+		result.Issues = append(result.Issues, Issue{
+			Severity: SeverityError,
+			Rule:     "terraform_source_required",
+			Message:  "terraform block must have 'source' attribute",
+			Location: block.TypeRange,
+		})
+	}
+}
+
+func (l *Linter) checkTerraformVersionFormat(result *Result, attrs map[string]hcl.Expression, _ *hclsyntax.Block) {
+	if version, ok := attrs["version"]; ok {
+		versionStr := getStringValue(version)
+		if versionStr != "" && !isValidTerraformVersion(versionStr) {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityWarning,
+				Rule:     "terraform_version_format",
+				Message:  fmt.Sprintf("terraform version %q may not match expected format (e.g., >= 1.0.0)", versionStr),
+				Location: version.Range(),
+			})
+		}
+	}
+
+	if requiredVersion, ok := attrs["required_version"]; ok {
+		versionStr := getStringValue(requiredVersion)
+		if versionStr != "" && !isValidTerraformVersionConstraint(versionStr) {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityWarning,
+				Rule:     "terraform_version_format",
+				Message:  fmt.Sprintf("terraform required_version %q may not match expected format (e.g., >= 1.0.0, < 2.0.0)", versionStr),
+				Location: requiredVersion.Range(),
+			})
+		}
+	}
+}
+
+var (
+	terraformVersionRegex    = regexp.MustCompile(`^v?\d+\.\d+(\.\d+)?$`)
+	terraformConstraintRegex = regexp.MustCompile(`^(>=|<=|>|<|~>|!=|==)?\s*v?\d+\.\d+(\.\d+)?`)
+)
+
+func isValidTerraformVersion(version string) bool {
+	return terraformVersionRegex.MatchString(version)
+}
+
+func isValidTerraformVersionConstraint(constraint string) bool {
+	parts := strings.Split(constraint, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if !terraformConstraintRegex.MatchString(part) {
+			return false
+		}
+	}
+	return true
+}
+
+func (l *Linter) checkTerraformExtraArguments(result *Result, body hcl.Body, _ *hclsyntax.Block) {
+	// Try both with and without label schema
+	var extraArgsBlocks []*hcl.Block
+
+	schemaWithLabel := &hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{
+			{Type: "extra_arguments", LabelNames: []string{"name"}},
+		},
+	}
+	content1, _, _ := body.PartialContent(schemaWithLabel)
+	extraArgsBlocks = append(extraArgsBlocks, content1.Blocks...)
+
+	schemaNoLabel := &hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{
+			{Type: "extra_arguments"},
+		},
+	}
+	content2, _, _ := body.PartialContent(schemaNoLabel)
+	extraArgsBlocks = append(extraArgsBlocks, content2.Blocks...)
+
+	// Deduplicate by block type range to avoid processing the same block twice
+	seen := make(map[string]bool)
+	for _, extraBlock := range extraArgsBlocks {
+		rangeKey := extraBlock.TypeRange.String()
+		if seen[rangeKey] {
+			continue
+		}
+		seen[rangeKey] = true
+
+		attrs := ast.GetBlockAttributes(extraBlock.Body)
+
+		// Name can be either the block label or an attribute called "name"
+		hasName := len(extraBlock.Labels) > 0
+		if nameAttr, ok := attrs["name"]; ok {
+			nameStr := getStringValue(nameAttr)
+			if nameStr != "" {
+				hasName = true
+			}
+		}
+		if !hasName {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityWarning,
+				Rule:     "terraform_extra_arguments_valid",
+				Message:  "extra_arguments block should have a non-empty 'name' attribute",
+				Location: extraBlock.TypeRange,
+			})
+		}
+
+		_, hasArguments := attrs["arguments"]
+		var hasNestedBlocks bool
+		if sibBody, ok := extraBlock.Body.(*hclsyntax.Body); ok {
+			hasNestedBlocks = len(sibBody.Blocks) > 0
+		}
+
+		if !hasArguments && !hasNestedBlocks {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityWarning,
+				Rule:     "terraform_extra_arguments_valid",
+				Message:  "extra_arguments block should have 'arguments' or nested blocks",
+				Location: extraBlock.TypeRange,
+			})
+		}
+	}
+}
+
+var terraformDeprecatedFields = map[string]string{
+	"terraform":   "Use 'source' instead",
+	"before_hook": "Use 'before_hooks' (plural) instead",
+	"after_hook":  "Use 'after_hooks' (plural) instead",
+}
+
+func (l *Linter) checkTerraformDeprecatedFields(result *Result, body hcl.Body, _ *hclsyntax.Block) {
+	attrs, _ := body.JustAttributes()
+	for name := range attrs {
+		if msg, ok := terraformDeprecatedFields[name]; ok {
+			result.Issues = append(result.Issues, Issue{
+				Severity: SeverityWarning,
+				Rule:     "terraform_deprecated_fields",
+				Message:  fmt.Sprintf("field %q is deprecated: %s", name, msg),
+				Location: attrs[name].Expr.Range(),
+			})
+		}
+	}
+
+	nestedBlocks := ast.GetBlockNestedBlocks(body, "before_hook")
+	for _, nestedBlock := range nestedBlocks {
+		result.Issues = append(result.Issues, Issue{
+			Severity: SeverityWarning,
+			Rule:     "terraform_deprecated_fields",
+			Message:  "block 'before_hook' is deprecated: use 'before_hooks' (plural) instead",
+			Location: nestedBlock.TypeRange,
+		})
+	}
+
+	nestedBlocks = ast.GetBlockNestedBlocks(body, "after_hook")
+	for _, nestedBlock := range nestedBlocks {
+		result.Issues = append(result.Issues, Issue{
+			Severity: SeverityWarning,
+			Rule:     "terraform_deprecated_fields",
+			Message:  "block 'after_hook' is deprecated: use 'after_hooks' (plural) instead",
+			Location: nestedBlock.TypeRange,
+		})
+	}
+
+	if _, ok := attrs["terraform"]; ok {
+		result.Issues = append(result.Issues, Issue{
+			Severity: SeverityWarning,
+			Rule:     "terraform_deprecated_fields",
+			Message:  "field 'terraform' is deprecated: Use 'source' instead",
+			Location: attrs["terraform"].Expr.Range(),
+		})
+	}
+
+	nestedTerraformBlocks := ast.GetBlockNestedBlocks(body, "terraform")
+	for _, nestedBlock := range nestedTerraformBlocks {
+		result.Issues = append(result.Issues, Issue{
+			Severity: SeverityWarning,
+			Rule:     "terraform_deprecated_fields",
+			Message:  "block 'terraform' is deprecated: Use 'source' instead",
+			Location: nestedBlock.TypeRange,
+		})
+	}
 }

@@ -84,13 +84,38 @@ func GetBlockBodyAttributes(body hcl.Body) (map[string]hcl.Expression, error) {
 }
 
 func GetBlockNestedBlocks(body hcl.Body, blockType string) []*hcl.Block {
-	schema := &hcl.BodySchema{
+	var blocks []*hcl.Block
+	seen := make(map[string]bool)
+
+	schemaWithLabel := &hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{
+			{Type: blockType, LabelNames: []string{"name"}},
+		},
+	}
+	content1, _, _ := body.PartialContent(schemaWithLabel)
+	for _, b := range content1.Blocks {
+		key := b.TypeRange.String()
+		if !seen[key] {
+			seen[key] = true
+			blocks = append(blocks, b)
+		}
+	}
+
+	schemaNoLabel := &hcl.BodySchema{
 		Blocks: []hcl.BlockHeaderSchema{
 			{Type: blockType},
 		},
 	}
-	content, _, _ := body.PartialContent(schema)
-	return content.Blocks
+	content2, _, _ := body.PartialContent(schemaNoLabel)
+	for _, b := range content2.Blocks {
+		key := b.TypeRange.String()
+		if !seen[key] {
+			seen[key] = true
+			blocks = append(blocks, b)
+		}
+	}
+
+	return blocks
 }
 
 type AttributeInfo struct {

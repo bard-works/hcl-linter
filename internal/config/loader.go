@@ -9,6 +9,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
 type ConfigSource int
@@ -56,14 +59,17 @@ type BlankLinesConfig struct {
 }
 
 type Rules struct {
-	BlockOrder     *BlockOrderConfig     `json:"block_order,omitempty"`
-	ArrayFormat    *ArrayFormatConfig    `json:"array_format,omitempty"`
-	NameValidation *NameValidationConfig `json:"name_validation,omitempty"`
-	Duplicates     *DuplicatesConfig     `json:"duplicates,omitempty"`
-	RequiredFields *RequiredFieldsConfig `json:"required_fields,omitempty"`
-	BlankLines     *BlankLinesConfig     `json:"blank_lines,omitempty"`
-	RequiredBlocks *RequiredBlocksConfig `json:"required_blocks,omitempty"`
-	MaxConcurrency int                   `json:"max_concurrency,omitempty"`
+	BlockOrder          *BlockOrderConfig          `json:"block_order,omitempty"`
+	ArrayFormat         *ArrayFormatConfig         `json:"array_format,omitempty"`
+	NameValidation      *NameValidationConfig      `json:"name_validation,omitempty"`
+	Duplicates          *DuplicatesConfig          `json:"duplicates,omitempty"`
+	RequiredFields      *RequiredFieldsConfig      `json:"required_fields,omitempty"`
+	BlankLines          *BlankLinesConfig          `json:"blank_lines,omitempty"`
+	RequiredBlocks      *RequiredBlocksConfig      `json:"required_blocks,omitempty"`
+	Terragrunt          *TerragruntConfig          `json:"terragrunt,omitempty"`
+	TerragruntFunctions *TerragruntFunctionsConfig `json:"terragrunt_functions,omitempty"`
+	TerraformBlock      *TerraformBlockConfig      `json:"terraform_block,omitempty"`
+	MaxConcurrency      int                        `json:"max_concurrency,omitempty"`
 }
 
 const EnvMaxConcurrency = "HCL_LINTER_MAX_CONCURRENCY"
@@ -119,10 +125,54 @@ type RequiredBlockSpec struct {
 	Error string `json:"error"`
 }
 
+type TerragruntConfig struct {
+	Enabled              bool `json:"enabled"`
+	DependencyPathExists bool `json:"dependency_path_exists"`
+	IncludePathExists    bool `json:"include_path_exists"`
+	RemoteStateConfig    bool `json:"remote_state_config"`
+}
+
+type DependencyBlockSpec struct {
+	Label      string `json:"label"`
+	ConfigPath string `json:"config_path"`
+}
+
+type IncludeBlockSpec struct {
+	Path string `json:"path"`
+}
+
+type RemoteStateBlockSpec struct {
+	Backend string `json:"backend"`
+	Config  map[string]struct {
+		Required bool `json:"required"`
+	}
+}
+
+type TerragruntFunctionsConfig struct {
+	Enabled                   bool `json:"enabled"`
+	FindInParentFoldersExists bool `json:"find_in_parent_folders_exists"`
+	GetEnvHasDefault          bool `json:"get_env_has_default"`
+}
+
+type TerraformBlockConfig struct {
+	Enabled             bool `json:"enabled"`
+	SourceRequired      bool `json:"source_required"`
+	VersionFormat       bool `json:"version_format"`
+	ExtraArgumentsValid bool `json:"extra_arguments_valid"`
+	NoDeprecatedFields  bool `json:"no_deprecated_fields"`
+}
+
+type DeprecatedField struct {
+	Name    string `json:"name"`
+	Block   string `json:"block"`
+	Message string `json:"message"`
+}
+
 func (r *Rules) IsEnabled() bool {
 	return r.BlockOrder != nil || r.ArrayFormat != nil ||
 		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
-		r.BlankLines != nil || r.RequiredBlocks != nil
+		r.BlankLines != nil || r.RequiredBlocks != nil || r.Terragrunt != nil ||
+		r.TerragruntFunctions != nil || r.TerraformBlock != nil
 }
 
 type Loader struct {
@@ -358,7 +408,280 @@ func (l *Loader) loadConfigFile(path string) (*Rules, error) {
 		return &cfg.Rules, nil
 	}
 
+	if strings.HasSuffix(path, ".hcl") {
+		return l.loadHCLConfig(path)
+	}
+
 	return nil, fmt.Errorf("unsupported config format: %s", path)
+}
+
+func (l *Loader) loadHCLConfig(path string) (*Rules, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config %s: %w", path, err)
+	}
+
+	parser := hclparse.NewParser()
+	file, diags := parser.ParseHCL(data, path)
+	if diags.HasErrors() {
+		return nil, fmt.Errorf("failed to parse HCL config %s: %w", path, diags)
+	}
+
+	syntaxBody, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return &Rules{}, nil
+	}
+
+	rules := &Rules{}
+
+	for _, block := range syntaxBody.Blocks {
+		if block.Type != "rules" {
+			continue
+		}
+
+		parseHCLRulesBlock(block.Body, rules)
+	}
+
+	return rules, nil
+}
+
+func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {
+	for _, block := range body.Blocks {
+		switch block.Type {
+		case "block_order":
+			rules.BlockOrder = parseHCLBlockOrder(block.Body)
+		case "array_format":
+			rules.ArrayFormat = parseHCLArrayFormat(block.Body)
+		case "blank_lines":
+			rules.BlankLines = parseHCLBlankLines(block.Body)
+		case "name_validation":
+			rules.NameValidation = parseHCLNameValidation(block.Body)
+		case "duplicates":
+			rules.Duplicates = parseHCLDuplicates(block.Body)
+		case "required_fields":
+			rules.RequiredFields = parseHCLRequiredFields(block.Body)
+		case "required_blocks":
+			rules.RequiredBlocks = parseHCLRequiredBlocks(block.Body)
+		case "terragrunt":
+			rules.Terragrunt = parseHCLTerragrunt(block.Body)
+		case "terragrunt_functions":
+			rules.TerragruntFunctions = parseHCLTerragruntFunctions(block.Body)
+		case "terraform_block":
+			rules.TerraformBlock = parseHCLTerraformBlock(block.Body)
+		}
+	}
+
+	if attr, ok := body.Attributes["max_concurrency"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			f, _ := val.AsBigFloat().Float64()
+			rules.MaxConcurrency = int(f)
+		}
+	}
+}
+
+func parseHCLBlockOrder(body *hclsyntax.Body) *BlockOrderConfig {
+	cfg := &BlockOrderConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["order"]; ok {
+		cfg.Order = hclExprToStringSlice(attr.Expr)
+	}
+	return cfg
+}
+
+func parseHCLArrayFormat(body *hclsyntax.Body) *ArrayFormatConfig {
+	cfg := &ArrayFormatConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["multiline_threshold"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			f, _ := val.AsBigFloat().Float64()
+			cfg.MultilineThreshold = int(f)
+		}
+	}
+	return cfg
+}
+
+func parseHCLBlankLines(body *hclsyntax.Body) *BlankLinesConfig {
+	cfg := &BlankLinesConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["within_blocks"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.WithinBlocks = val.True()
+		}
+	}
+	return cfg
+}
+
+func parseHCLNameValidation(body *hclsyntax.Body) *NameValidationConfig {
+	cfg := &NameValidationConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["pattern"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Pattern = val.AsString()
+		}
+	}
+	if attr, ok := body.Attributes["blocks"]; ok {
+		cfg.Blocks = hclExprToStringSlice(attr.Expr)
+	}
+	return cfg
+}
+
+func parseHCLDuplicates(body *hclsyntax.Body) *DuplicatesConfig {
+	cfg := &DuplicatesConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["blocks"]; ok {
+		cfg.Blocks = hclExprToStringSlice(attr.Expr)
+	}
+	return cfg
+}
+
+func parseHCLRequiredFields(body *hclsyntax.Body) *RequiredFieldsConfig {
+	cfg := &RequiredFieldsConfig{}
+	for _, block := range body.Blocks {
+		if block.Type == "include" {
+			cfg.Include = &IncludeRequired{}
+			if attr, ok := block.Body.Attributes["expose"]; ok {
+				if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+					cfg.Include.Expose = val.True()
+				}
+			}
+		}
+	}
+	return cfg
+}
+
+func parseHCLRequiredBlocks(body *hclsyntax.Body) *RequiredBlocksConfig {
+	cfg := &RequiredBlocksConfig{}
+	for _, block := range body.Blocks {
+		if block.Type != "required" {
+			continue
+		}
+		spec := RequiredBlockSpec{}
+		if attr, ok := block.Body.Attributes["type"]; ok {
+			if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+				spec.Type = val.AsString()
+			}
+		}
+		if attr, ok := block.Body.Attributes["count"]; ok {
+			if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+				spec.Count = val.AsString()
+			}
+		}
+		if attr, ok := block.Body.Attributes["error"]; ok {
+			if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+				spec.Error = val.AsString()
+			}
+		}
+		cfg.Required = append(cfg.Required, spec)
+	}
+	return cfg
+}
+
+func parseHCLTerragruntFunctions(body *hclsyntax.Body) *TerragruntFunctionsConfig {
+	cfg := &TerragruntFunctionsConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["find_in_parent_folders_exists"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.FindInParentFoldersExists = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["get_env_has_default"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.GetEnvHasDefault = val.True()
+		}
+	}
+	return cfg
+}
+
+func parseHCLTerraformBlock(body *hclsyntax.Body) *TerraformBlockConfig {
+	cfg := &TerraformBlockConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["source_required"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.SourceRequired = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["version_format"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.VersionFormat = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["extra_arguments_valid"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.ExtraArgumentsValid = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["no_deprecated_fields"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.NoDeprecatedFields = val.True()
+		}
+	}
+	return cfg
+}
+
+func parseHCLTerragrunt(body *hclsyntax.Body) *TerragruntConfig {
+	cfg := &TerragruntConfig{}
+	if attr, ok := body.Attributes["enabled"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Enabled = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["dependency_path_exists"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.DependencyPathExists = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["include_path_exists"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.IncludePathExists = val.True()
+		}
+	}
+	if attr, ok := body.Attributes["remote_state_config"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.RemoteStateConfig = val.True()
+		}
+	}
+	return cfg
+}
+
+func hclExprToStringSlice(expr hclsyntax.Expression) []string {
+	val, diags := expr.Value(nil)
+	if diags.HasErrors() {
+		return nil
+	}
+	arr := val.AsValueSlice()
+	result := make([]string, 0, len(arr))
+	for _, v := range arr {
+		result = append(result, v.AsString())
+	}
+	return result
 }
 
 func LoadConfigDir(configDir string) (*Loader, error) {

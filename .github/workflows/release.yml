@@ -7,28 +7,45 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: linux-amd64
+            goos: linux
+            goarch: amd64
             ext: ''
           - os: ubuntu-latest
             target: linux-arm64
+            goos: linux
+            goarch: arm64
             ext: ''
           - os: macos-latest
             target: darwin-amd64
+            goos: darwin
+            goarch: amd64
             ext: ''
           - os: macos-latest
             target: darwin-arm64
+            goos: darwin
+            goarch: arm64
             ext: ''
           - os: windows-latest
             target: windows-amd64
+            goos: windows
+            goarch: amd64
             ext: .exe
     steps:
       - name: Checkout
@@ -41,33 +58,57 @@ jobs:
 
       - name: Get version
         id: version
+        shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Build
+        shell: bash
         env:
-          GOOS: ${{ startsWith(matrix.target, 'darwin') && 'darwin' || 'linux' }}
-          GOARCH: ${{ contains(matrix.target, 'arm64') && 'arm64' || 'amd64' }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
         run: |
           mkdir -p dist
-          CGO_ENABLED=0 go build -ldflags "-X main.Version=${{ steps.version.outputs.VERSION }} -X main.BuildDate=$(date -u +"%Y-%m-%dT%H:%M:%SZ") -X main.GitCommit=${{ github.sha }}" -o dist/hcl-linter-${{ matrix.target }}${{ matrix.ext }} ./cmd/hcl-linter
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          go build \
+            -trimpath \
+            -ldflags "-s -w -X main.Version=${{ steps.version.outputs.VERSION }} -X main.BuildDate=${BUILD_DATE} -X main.GitCommit=${{ github.sha }}" \
+            -o "dist/hcl-linter${{ matrix.ext }}" \
+            ./cmd/hcl-linter
 
-      - name: Checksum
+      - name: Package
+        id: package
+        shell: bash
         run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          STAGE="hcl-linter-${VERSION}-${{ matrix.target }}"
+          mkdir -p "dist/${STAGE}"
+          mv "dist/hcl-linter${{ matrix.ext }}" "dist/${STAGE}/"
+          cp LICENSE README.md "dist/${STAGE}/"
           cd dist
-          sha256sum hcl-linter-${{ matrix.target }}${{ matrix.ext }} > hcl-linter-${{ matrix.target }}${{ matrix.ext }}.sha256
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            ARCHIVE="${STAGE}.zip"
+            7z a "${ARCHIVE}" "${STAGE}" > /dev/null
+          else
+            ARCHIVE="${STAGE}.tar.gz"
+            tar -czf "${ARCHIVE}" "${STAGE}"
+          fi
+          openssl dgst -sha256 -r "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          rm -rf "${STAGE}"
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: dist/${{ steps.package.outputs.archive }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: hcl-linter-${{ matrix.target }}${{ matrix.ext }}
-          path: dist/hcl-linter-${{ matrix.target }}${{ matrix.ext }}
-          retention-days: 5
-
-      - name: Upload checksum
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: hcl-linter-${{ matrix.target }}${{ matrix.ext }}.sha256
-          path: dist/hcl-linter-${{ matrix.target }}${{ matrix.ext }}.sha256
+          name: hcl-linter-${{ matrix.target }}
+          path: |
+            dist/${{ steps.package.outputs.archive }}
+            dist/${{ steps.package.outputs.archive }}.sha256
           retention-days: 5
 
   source:
@@ -79,61 +120,58 @@ jobs:
 
       - name: Get version
         id: version
+        shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Create source archive
+        id: archive
         run: |
-          git archive --format=tar.gz --prefix="hcl-linter-${{ steps.version.outputs.VERSION }}/" -o "dist/hcl-linter-${{ steps.version.outputs.VERSION }}-source.tar.gz" HEAD
+          mkdir -p dist
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          ARCHIVE="hcl-linter-${VERSION}-source.tar.gz"
+          git archive --format=tar.gz --prefix="hcl-linter-${VERSION}/" -o "dist/${ARCHIVE}" HEAD
+          (cd dist && openssl dgst -sha256 -r "${ARCHIVE}" > "${ARCHIVE}.sha256")
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest source provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: dist/${{ steps.archive.outputs.archive }}
 
       - name: Upload source
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: source
-          path: dist/hcl-linter-${{ steps.version.outputs.VERSION }}-source.tar.gz
+          path: |
+            dist/${{ steps.archive.outputs.archive }}
+            dist/${{ steps.archive.outputs.archive }}.sha256
           retention-days: 5
 
   release:
     name: Create Release
     needs: [build, source]
     runs-on: ubuntu-latest
-    outputs:
-      upload-url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
       - name: Download all artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: dist
+          merge-multiple: true
 
       - name: Get version
         id: version
+        shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Prepare artifacts
-        run: |
-          cd dist
-          # Rename artifacts to remove artifact suffixes
-          for dir in */; do
-            if [ -d "$dir" ]; then
-              mv "$dir"* . 2>/dev/null || true
-            fi
-          done
-          # Remove empty directories
-          rm -rf */
-          ls -la
-
       - name: Create Release
-        id: create_release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: ${{ github.ref_name }}
-          version: ${{ steps.version.outputs.VERSION }}
           name: Release ${{ steps.version.outputs.VERSION }}
           draft: false
           prerelease: false
           generate_release_notes: true
           files: |
-            hcl-linter-*
-            *.sha256
+            dist/hcl-linter-*.tar.gz
+            dist/hcl-linter-*.zip
+            dist/*.sha256

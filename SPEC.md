@@ -4,7 +4,7 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 
 ## Goals
 
-- Enforce block ordering, formatting, naming, required fields, blank lines, and required blocks
+- Enforce block ordering, formatting, naming, required fields, blank lines, required blocks, and Terragrunt-specific validations
 - Configurable rules per filename pattern (terragrunt.hcl, root.hcl, service.hcl)
 - Auto-fix capability for formatable issues
 - Extensible config system with user-defined configurations
@@ -26,13 +26,13 @@ Configuration files in `.hcl-linter/` directory, named after the file pattern th
 
 Configs are loaded in the following order (first match wins):
 
-| Priority | Source | Description |
-|----------|--------|-------------|
-| 1 | CLI `--config-source` | Explicit path via flag |
-| 2 | Env `HCL_LINTER_CONFIG_DIR` | Environment variable |
-| 3 | `.hcl-linter/` in cwd | User config in current directory |
-| 4 | `.hcl-linter/` in home | User config in home directory |
-| 5 | Project's `.hcl-linter/` | Built-in defaults (fallback) |
+| Priority | Source                      | Description                      |
+| -------- | --------------------------- | -------------------------------- |
+| 1        | CLI `--config-source`       | Explicit path via flag           |
+| 2        | Env `HCL_LINTER_CONFIG_DIR` | Environment variable             |
+| 3        | `.hcl-linter/` in cwd       | User config in current directory |
+| 4        | `.hcl-linter/` in home      | User config in home directory    |
+| 5        | Project's `.hcl-linter/`    | Built-in defaults (fallback)     |
 
 **Full override**: User config completely replaces project configs - no merging.
 
@@ -79,6 +79,24 @@ If falling back to project defaults (no user config found), a warning is display
           "error": "missing terraform block"
         }
       ]
+    },
+    "terragrunt": {
+      "enabled": true,
+      "dependency_path_exists": true,
+      "include_path_exists": true,
+      "remote_state_config": true
+    },
+    "terragrunt_functions": {
+      "enabled": true,
+      "find_in_parent_folders_exists": true,
+      "get_env_has_default": true
+    },
+    "terraform_block": {
+      "enabled": true,
+      "source_required": true,
+      "version_format": true,
+      "extra_arguments_valid": true,
+      "no_deprecated_fields": true
     }
   }
 }
@@ -91,10 +109,12 @@ If falling back to project defaults (no user config found), a warning is display
 **Purpose:** Enforce consistent ordering of top-level blocks.
 
 **Behavior:**
+
 - Order of listed blocks is enforced
 - Unlisted blocks (e.g., `outputs`, custom blocks) are placed after the last listed block
 
 **Example violation:**
+
 ```hcl
 # Wrong order
 locals {}
@@ -112,8 +132,10 @@ terraform {}
 **Purpose:** Normalize array formatting.
 
 **Rules:**
+
 - 1 item: inline `actions = ["a"]`
 - 2+ items: multiline with trailing comma
+
 ```hcl
 actions = [
   "a",
@@ -122,6 +144,7 @@ actions = [
 ```
 
 **Edge cases:**
+
 - Arrays with non-quoted items (e.g., `dependency.x.outputs.y`) are left unchanged
 - Empty arrays remain unchanged
 
@@ -130,6 +153,7 @@ actions = [
 **Purpose:** Clean up blank lines within blocks for consistent formatting.
 
 **Configuration:**
+
 ```json
 {
   "blank_lines": {
@@ -140,6 +164,7 @@ actions = [
 ```
 
 **Behavior:**
+
 - `within_blocks: true` - Cleans blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
 - Removes blank lines at the beginning (after `{`) and end (before `}`) of blocks
 - Reduces consecutive duplicate blank lines to a single blank line
@@ -148,22 +173,23 @@ actions = [
 - Nested blocks (e.g., `before_hook` inside `terraform`) are also cleaned
 
 **Example:**
+
 ```hcl
 # Before
 inputs = {
 
-  repository = "test"
+  name = "test"
 
 
-  tags = "value"
+  options = "none"
 
 }
 
 # After
 inputs = {
-  repository = "test"
+  name = "test"
 
-  tags = "value"
+  options = "none"
 }
 ```
 
@@ -172,16 +198,18 @@ inputs = {
 **Purpose:** Ensure consistent naming conventions.
 
 **Checks:**
+
 - Include/dependency block labels must match regex pattern
 - Default: `^[a-z][a-z0-9_]*$` (no hyphens)
 
 **Example violation:**
+
 ```hcl
 # Wrong
-include "vault-azuread" {}
+include "my-vpc" {}
 
 # Correct
-include "vault_azuread" {}
+include "my_vpc" {}
 ```
 
 ### 5. Duplicate Detection (`duplicates`)
@@ -189,10 +217,12 @@ include "vault_azuread" {}
 **Purpose:** Detect duplicate blocks.
 
 **Checks:**
+
 - Duplicate `dependency` block labels
 - Duplicate `include` block labels
 
 **Example violation:**
+
 ```hcl
 # Duplicate dependencies
 dependency "vpc" {}
@@ -204,6 +234,7 @@ dependency "vpc" {}  # ERROR: duplicate
 **Purpose:** Enforce required attributes per block type.
 
 **Configuration:**
+
 ```json
 {
   "required_fields": {
@@ -215,6 +246,7 @@ dependency "vpc" {}  # ERROR: duplicate
 ```
 
 **Checks:**
+
 - When block exists, required attributes must be present
 - Boolean `true` means attribute must exist with any value
 
@@ -223,6 +255,7 @@ dependency "vpc" {}  # ERROR: duplicate
 **Purpose:** Enforce that certain block types must exist in the file.
 
 **Configuration:**
+
 ```json
 {
   "required_blocks": {
@@ -238,14 +271,17 @@ dependency "vpc" {}  # ERROR: duplicate
 ```
 
 **Supported count values:**
+
 - `once` - Block must appear exactly once
 
 **Checks:**
+
 - Reports error if required block is missing or appears more than once
 - Error message is customizable per block type
 - File-pattern based (applies only to files matching the config)
 
 **Example:**
+
 ```hcl
 # With config requiring terraform block:
 # OK
@@ -254,6 +290,172 @@ terraform {}
 # ERROR: missing terraform block
 include "root" {}
 locals {}
+```
+
+### 8. Terragrunt Validation (`terragrunt`)
+
+**Purpose:** Validate Terragrunt-specific configurations.
+
+**Configuration:**
+
+```json
+{
+  "terragrunt": {
+    "enabled": true,
+    "dependency_path_exists": true,
+    "include_path_exists": true,
+    "remote_state_config": true
+  }
+}
+```
+
+**Checks:**
+
+- `dependency_path_exists` - Validates `dependency.config_path` points to an existing directory
+- `include_path_exists` - Validates `include.path` exists (function calls like `find_in_parent_folders()` are skipped)
+- `remote_state_config` - Validates `terraform.remote_state` has a `backend` attribute
+
+**Example violations:**
+
+```hcl
+# dependency_path_exists violation
+dependency "vpc" {
+  config_path = "../non-existent-vpc"  # ERROR: directory does not exist
+}
+
+# include_path_exists violation
+include "root" {
+  path = "non-existent/parent.hcl"  # ERROR: file does not exist
+}
+
+# remote_state_config violation
+terraform {
+  remote_state {
+    # ERROR: missing required 'backend' attribute
+    config {
+      bucket = "my-bucket"
+    }
+  }
+}
+```
+
+### 9. Terragrunt Functions (`terragrunt_functions`)
+
+**Purpose:** Validate Terragrunt function calls.
+
+**Configuration:**
+
+```json
+{
+  "terragrunt_functions": {
+    "enabled": true,
+    "find_in_parent_folders_exists": true,
+    "get_env_has_default": true
+  }
+}
+```
+
+**Checks:**
+
+- `find_in_parent_folders_exists` - Validates that the file being searched for exists in parent directories
+- `get_env_has_default` - Warns when `get_env()` is called without a default value
+
+**Example violations:**
+
+```hcl
+# find_in_parent_folders_exists violation
+inputs = {
+  config = find_in_parent_folders("missing-file.hcl")  # ERROR: file not found
+}
+
+# get_env_has_default violation
+locals {
+  env = get_env("ENVIRONMENT")  # WARNING: should have default
+}
+
+# Correct usage
+locals {
+  env = get_env("ENVIRONMENT", "dev")
+}
+```
+
+### 10. Terraform Block (`terraform_block`)
+
+**Purpose:** Validate Terragrunt's `terraform` block configuration.
+
+**Configuration:**
+
+```json
+{
+  "terraform_block": {
+    "enabled": true,
+    "source_required": true,
+    "version_format": true,
+    "extra_arguments_valid": true,
+    "no_deprecated_fields": true
+  }
+}
+```
+
+**Checks:**
+
+- `source_required` - Ensures the `terraform` block has a `source` attribute
+- `version_format` - Validates that the `version` attribute matches expected format (e.g., `>= 1.0.0`)
+- `extra_arguments_valid` - Validates that `extra_arguments` blocks have either a `name` attribute/label and contain `arguments` or nested blocks
+- `no_deprecated_fields` - Warns about deprecated block types: `before_hook`, `after_hook` (use plural form), and nested `terraform` (use `source`)
+
+**Example violations:**
+
+```hcl
+# source_required violation
+terraform {
+  # ERROR: missing required 'source' attribute
+}
+
+# version_format violation
+terraform {
+  version = "1.2.3"  # WARNING: may not match expected format
+}
+
+# extra_arguments_valid violations
+terraform {
+  extra_arguments {}  # ERROR: missing name attribute
+
+  extra_arguments "example" {}  # ERROR: missing arguments or nested blocks
+}
+
+# no_deprecated_fields violations
+terraform {
+  before_hook {  # ERROR: use 'before_hooks' instead
+    commands = ["echo hello"]
+  }
+
+  after_hook {  # ERROR: use 'after_hooks' instead
+    commands = ["echo hello"]
+  }
+
+  terraform {  # ERROR: use 'source' instead
+    source = "./module"
+  }
+}
+
+# Correct usage
+terraform {
+  source = "./module"
+  version = ">= 1.0.0"
+
+  before_hooks {
+    commands = ["echo hello"]
+  }
+
+  after_hooks {
+    commands = ["echo hello"]
+  }
+
+  extra_arguments "example" {
+    arguments = ["-var", "foo=bar"]
+  }
+}
 ```
 
 ## CLI
@@ -316,6 +518,7 @@ Higher concurrency speeds up processing of large file sets but uses more memory.
 ### Config File Matching
 
 Config files are matched by filename:
+
 1. Exact match: `terragrunt.hcl` → `configs/terragrunt.json`
 2. Fallback: use `default.json` if exists
 3. No config: file is skipped with a warning
@@ -323,12 +526,14 @@ Config files are matched by filename:
 ### Target File Filtering
 
 When `--filter` is specified:
+
 - Filters are matched as glob patterns against the filename (not full path)
 - Multiple `--filter` flags are combined with OR logic
 - Matching files are printed before processing
 - Non-matching files are silently skipped
 
 Example:
+
 ```
 $ hcl-linter lint ./infra --filter "*.hcl" --filter "*.tf"
 Matched files:
@@ -395,11 +600,13 @@ make install
 ### Versioning
 
 Version is managed via the `VERSION` file:
+
 ```
 0.1.0
 ```
 
 Version info is injected at build time via ldflags:
+
 - `main.Version` - from VERSION file
 - `main.BuildDate` - build timestamp
 - `main.GitCommit` - git SHA
@@ -415,6 +622,7 @@ make release VERSION=0.1.0
 ```
 
 This creates:
+
 - `dist/hcl-linter-darwin-amd64`
 - `dist/hcl-linter-darwin-arm64`
 - `dist/hcl-linter-linux-amd64`

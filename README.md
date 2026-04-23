@@ -79,7 +79,7 @@ Example `default.json`:
 ## CLI Options
 
 ```bash
---config-source, -c   Config source path
+--config-source, -c  Config source path
 --filter             Filter files by name pattern (glob supported)
 --concurrency        Max concurrent workers (default: CPU count)
 --verbose, -v        Show detailed output
@@ -96,4 +96,4 @@ See [SPEC.md](SPEC.md) for complete documentation including all rules and config
 
 ## License
 
-MIT
+Apache 2.0
