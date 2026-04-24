@@ -222,3 +222,28 @@ scalar = "value"
 		}
 	}
 }
+
+func TestGetBodyAttributes(t *testing.T) {
+	p := NewParser()
+	file, _ := p.ParseContent([]byte(`
+terraform {
+  source  = "./m"
+  version = "1.0.0"
+}
+`), "test.hcl")
+
+	body := file.Body.(*hclsyntax.Body)
+	attrs := GetBodyAttributes(body.Blocks[0].Body)
+	if attrs == nil {
+		t.Fatal("expected non-nil map")
+	}
+	if _, ok := attrs["source"]; !ok {
+		t.Error("missing 'source' attribute")
+	}
+	if _, ok := attrs["version"]; !ok {
+		t.Error("missing 'version' attribute")
+	}
+	if _, ok := attrs["nonexistent"]; ok {
+		t.Error("unexpected 'nonexistent' attribute")
+	}
+}

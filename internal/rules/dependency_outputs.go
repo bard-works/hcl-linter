@@ -104,7 +104,7 @@ func depCheckOutputRefs(issues *[]diag.Issue, block ast.BlockInfo, currentFilePa
 }
 
 func depGetPath(body hcl.Body) string {
-	attrs, _ := body.JustAttributes()
+	attrs := ast.GetBodyAttributes(body)
 	if attr, ok := attrs["config_path"]; ok {
 		val, diags := attr.Expr.Value(nil)
 		if !diags.HasErrors() && val.Type() == cty.String {
@@ -184,7 +184,7 @@ func depParseMockOutputs(content []byte) map[string]depMockOutput {
 }
 
 func depCheckInputsOutputRefs(_ *[]diag.Issue, body hcl.Body, outputs map[string]depOutputDef, mockOuts map[string]depMockOutput, depName, depPath string) {
-	attrs, _ := body.JustAttributes()
+	attrs := ast.GetBodyAttributes(body)
 	for _, attr := range attrs {
 		val, diags := attr.Expr.Value(nil)
 		if diags.HasErrors() {

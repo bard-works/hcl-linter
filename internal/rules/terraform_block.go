@@ -185,7 +185,7 @@ var tfDeprecatedFields = map[string]string{
 }
 
 func checkTFDeprecatedFields(issues *[]diag.Issue, body hcl.Body) {
-	attrs, _ := body.JustAttributes()
+	attrs := ast.GetBodyAttributes(body)
 	for name, attr := range attrs {
 		if msg, ok := tfDeprecatedFields[name]; ok {
 			*issues = append(*issues, diag.Issue{
