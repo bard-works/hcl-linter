@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -50,8 +51,8 @@ func (e *ParseError) Error() string {
 	return fmt.Sprintf("parse error in %s: %s", e.File, e.Cause)
 }
 
-func (e *ParseError) Unwrap() string {
-	return e.Cause
+func (e *ParseError) Unwrap() error {
+	return errors.New(e.Cause)
 }
 
 func New(loader *config.Loader, opts ...EngineOption) *Engine {
