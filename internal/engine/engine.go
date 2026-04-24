@@ -42,7 +42,7 @@ func WithRegistry(r *rules.Registry) EngineOption {
 }
 
 type ParseError struct {
-	File string
+	File  string
 	Cause string
 }
 

@@ -112,7 +112,7 @@ func getLoader() (*config.Loader, *config.ConfigResult) {
 	return config.LoadConfigDirWithResult(flagConfigSrc)
 }
 
-func runLint(cmd *cobra.Command, args []string) error {
+func runLint(_ *cobra.Command, args []string) error {
 	path := args[0]
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("path error: %w", err)
@@ -129,7 +129,7 @@ func runLint(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runCheck(cmd *cobra.Command, args []string) error {
+func runCheck(_ *cobra.Command, args []string) error {
 	path := args[0]
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("path error: %w", err)
@@ -149,7 +149,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func loadConfig(path string) (*config.Loader, *config.ConfigResult) {
+func loadConfig(_ string) (*config.Loader, *config.ConfigResult) {
 	loader, configResult := getLoader()
 	if configResult.Source == config.ConfigSourceNone {
 		fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
@@ -210,7 +210,7 @@ func resolveConcurrency() int {
 	return config.GetMaxConcurrency(nil)
 }
 
-func printLintResults(allResults []*diag.Result, checkMode bool) (hasErrors bool) {
+func printLintResults(allResults []*diag.Result, _ bool) (hasErrors bool) {
 	for _, result := range allResults {
 		if flagVerbose || len(result.Issues) > 0 {
 			relPath, err := filepath.Rel(".", result.File)
@@ -241,23 +241,6 @@ func printLintResults(allResults []*diag.Result, checkMode bool) (hasErrors bool
 	return hasErrors
 }
 
-func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
-	path := args[0]
-	loader, _ := loadConfig(path)
-	eng := engine.New(loader)
-	filesToLint := filterFilesByConfig(loader, nil, path)
-
-	maxConcurrency := resolveConcurrency()
-	fmt.Printf("\nChecking %d file(s)...\n", len(filesToLint))
-
-	allResults := eng.LintFiles(filesToLint, maxConcurrency)
-	hasErrors := printLintResults(allResults, false)
-	if hasErrors {
-		os.Exit(1)
-	}
-	return nil
-}
-
 func runFix(cmd *cobra.Command, args []string) error {
 	if flagFormat {
 		return runFormatMode(cmd, args)
@@ -282,8 +265,25 @@ func runFix(cmd *cobra.Command, args []string) error {
 	return finalizeFixRun(totalChanges, wouldChange, flagDryRun)
 }
 
-func run(_ *cobra.Command, args []string, checkMode, fixMode bool) error {
-	return nil
+func runFormatMode(_ *cobra.Command, args []string) error {
+	path := args[0]
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("path error: %w", err)
+	}
+	loader, configResult := loadConfig(path)
+	eng := engine.New(loader)
+	eng.DryRun = flagDryRun
+	files := filterFilesByConfig(loader, configResult, path)
+	if len(files) == 0 {
+		return nil
+	}
+	maxConcurrency := resolveConcurrency()
+	if flagVerbose && len(files) > 1 {
+		fmt.Printf("Formatting %d files with concurrency %d\n", len(files), maxConcurrency)
+	}
+	results := eng.FormatFixFiles(files, maxConcurrency)
+	totalChanges, wouldChange := handleFixResults(results, flagDryRun)
+	return finalizeFixRun(totalChanges, wouldChange, flagDryRun)
 }
 
 func filterFiles(files []string) []string {
@@ -341,104 +341,6 @@ func matchGlob(filename, pattern string) bool {
 		return strings.HasPrefix(filename, prefix)
 	}
 	return filename == pattern
-}
-
-func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
-	eng := engine.New(loader)
-
-	var filesToLint []string
-	for _, file := range files {
-		hasSpecificConfig := loader.HasSpecificConfigForFile(file)
-		if !hasSpecificConfig {
-			relPath, _ := filepath.Rel(".", file)
-			if relPath == "" {
-				relPath = file
-			}
-			if !loader.HasConfigForFile(file) {
-				fmt.Printf("%s No config found for %s, skipping\n", termcolor.Warning("Warning:"), relPath)
-				continue
-			}
-			fmt.Printf("%s No specific config for %s, using defaults\n", termcolor.Warning("Warning:"), relPath)
-		}
-		filesToLint = append(filesToLint, file)
-	}
-
-	maxConcurrency := flagConcurrency
-	if maxConcurrency <= 0 {
-		maxConcurrency = config.GetMaxConcurrency(nil)
-	}
-	if flagVerbose && len(filesToLint) > 1 {
-		fmt.Printf("Linting %d files with concurrency %d\n", len(filesToLint), maxConcurrency)
-	}
-
-	allResults := eng.LintFiles(filesToLint, maxConcurrency)
-
-	hasErrors := false
-	for _, result := range allResults {
-		if flagVerbose || len(result.Issues) > 0 {
-			relPath, err := filepath.Rel(".", result.File)
-			if err != nil {
-				relPath = result.File
-			}
-			fmt.Printf("\n%s:\n", termcolor.Path(relPath))
-			for _, issue := range result.Issues {
-				if issue.Severity == diag.SeverityError {
-					hasErrors = true
-				}
-				printIssue(issue)
-			}
-		}
-	}
-
-	if !flagVerbose && !checkMode {
-		for _, result := range allResults {
-			if len(result.Issues) > 0 {
-				fmt.Println(result.Summary())
-			}
-		}
-	}
-
-	totalIssues := 0
-	for _, r := range allResults {
-		totalIssues += len(r.Issues)
-	}
-
-	if totalIssues > 0 {
-		fmt.Printf("\nTotal: %d issue(s) in %d file(s)\n", totalIssues, len(allResults))
-	} else {
-		fmt.Println(termcolor.Success("All files pass!"))
-	}
-
-	if checkMode && hasErrors {
-		return errors.New("lint check failed")
-	}
-
-	return nil
-}
-
-func runFormatMode(_ *cobra.Command, args []string) error {
-	path := args[0]
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("path error: %w", err)
-	}
-	loader, configResult := loadConfig(path)
-	eng := engine.New(loader)
-	eng.DryRun = flagDryRun
-	files := filterFilesByConfig(loader, configResult, path)
-	if len(files) == 0 {
-		return nil
-	}
-	maxConcurrency := resolveConcurrency()
-	if flagVerbose && len(files) > 1 {
-		fmt.Printf("Formatting %d files with concurrency %d\n", len(files), maxConcurrency)
-	}
-	results := eng.FormatFixFiles(files, maxConcurrency)
-	totalChanges, wouldChange := handleFixResults(results, flagDryRun)
-	return finalizeFixRun(totalChanges, wouldChange, flagDryRun)
-}
-
-func runFixMode(loader *config.Loader, files []string) error {
-	return nil
 }
 
 func runValidateConfig(_ *cobra.Command, args []string) error {

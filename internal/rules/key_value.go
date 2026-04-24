@@ -58,13 +58,11 @@ func (r KeyValueRule) Check(ctx *Context) []diag.Issue {
 	return issues
 }
 
-var (
-	keyCasePatterns = map[string]*regexp.Regexp{
-		"camelcase":  regexp.MustCompile(`^[a-z][a-zA-Z0-9]*$`),
-		"snake_case": regexp.MustCompile(`^[a-z][a-z0-9_]*$`),
-		"kebab-case": regexp.MustCompile(`^[a-z][a-z0-9-]*$`),
-	}
-)
+var keyCasePatterns = map[string]*regexp.Regexp{
+	"camelcase":  regexp.MustCompile(`^[a-z][a-zA-Z0-9]*$`),
+	"snake_case": regexp.MustCompile(`^[a-z][a-z0-9_]*$`),
+	"kebab-case": regexp.MustCompile(`^[a-z][a-z0-9-]*$`),
+}
 
 func init() {
 	for name, re := range keyCasePatterns {
