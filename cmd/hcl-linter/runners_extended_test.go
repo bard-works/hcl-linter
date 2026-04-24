@@ -275,11 +275,9 @@ func TestRunLintMode_CheckModeWithErrors(t *testing.T) {
 	)
 	flagConfigSrc = filepath.Join(root, ".hcl-linter")
 
-	// runLint calls run() with checkMode=false → no error even with issues.
-	// runCheck calls runLintModeWithExitCode which uses os.Exit on errors.
-	// Instead call run() with checkMode=true directly to test the return path.
-	if err := run(nil, []string{root}, true, false); err == nil {
-		t.Error("expected error from run in checkMode with lint errors, got nil")
+	// runCheck returns an error when lint errors are found (check mode)
+	if err := runCheck(nil, []string{root}); err == nil {
+		t.Error("expected error from runCheck with lint errors, got nil")
 	}
 }
 
