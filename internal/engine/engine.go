@@ -41,6 +41,19 @@ func WithRegistry(r *rules.Registry) EngineOption {
 	return func(e *Engine) { e.registry = r }
 }
 
+type ParseError struct {
+	File string
+	Cause string
+}
+
+func (e *ParseError) Error() string {
+	return fmt.Sprintf("parse error in %s: %s", e.File, e.Cause)
+}
+
+func (e *ParseError) Unwrap() string {
+	return e.Cause
+}
+
 func New(loader *config.Loader, opts ...EngineOption) *Engine {
 	e := &Engine{
 		configLoader: loader,
@@ -66,7 +79,7 @@ func (e *Engine) buildContext(path string) (*rules.Context, error) {
 	parser := ast.NewParser()
 	file, diags := parser.ParseFile(path)
 	if diags.HasErrors() {
-		return nil, fmt.Errorf("parse error: %s", diags.Error())
+		return nil, &ParseError{File: path, Cause: diags.Error()}
 	}
 
 	return &rules.Context{
@@ -174,7 +187,7 @@ func (e *Engine) refreshContext(ctx *rules.Context) error {
 	parser := ast.NewParser()
 	file, diags := parser.ParseContent(ctx.Content, ctx.FilePath)
 	if diags.HasErrors() {
-		return fmt.Errorf("parse error after fix: %s", diags.Error())
+		return &ParseError{File: ctx.FilePath, Cause: diags.Error()}
 	}
 	ctx.File = file
 	ctx.Blocks = ast.GetTopLevelBlocks(file)
