@@ -12,6 +12,8 @@ import (
 	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
+const defaultNamePattern = `^[a-z][a-z0-9_]*$`
+
 type NameValidationRule struct{}
 
 func (r NameValidationRule) Name() string  { return "name_validation" }
@@ -86,7 +88,7 @@ func (r NameValidationRule) Fix(ctx *Context) (int, error) {
 func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameValidationConfig) (string, bool) {
 	pattern := cfg.Pattern
 	if pattern == "" {
-		pattern = `^[a-z][a-z0-9_]*$`
+		pattern = defaultNamePattern
 	}
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
