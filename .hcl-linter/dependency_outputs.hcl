@@ -13,4 +13,8 @@ rules {
     enabled            = true
     multiline_threshold = 2
   }
+
+  dependency_outputs {
+    enabled = true
+  }
 }

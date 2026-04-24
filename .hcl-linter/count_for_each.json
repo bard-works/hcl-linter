@@ -3,20 +3,18 @@
     "block_order": {
       "enabled": true,
       "order": [
-        "locals",
-        "include"
+        "locals"
       ]
     },
     "array_format": {
       "enabled": true,
       "multiline_threshold": 2
     },
-    "duplicates": {
+    "count_for_each": {
       "enabled": true,
-      "blocks": [
-        "locals",
-        "include"
-      ]
+      "warn_on_count_zero": true,
+      "warn_on_empty_for_each": true,
+      "warn_on_conflict": true
     }
   }
 }

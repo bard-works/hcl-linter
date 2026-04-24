@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 680 680" role="img">
+  <title>HCL Linter</title>
+  <desc>Circular icon with misaligned slim code bars on the left becoming flush-aligned on the right, split by a bright teal vertical rule.</desc>
+  <defs>
+    <clipPath id="circle-clip">
+      <circle cx="340" cy="340" r="272"/>
+    </clipPath>
+  </defs>
+
+  <circle cx="340" cy="340" r="280" fill="#0d1f1a"/>
+  <circle cx="340" cy="340" r="278" fill="none" stroke="#1aff8c" stroke-width="6" opacity="0.35"/>
+
+  <g clip-path="url(#circle-clip)">
+    <rect x="148" y="198" width="142" height="13" rx="3" fill="#1c4232"/>
+    <rect x="162" y="225" width="108" height="13" rx="3" fill="#1c4232"/>
+    <rect x="140" y="252" width="158" height="13" rx="3" fill="#1c4232"/>
+    <rect x="175" y="279" width="88"  height="13" rx="3" fill="#163528"/>
+    <rect x="152" y="306" width="130" height="13" rx="3" fill="#1c4232"/>
+    <rect x="144" y="333" width="148" height="13" rx="3" fill="#1c4232"/>
+    <rect x="168" y="360" width="78"  height="13" rx="3" fill="#163528"/>
+    <rect x="155" y="387" width="124" height="13" rx="3" fill="#1c4232"/>
+    <rect x="148" y="414" width="140" height="13" rx="3" fill="#1c4232"/>
+    <rect x="160" y="441" width="112" height="13" rx="3" fill="#1c4232"/>
+    <rect x="145" y="468" width="152" height="13" rx="3" fill="#163528"/>
+
+    <rect x="360" y="198" width="142" height="13" rx="3" fill="#2fe8a0"/>
+    <rect x="360" y="225" width="108" height="13" rx="3" fill="#1db872"/>
+    <rect x="360" y="252" width="158" height="13" rx="3" fill="#2fe8a0"/>
+    <rect x="376" y="279" width="88"  height="13" rx="3" fill="#159958"/>
+    <rect x="360" y="306" width="130" height="13" rx="3" fill="#1db872"/>
+    <rect x="360" y="333" width="148" height="13" rx="3" fill="#2fe8a0"/>
+    <rect x="376" y="360" width="78"  height="13" rx="3" fill="#159958"/>
+    <rect x="360" y="387" width="124" height="13" rx="3" fill="#1db872"/>
+    <rect x="360" y="414" width="140" height="13" rx="3" fill="#2fe8a0"/>
+    <rect x="360" y="441" width="112" height="13" rx="3" fill="#1db872"/>
+    <rect x="360" y="468" width="152" height="13" rx="3" fill="#2fe8a0"/>
+  </g>
+
+  <rect x="334" y="158" width="12" height="364" rx="6" fill="#1aff8c"/>
+  <circle cx="340" cy="154" r="8" fill="#1aff8c"/>
+  <circle cx="340" cy="526" r="8" fill="#1aff8c"/>
+</svg>

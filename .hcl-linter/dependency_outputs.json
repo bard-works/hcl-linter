@@ -3,20 +3,15 @@
     "block_order": {
       "enabled": true,
       "order": [
-        "locals",
-        "include"
+        "locals"
       ]
     },
     "array_format": {
       "enabled": true,
       "multiline_threshold": 2
     },
-    "duplicates": {
-      "enabled": true,
-      "blocks": [
-        "locals",
-        "include"
-      ]
+    "dependency_outputs": {
+      "enabled": true
     }
   }
 }

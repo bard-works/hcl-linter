@@ -2,7 +2,9 @@
   "rules": {
     "block_order": {
       "enabled": true,
-      "order": ["locals"]
+      "order": [
+        "locals"
+      ]
     },
     "array_format": {
       "enabled": true,
