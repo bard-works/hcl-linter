@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/bard-works/hcl-linter/internal/engine"
@@ -340,6 +341,9 @@ func TestPrintExplainTable_ColorEnabled(t *testing.T) {
 }
 
 func TestWriteInitFilesWriteError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based tests are not supported on Windows")
+	}
 	tmp := t.TempDir()
 	configDir := filepath.Join(tmp, "cfg")
 	if err := os.MkdirAll(configDir, 0o555); err != nil {
