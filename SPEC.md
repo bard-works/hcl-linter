@@ -97,6 +97,23 @@ If falling back to project defaults (no user config found), a warning is display
       "version_format": true,
       "extra_arguments_valid": true,
       "no_deprecated_fields": true
+    },
+    "key_value": {
+      "enabled": true,
+      "key_case": "snake_case",
+      "value_pattern": {
+        "region": "^us-[a-z]+-[0-9]+$"
+      },
+      "disallowed": ["secret", "password"]
+    },
+    "count_for_each": {
+      "enabled": true,
+      "warn_on_count_zero": true,
+      "warn_on_empty_for_each": true,
+      "warn_on_conflict": true
+    },
+    "dependency_outputs": {
+      "enabled": true
     }
   }
 }
@@ -113,6 +130,23 @@ If falling back to project defaults (no user config found), a warning is display
 - Order of listed blocks is enforced
 - Unlisted blocks (e.g., `outputs`, custom blocks) are placed after the last listed block
 
+**Configuration:**
+
+```json
+{
+  "block_order": {
+    "enabled": true,
+    "order": ["include", "locals", "terraform", "dependency", "inputs"],
+    "nested_order": {
+      "terraform": ["before_hooks", "after_hooks"]
+    }
+  }
+}
+```
+
+- `nested_order` (optional): Map of parent block types to their nested block ordering rules
+- Use dot notation in comments for documentation (e.g., `terraform.before_hooks`)
+
 **Example violation:**
 
 ```hcl
@@ -125,6 +159,38 @@ terraform {}
 include "root" {}
 locals {}
 terraform {}
+```
+
+**Nested block ordering example:**
+
+```hcl
+# Wrong nested order
+terraform {
+  after_hooks {
+    exec {
+      command = "echo after"
+    }
+  }
+  before_hooks {
+    exec {
+      command = "echo before"
+    }
+  }
+}
+
+# Correct nested order
+terraform {
+  before_hooks {
+    exec {
+      command = "echo before"
+    }
+  }
+  after_hooks {
+    exec {
+      command = "echo after"
+    }
+  }
+}
 ```
 
 ### 2. Array Format (`array_format`)
@@ -455,6 +521,166 @@ terraform {
   extra_arguments "example" {
     arguments = ["-var", "foo=bar"]
   }
+```
+
+### 11. Key-Value Validation (`key_value`)
+
+**Purpose:** Enforce attribute naming conventions, validate values against patterns, and blocklist certain keys.
+
+**Configuration:**
+
+```json
+{
+  "key_value": {
+    "enabled": true,
+    "key_case": "snake_case",
+    "value_pattern": {
+      "region": "^us-[a-z]+-[0-9]+$"
+    },
+    "disallowed": ["secret", "password"]
+  }
+}
+```
+
+**Checks:**
+
+- `key_case` - Enforce naming convention: `camelCase`, `snake_case`, or `kebab-case`
+- `value_pattern` - Regex validation for attribute values (e.g., AWS region format)
+- `disallowed` - Blocklist certain attributes that shouldn't exist
+
+**Supported case values:**
+
+- `camelCase` - `^[a-z][a-zA-Z0-9]*$`
+- `snake_case` - `^[a-z][a-z0-9_]*$`
+- `kebab-case` - `^[a-z][a-z0-9-]*$`
+
+**Example violations:**
+
+```hcl
+# key_case violation (snake_case expected)
+locals {
+  myVar = "test"  # ERROR: should be snake_case
+  my-var = "test"  # ERROR: should be snake_case
+}
+
+# value_pattern violation
+locals {
+  region = "invalid"  # WARNING: does not match pattern ^us-[a-z]+-[0-9]+$
+}
+
+# disallowed_keys violation
+locals {
+  secret = "abc"  # ERROR: attribute is not allowed
+  password = "123"  # ERROR: attribute is not allowed
+}
+
+# Correct usage
+locals {
+  my_var = "test"  # snake_case ✓
+  region = "us-east-1"  # matches pattern ✓
+  api_key = "abc"  # allowed key ✓
+}
+```
+
+### 12. Count/ForEach Validation (`count_for_each`)
+
+**Purpose:** Detect potential issues with count and for_each expressions.
+
+**Configuration:**
+
+```json
+{
+  "count_for_each": {
+    "enabled": true,
+    "warn_on_count_zero": true,
+    "warn_on_empty_for_each": true,
+    "warn_on_conflict": true
+  }
+}
+```
+
+**Checks:**
+
+- `warn_on_count_zero` - Detect `count = 0` which means resource won't be created
+- `warn_on_empty_for_each` - Detect empty `for_each = {}` 
+- `warn_on_conflict` - Detect when both `count` and `for_each` are used together (they can't be)
+
+**Example violations:**
+
+```hcl
+# count_zero violation
+resource "aws_instance" "test" {
+  count = 0  # WARNING: resource will not be created
+}
+
+# empty_for_each violation
+resource "aws_instance" "test" {
+  for_each = {}  # WARNING: resource will not be created
+}
+
+# count_for_each_conflict violation
+resource "aws_instance" "test" {
+  count     = 1  # ERROR: cannot use both count and for_each
+  for_each = {}
+}
+```
+
+### 13. Dependency Output Validation (`dependency_outputs`)
+
+**Purpose:** Validate `dependency.*.outputs.*` references by walking the dependency chain.
+
+**Configuration:**
+
+```json
+{
+  "dependency_outputs": {
+    "enabled": true
+  }
+}
+```
+
+**Behavior:**
+
+1. **Dependency resolution**:
+   - Parse `dependency` blocks to get `config_path`
+   - Support relative paths (e.g., `../vpc`, `vpc`)
+   - Skip paths with variables/expressions (shown in verbose mode)
+   - Detect circular dependencies to avoid infinite loops
+
+2. **Output validation**:
+   - Parse `output` blocks from `.tf` files in dependency module
+   - Validate output name exists
+   - Error if output doesn't exist
+
+3. **Mock outputs** (for development):
+   - Support `.mock-outputs.json` in dependency module directory
+   - Format:
+     ```json
+     {
+       "outputs": {
+         "vpc_id": { "value": "vpc-123", "type": "string" }
+       }
+     }
+     ```
+   - Optional - if not present, only validate against `.tf` files
+
+4. **Error handling**:
+   - If output doesn't exist = error
+   - If dependency path doesn't exist = warning (validation skipped)
+   - No terraform/terragrunt execution - purely static analysis
+
+**Example violations:**
+
+```hcl
+# In your terragrunt.hcl
+dependency "vpc" {
+  config_path = "../vpc"
+}
+
+# Reference outputs
+inputs = {
+  vpc_id = dependency.vpc.outputs.vpc_id  # ✓ validated
+  fake   = dependency.vpc.outputs.fake_id  # ✗ not defined in ../vpc/outputs.tf
 }
 ```
 
@@ -550,8 +776,13 @@ internal/
 ├── config/
 │   └── loader.go                # Load configs (multiple sources)
 ├── linter/
-│   ├── linter.go                 # Linting logic
-│   └── result.go                 # Result types
+│   ├── linter.go                 # Main linting logic
+│   ├── result.go                 # Result types
+│   ├── block_order.go            # Block ordering checks
+│   ├── array_format.go            # Array format checks
+│   ├── validation.go              # Name validation, duplicates, required fields/blocks
+│   ├── terragrunt.go               # Terragrunt path and function validation
+│   └── terraform.go               # Terraform block validation
 ├── fix/
 │   └── fixer.go                  # Auto-fix logic
 └── ast/

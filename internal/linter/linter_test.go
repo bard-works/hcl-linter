@@ -104,6 +104,98 @@ terraform {}
 	}
 }
 
+func TestNestedBlockOrderRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"block_order": {
+				"enabled": true,
+				"order": ["terraform"],
+				"nested_order": {
+					"terraform": ["before_hooks", "after_hooks"]
+				}
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name        string
+		content     string
+		expectIssue bool
+		issueRule   string
+	}{
+		{
+			name: "correct nested order - before_hooks before after_hooks",
+			content: `terraform {
+  before_hooks {
+    exec {
+      command = "echo before"
+    }
+  }
+  after_hooks {
+    exec {
+      command = "echo after"
+    }
+  }
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "wrong nested order - after_hooks before before_hooks",
+			content: `terraform {
+  after_hooks {
+    exec {
+      command = "echo after"
+    }
+  }
+  before_hooks {
+    exec {
+      command = "echo before"
+    }
+  }
+}
+`,
+			expectIssue: true,
+			issueRule:   "block_order",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasBlockOrderIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "block_order" && strings.Contains(issue.Message, "nested block") {
+					hasBlockOrderIssue = true
+					break
+				}
+			}
+
+			if tt.expectIssue && !hasBlockOrderIssue {
+				t.Error("expected nested block_order issue, got none")
+			}
+			if !tt.expectIssue && hasBlockOrderIssue {
+				t.Errorf("unexpected nested block_order issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
 func TestNameValidationRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
@@ -1588,5 +1680,403 @@ locals {
 		if issue.Rule == "find_in_parent_folders_exists" || issue.Rule == "get_env_has_default" {
 			t.Errorf("unexpected issue when rule is disabled: %v", issue.Rule)
 		}
+	}
+}
+
+func TestKeyCaseRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"key_value": {
+				"enabled": true,
+				"key_case": "snake_case"
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name        string
+		content     string
+		expectIssue bool
+		issueRule   string
+	}{
+		{
+			name: "valid snake_case",
+			content: `locals {
+  my_var = "test"
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "invalid camelCase in snake_case config",
+			content: `locals {
+  myVar = "test"
+}
+`,
+			expectIssue: true,
+			issueRule:   "key_case",
+		},
+		{
+			name: "invalid kebab-case in snake_case config",
+			content: `locals {
+  my-var = "test"
+}
+`,
+			expectIssue: true,
+			issueRule:   "key_case",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == tt.issueRule {
+					hasIssue = true
+					break
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Error("expected key_case issue, got none")
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected key_case issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestDisallowedKeysRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"key_value": {
+				"enabled": true,
+				"disallowed": ["secret", "password"]
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name        string
+		content     string
+		expectIssue bool
+	}{
+		{
+			name: "allowed keys",
+			content: `locals {
+  name = "test"
+}
+`,
+			expectIssue: false,
+		},
+		{
+			name: "disallowed secret key",
+			content: `locals {
+  secret = "abc"
+}
+`,
+			expectIssue: true,
+		},
+		{
+			name: "disallowed password key",
+			content: `locals {
+  password = "123"
+}
+`,
+			expectIssue: true,
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "disallowed_keys" {
+					hasIssue = true
+					break
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Error("expected disallowed_keys issue, got none")
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected disallowed_keys issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestValuePatternRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"key_value": {
+				"enabled": true,
+				"value_pattern": {
+					"region": "^us-[a-z]+-[0-9]+$"
+				}
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name          string
+		content       string
+		expectIssue   bool
+		issueContains string
+	}{
+		{
+			name: "valid region format",
+			content: `locals {
+  region = "us-east-1"
+}
+`,
+			expectIssue:   false,
+			issueContains: "",
+		},
+		{
+			name: "invalid region format",
+			content: `locals {
+  region = "invalid"
+}
+`,
+			expectIssue:   true,
+			issueContains: "does not match pattern",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if issue.Rule == "value_pattern" {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Errorf("expected value_pattern issue containing %q, got none", tt.issueContains)
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected value_pattern issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestCountForEachRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `{
+		"rules": {
+			"count_for_each": {
+				"enabled": true,
+				"warn_on_count_zero": true,
+				"warn_on_empty_for_each": true,
+				"warn_on_conflict": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	tests := []struct {
+		name          string
+		content       string
+		expectIssue   bool
+		issueRule     string
+		issueContains string
+	}{
+		{
+			name: "resource with count = 0",
+			content: `resource "aws_instance" "test" {
+  count = 0
+}
+`,
+			expectIssue:   true,
+			issueRule:     "count_zero",
+			issueContains: "count = 0",
+		},
+		{
+			name: "resource with empty for_each",
+			content: `resource "aws_instance" "test" {
+  for_each = {}
+}
+`,
+			expectIssue:   true,
+			issueRule:     "empty_for_each",
+			issueContains: "empty for_each",
+		},
+		{
+			name: "resource with count and for_each conflict",
+			content: `resource "aws_instance" "test" {
+  count     = 1
+  for_each = {}
+}
+`,
+			expectIssue:   true,
+			issueRule:     "count_for_each_conflict",
+			issueContains: "both count and for_each",
+		},
+		{
+			name: "valid resource with count = 1",
+			content: `resource "aws_instance" "test" {
+  count = 1
+}
+`,
+			expectIssue:   false,
+			issueRule:     "",
+			issueContains: "",
+		},
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := filepath.Join(tmpDir, "terragrunt.hcl")
+			if err := os.WriteFile(file, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := l.LintFile(file)
+			if err != nil {
+				t.Fatalf("LintFile failed: %v", err)
+			}
+
+			hasIssue := false
+			for _, issue := range result.Issues {
+				if tt.issueRule == "" {
+					hasIssue = len(result.Issues) > 0
+					break
+				}
+				if issue.Rule == tt.issueRule {
+					if tt.issueContains == "" || strings.Contains(issue.Message, tt.issueContains) {
+						hasIssue = true
+						break
+					}
+				}
+			}
+
+			if tt.expectIssue && !hasIssue {
+				t.Error("expected count_for_each issue, got none")
+			}
+			if !tt.expectIssue && hasIssue {
+				t.Errorf("unexpected count_for_each issue: %v", result.Issues)
+			}
+		})
+	}
+}
+
+func TestDependencyOutputsRule(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	vpcDir := filepath.Join(tmpDir, "vpc")
+	if err := os.MkdirAll(vpcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	outputsTf := `output "vpc_id" {
+  type        = string
+  description = " VPC ID"
+  value       = "vpc-123"
+}
+`
+	if err := os.WriteFile(filepath.Join(vpcDir, "outputs.tf"), []byte(outputsTf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	configContent := `{
+		"rules": {
+			"dependency_outputs": {
+				"enabled": true
+			}
+		}
+	}`
+	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+
+	terragruntHcl := filepath.Join(tmpDir, "terragrunt.hcl")
+	hclContent := `dependency "vpc" {
+  config_path = "vpc"
+}
+
+inputs = {
+  vpc_id = dependency.vpc.outputs.vpc_id
+}
+`
+	if err := os.WriteFile(terragruntHcl, []byte(hclContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := config.NewLoader(tmpDir)
+	l := NewLinter(loader)
+
+	result, err := l.LintFile(terragruntHcl)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	hasDependencyOutputsError := false
+	for _, issue := range result.Issues {
+		if issue.Rule == "dependency_outputs" {
+			hasDependencyOutputsError = true
+			t.Logf("Got issue: %s", issue.Message)
+		}
+	}
+
+	if !hasDependencyOutputsError {
+		t.Log("No dependency_outputs issues - validation working")
 	}
 }

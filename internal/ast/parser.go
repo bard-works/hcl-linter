@@ -87,6 +87,37 @@ func GetBlockNestedBlocks(body hcl.Body, blockType string) []*hcl.Block {
 	var blocks []*hcl.Block
 	seen := make(map[string]bool)
 
+	if blockType == "*" {
+		schemaWithLabel := &hcl.BodySchema{
+			Blocks: []hcl.BlockHeaderSchema{
+				{Type: "*", LabelNames: []string{"name"}},
+			},
+		}
+		content1, _, _ := body.PartialContent(schemaWithLabel)
+		for _, b := range content1.Blocks {
+			key := b.TypeRange.String()
+			if !seen[key] {
+				seen[key] = true
+				blocks = append(blocks, b)
+			}
+		}
+
+		schemaNoLabel := &hcl.BodySchema{
+			Blocks: []hcl.BlockHeaderSchema{
+				{Type: "*"},
+			},
+		}
+		content2, _, _ := body.PartialContent(schemaNoLabel)
+		for _, b := range content2.Blocks {
+			key := b.TypeRange.String()
+			if !seen[key] {
+				seen[key] = true
+				blocks = append(blocks, b)
+			}
+		}
+		return blocks
+	}
+
 	schemaWithLabel := &hcl.BodySchema{
 		Blocks: []hcl.BlockHeaderSchema{
 			{Type: blockType, LabelNames: []string{"name"}},

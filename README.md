@@ -7,7 +7,15 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 
 ## Features
 
-- Enforce block ordering, formatting, naming, required fields, blank lines, and required blocks
+- **Block ordering** - Enforce consistent ordering of top-level and nested blocks
+- **Array formatting** - Normalize array formatting (inline vs multiline)
+- **Name validation** - Enforce naming conventions for block labels
+- **Duplicate detection** - Detect duplicate block definitions
+- **Required fields** - Enforce required attributes per block type
+- **Required blocks** - Enforce presence of required block types
+- **Terragrunt validation** - Validate paths, include files, and remote state config
+- **Terragrunt functions** - Validate `find_in_parent_folders()` and `get_env()` calls
+- **Terraform block** - Validate terraform blocks for source, version, and deprecated fields
 - Auto-fix capability for formatable issues
 - Configurable rules per filename pattern
 - Fast processing with configurable concurrency
