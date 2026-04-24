@@ -118,13 +118,13 @@ func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockO
 	outputs := make(map[string]depOutputDef)
 	mockOuts := make(map[string]depMockOutput)
 
-	if _, err := os.Stat(depPath); os.IsNotExist(err) {
+	if _, err := safeStat(depPath); os.IsNotExist(err) {
 		return nil, nil
 	}
 
 	tfFiles, _ := filepath.Glob(filepath.Join(depPath, "*.tf"))
 	for _, tfFile := range tfFiles {
-		content, err := os.ReadFile(tfFile)
+		content, err := safeReadFile(tfFile)
 		if err != nil {
 			continue
 		}
@@ -134,7 +134,7 @@ func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockO
 	}
 
 	mockPath := filepath.Join(depPath, ".mock-outputs.json")
-	if mockContent, err := os.ReadFile(mockPath); err == nil {
+	if mockContent, err := safeReadFile(mockPath); err == nil {
 		parsed := depParseMockOutputs(mockContent)
 		for name, out := range parsed {
 			mockOuts[name] = out
