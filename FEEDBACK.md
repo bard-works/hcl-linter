@@ -6,291 +6,269 @@ This document provides a comprehensive code quality review of the hcl-linter cod
 
 **Review Scope**: ~40 Go source files across cmd, internal/engine, internal/rules, internal/config, internal/diag, internal/ast packages.
 
+**Analysis Date**: 2026-04-24
+
 ---
 
 ## P0 - CRITICAL (High Impact / Security / Correctness)
 
-### Issue 1: Global Mutable Registry State ✅ DONE
-
-**Problem**: The `defaultRegistry` in `internal/rules/registry.go:9` is a package-level global mutable variable. This violates Go best practices and creates several problems:
-- **Thread safety**: No synchronization for concurrent access
-- **Test isolation**: Cannot inject mock registries for unit testing
-- **Composability**: Cannot run multiple engines with different rule sets in the same process
-
-```go
-// internal/rules/registry.go:9
-var defaultRegistry = &Registry{}
-
-// internal/engine/engine.go:41
-registry: rules.DefaultRegistry(),
-```
-
-**Solution Applied**: Added functional options pattern to Engine for dependency injection:
-
-1. Added `EngineOption` type and `WithRegistry` option in `internal/engine/engine.go`
-2. `New(loader, opts...)` now accepts optional functional options
-3. Backward compatible: existing callers work without changes
-
-```go
-type EngineOption func(*Engine)
-
-func WithRegistry(r *rules.Registry) EngineOption {
-    return func(e *Engine) { e.registry = r }
-}
-
-func New(loader *config.Loader, opts ...EngineOption) *Engine {
-    e := &Engine{
-        configLoader: loader,
-        registry:     rules.DefaultRegistry(),
-    }
-    for _, opt := range opts {
-        opt(e)
-    }
-    return e
-}
-```
-
-**Fixed Files**:
-- `internal/engine/engine.go` (lines 38-52) - Added functional options pattern
-
----
-
-### Issue 2: Unsafe Regex Compilation with Panic Risk ✅ DONE
-
-**Problem**: Using `regexp.MustCompile` at package init time creates panics if regex patterns are invalid. While currently at init time, this is unsafe for patterns that might come from configuration:
-
-```go
-// internal/rules/key_value.go:65-69
-pattern = regexp.MustCompile(`^[a-z][a-zA-Z0-9]*$`)
-```
-
-```go
-// internal/rules/terraform_block.go:112-113
-tfVersionRe    = regexp.MustCompile(`^v?\d+\.\d+(\.\d+)?$`)
-tfConstraintRe = regexp.MustCompile(`^(>=|<=|>|<|~>|!=|==)?\s*v?\d+\.\d+(\.\d+)?`)
-```
-
-```go
-// internal/rules/dependency_outputs.go:152
-var depOutputBlockRe = regexp.MustCompile(`^output\s+"(\w+)"`)
-```
-
-**Solution Applied**: Converted all `regexp.MustCompile` to `regexp.Compile` with explicit error handling in `init()` functions. Patterns that come from config (name_validation.go) now use `regexp.Compile` with error handling and return early on failure.
-
-**Fixed Files**:
-- `internal/rules/key_value.go` (lines 61-72) - Pre-compiled patterns in map with init validation
-- `internal/rules/terraform_block.go` (lines 111-122) - init() with error handling
-- `internal/rules/dependency_outputs.go` (lines 152-158) - init() with error handling
-- `internal/rules/name_validation.go` (lines 86-92) - regexp.Compile with graceful fallback
+No P0 issues found. Previous review addressed:
+- Global mutable registry state → ✅ Fixed with functional options pattern
+- Unsafe regex compilation → ✅ Fixed with proper error handling
 
 ---
 
 ## P1 - MAJOR (Code Quality / Maintainability)
 
-### Issue 3: CLI Code Duplication
+### Issue 1: Repeated `body.JustAttributes()` Calls
 
-**Problem**: `runLint` (lines 115-228) and `runLintModeWithExitCode` (lines 127-228) in main.go share ~100 nearly-identical lines. Additionally, `run` function (lines 237-281) duplicates similar path resolution logic.
+**Problem**: The pattern `attrs, _ := body.JustAttributes()` appears 7 times across the codebase. This is verbose and error-prone.
+
+**Locations**:
+- `internal/rules/key_value.go:91` (kvCheckBlockKeyCase)
+- `internal/rules/key_value.go:120` (kvCheckBlockDisallowedKeys)
+- `internal/rules/key_value.go:151` (kvCheckBlockValuePattern)
+- `internal/rules/terraform_block.go:188` (checkTerraformBlock)
+- `internal/rules/dependency_outputs.go:107` (checkDependencyOutputs)
+- `internal/rules/dependency_outputs.go:187` (checkDepOutputBlock)
+- `internal/ast/parser.go:56` (GetBlocks)
+
+**Suggested Fix**: Extract helper function in `internal/ast/parser.go`:
 
 ```go
-// Lines 115-117
-func runLint(cmd *cobra.Command, args []string) error {
-    return run(cmd, args, false, false)
+func GetBodyAttributes(body hcl.Body) map[string]*hcl.Attribute {
+    attrs, _ := body.JustAttributes()
+    return attrs
 }
-
-// Lines 127-228 - ~100 lines reused
-func runLintModeWithExitCode(_ *cobra.Command, args []string) error { ... }
-
-// Lines 237-281 - Similar duplication
-func run(_ *cobra.Command, args []string, checkMode, fixMode bool) error { ... }
 ```
 
-**Solution**: Extract common operations into shared helpers:
-
-```go
-### Issue 3: CLI Code Duplication ✅ DONE
-
-**Problem**: `runLint`, `runLintModeWithExitCode`, and `run` functions shared ~100 nearly-identical lines for path resolution, config loading, and file filtering.
-
-**Solution Applied**: Extracted common operations into shared helper functions:
-
-```go
-func loadConfig(path string) (*config.Loader, *config.ConfigResult)
-func resolveFiles(path string) []string
-func filterFilesByConfig(loader *config.Loader, configResult *config.ConfigResult, path string) []string
-func resolveConcurrency() int
-func printLintResults(allResults []*diag.Result, checkMode bool) bool
-```
-
-Refactored `runLint`, `runCheck`, `runFix`, `runFormatMode` to use these helpers, reducing code duplication from ~100 lines to ~30 lines.
-
-**Fixed Files**:
-- `cmd/hcl-linter/main.go` - Extracted shared helpers and refactored command handlers
-- `cmd/hcl-linter/runners_extended_test.go` - Updated test to use new API
+Then replace all 7 occurrences with `ast.GetBodyAttributes(body)`.
 
 ---
 
-### Issue 4: Missing SeverityInfo Constant ✅ DONE
+### Issue 2: Unused `Attrs` Field in Context
 
-**Problem**: Only two severity levels existed in `internal/diag/result.go`, but the codebase may need additional severities (info, notice).
-
-**Solution Applied**: Added `SeverityInfo` and `SeverityNotice` constants:
+**Problem**: The `Context` struct in `internal/rules/rule.go:17` declares an `Attrs` field that is never used:
 
 ```go
-const (
-    SeverityError   Severity = "error"
-    SeverityWarning Severity = "warning"
-    SeverityInfo    Severity = "info"
-    SeverityNotice  Severity = "notice"
-)
+// internal/rules/rule.go:12-19
+type Context struct {
+    FilePath string
+    Content  []byte
+    File     *hcl.File
+    Blocks   []ast.BlockInfo
+    Attrs    []ast.AttributeInfo  // <-- Never referenced
+    Config   *config.Rules
+}
 ```
 
-**Fixed Files**:
-- `internal/diag/result.go` (lines 20-24)
+**Suggested Fix**: Either:
+1. Remove the field if truly unused, OR
+2. Document its intended purpose and populate it in engine
 
 ---
 
-### Issue 5: Inadequate Error Wrapping ✅ DONE
+### Issue 3: Regex Pattern Recompiled in Fix Function
 
-**Problem**: Errors lacked context when propagated, making debugging difficult. Using `%s` instead of `%w` prevented proper error chain inspection.
-
-**Solution Applied**: Added structured `ParseError` type with file context and proper error interface:
+**Problem**: In `internal/rules/name_validation.go:91`, the regex pattern is recompiled on every Fix call, even though it was already validated in Check:
 
 ```go
-type ParseError struct {
-    File string
-    Cause string
-}
-
-func (e *ParseError) Error() string {
-    return fmt.Sprintf("parse error in %s: %s", e.File, e.Cause)
-}
-
-func (e *ParseError) Unwrap() string {
-    return e.Cause
+// internal/rules/name_validation.go:86-94
+func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameValidationConfig) (string, bool) {
+    pattern := cfg.Pattern
+    if pattern == "" {
+        pattern = `^[a-z][a-z0-9_]*$`
+    }
+    regex, err := regexp.Compile(pattern)  // <-- Recompiled every time
+    if err != nil {
+        return content, false
+    }
+    // ...
 }
 ```
 
-**Fixed Files**:
-- `internal/engine/engine.go` (lines 38-51, 69, 183) - Added ParseError type and updated error returns
+**Suggested Fix**: Compile pattern once in `Check()` and pass compiled regex to `Fix()` via Context, or cache at config load time.
 
 ---
 
 ## P2 - MODERATE (Testing / Observability)
 
-### Issue 6: Incomplete Test Coverage ✅ DONE
+### Issue 4: Misleading Function Name
 
-**Problem**: Several rule files lacked corresponding test files. Per project convention, every rule must have a co-located test file.
-
-**Solution Applied**: Verified all rules have test files. Added comprehensive regex pattern tests for `terraform_block.go`:
+**Problem**: `isLowerLetter()` in `internal/rules/name_validation.go:157-159` accepts both uppercase and lowercase:
 
 ```go
-func TestTerraformVersionValid(t *testing.T)
-func TestTerraformConstraintValid(t *testing.T)
+func isLowerLetter(ch rune) bool {
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')  // <-- Not "lower"
+}
 ```
 
-**Fixed Files**:
-- `internal/rules/terraform_block_test.go` - Added unit tests for `tfVersionValid` and `tfConstraintValid` functions with comprehensive edge case coverage
+The function name suggests it only accepts lowercase, but it accepts A-Z as well.
+
+**Suggested Fix**: Rename to `isValidIdentifierChar` or similar, or fix the implementation.
 
 ---
 
-### Issue 6b: Regex Patterns in Tests Not Covered ✅ DONE
+### Issue 5: Value Pattern Regex Recompiled Per Check Call
 
-**Problem**: Most test files didn't cover regex patterns comprehensively.
-
-**Solution Applied**: Added comprehensive edge case tests for regex patterns in `terraform_block_test.go`.
-
----
-
-### Issue 7: No Circuit Breaker for External Calls ✅ DONE
-
-**Problem**: Rules like `dependency_paths` and `dependency_outputs` made file system calls without timeout protection. If a filesystem becomes unresponsive, all lint operations could hang.
-
-**Solution Applied**: Added timeout mechanism for file system operations:
+**Problem**: In `internal/rules/key_value.go:133-139`, value patterns are recompiled on every Check call:
 
 ```go
-type CircuitBreaker struct {
-    failures int
-    lastFail time.Time
-    mu       sync.Mutex
-}
-
-func withTimeout[T any](op string, fn func() (T, error)) (T, error) {
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-    defer cancel()
+func kvCheckValuePattern(issues *[]diag.Issue, blocks []ast.BlockInfo, patterns map[string]string) {
+    compiled := make(map[string]*regexp.Regexp)
+    for key, pat := range patterns {
+        if p, err := regexp.Compile(pat); err == nil {
+            compiled[key] = p  // <-- Recompiled every Check call
+        }
+    }
     // ...
 }
-
-func safeStat(path string) (os.FileInfo, error)
-func safeReadFile(path string) ([]byte, error)
 ```
 
-**Fixed Files**:
-- `internal/rules/circuit_breaker.go` (new) - Timeout wrapper and safe file operations
-- `internal/rules/dependency_paths.go` - Uses `safeStat` instead of `os.Stat`
-- `internal/rules/dependency_outputs.go` - Uses `safeStat` and `safeReadFile`
+**Suggested Fix**: Compile once at config load time and store compiled patterns in `config.KeyValueConfig`.
+
+---
+
+### Issue 6: Error Value from `termcolor.SetMode` Ignored
+
+**Problem**: `termcolor.SetMode()` return value is ignored in most calls:
+
+```go
+// cmd/hcl-linter/main.go:45
+return termcolor.SetMode(flagColor)  // Error ignored
+
+// cmd/hcl-linter/init_test.go:40
+if err := termcolor.SetMode(termcolor.ModeNever); err != nil {  // Correct
+```
+
+While `SetMode` currently only fails on invalid mode (which shouldn't happen in production), ignoring errors is inconsistent.
+
+**Suggested Fix**: Always check error return or document why it's safe to ignore.
 
 ---
 
 ## P3 - MINOR (Style / Polish)
 
-### Issue 9: Inconsistent Severity Usage ✅ N/A
+### Issue 7: Duplicate BlockInfo Extraction Pattern
 
-**Problem**: Code may use string literals directly instead of constants.
+**Problem**: The pattern `ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks)` appears 5 times:
 
-**Status**: Verified - all `diag.Issue` creations properly use `diag.SeverityError` or `diag.SeverityWarning`. String literals only exist in `RuleDoc.Severity` (documentation metadata), which is appropriate.
+- `internal/rules/required_fields.go:92`
+- `internal/rules/name_validation.go:140`
+- `internal/rules/key_value.go:84, 113, 144`
+- `internal/rules/duplicates.go:78`
+- `internal/rules/array_format.go:295`
+
+**Suggested Fix**: Add helper `Block.NestedBlocks() []ast.BlockInfo` to reduce repetition:
+
+```go
+func (b *BlockInfo) NestedBlocks() []ast.BlockInfo {
+    if len(b.Block.Body.Blocks) == 0 {
+        return nil
+    }
+    return ast.GetBlockInfoFromBlocks(b.Block.Body.Blocks)
+}
+```
 
 ---
 
-### Issue 10: Helper Duplication Between Packages ✅ N/A
+### Issue 8: Map Initialization Repetition
 
-**Problem**: `internal/rules/helpers.go` may duplicate functions in `internal/ast/helpers.go`.
+**Problem**: Similar map initialization patterns appear multiple times:
 
-**Status**: No duplication exists. The `internal/ast` package has no `helpers.go` file. The functions in `internal/rules/helpers.go` are rule-specific utilities.
+```go
+// internal/rules/name_validation.go:50-53
+allowedBlocks := make(map[string]bool, len(cfg.Blocks))
+for _, b := range cfg.Blocks {
+    allowedBlocks[b] = true
+}
+```
+
+```go
+// internal/rules/key_value.go:104-108
+disallowedMap := make(map[string]bool)
+for _, k := range disallowed {
+    disallowedMap[k] = true
+}
+```
+
+**Suggested Fix**: Generic helper:
+
+```go
+func ToSet[T string | int](items []T) map[T]bool {
+    m := make(map[T]bool, len(items))
+    for _, item := range items {
+        m[item] = true
+    }
+    return m
+}
+```
 
 ---
 
-### Issue 11: Flag Definitions Scattered ✅ N/A
+### Issue 9: Hardcoded Default Pattern
 
-**Problem**: Flag definitions appear in `newRootCmd` without clear grouping.
+**Problem**: Default pattern `^[a-z][a-z0-9_]*$` appears in both Check and Fix:
 
-**Status**: Flags are already properly grouped by command (global flags with `PersistentFlags()`, command-specific flags with `Flags()`).
+```go
+// internal/rules/name_validation.go:89
+pattern = `^[a-z][a-z0-9_]*$`
 
----
+// internal/rules/name_validation.go:128
+valid = isValidIdentifier(name)  // Uses different validation
+```
 
-### Issue 8: No Structured Logging ⚠️ DEFERRED
+**Suggested Fix**: Define constant:
 
-**Problem**: No structured logging exists. All output uses `fmt.Printf` scattered throughout.
-
-**Status**: Deferred. Adding structured logging (e.g., zerolog) requires adding a new dependency and significant refactoring. The current CLI output is human-readable and functional.
-
-**Affected Files**:
-- `cmd/hcl-linter/main.go`
-- `internal/engine/engine.go`
+```go
+const DefaultNamePattern = `^[a-z][a-z0-9_]*$`
+```
 
 ---
 
 ## Summary: Priority Action Items
 
-| Priority | Issue | Status | Impact |
+| Priority | Issue | Impact | Effort |
 |----------|-------|--------|--------|
-| P0 | Global Registry Refactor | ✅ DONE | Testability, thread safety |
-| P0 | Unsafe Regex | ✅ DONE | Crash prevention |
-| P1 | CLI Duplication | ✅ DONE | Maintainability |
-| P1 | Error Wrapping | ✅ DONE | Debugging |
-| P2 | Test Coverage | ✅ DONE | Code confidence |
-| P2 | Circuit Breaker | ✅ DONE | Reliability |
-| P3 | Logging | ⚠️ DEFERRED | Observability |
-| P3 | Severity Usage | ✅ N/A | N/A |
-| P3 | Helper Duplication | ✅ N/A | N/A |
-| P3 | Flag Definitions | ✅ N/A | N/A |
+| P1 | Repeated JustAttributes() | Maintainability | Low |
+| P1 | Unused Attrs field | Memory, confusion | Low |
+| P1 | Regex recompiled in Fix | Performance | Medium |
+| P2 | Misleading isLowerLetter | Correctness | Low |
+| P2 | Value pattern recompiled | Performance | Medium |
+| P2 | Ignored SetMode error | Consistency | Low |
+| P3 | Duplicate block extraction | DRY | Low |
+| P3 | Map initialization | DRY | Low |
+| P3 | Hardcoded pattern | Maintainability | Low |
 
 ---
 
-## Completed Work
+## Security Findings
 
-All P0, P1, P2 issues have been addressed. P3 issues are either N/A or deferred.
+No security issues found:
+- No hardcoded secrets or credentials
+- No weak cryptographic operations
+- No command injection vectors
+- File operations use proper `os.Stat` checks
+- No SQL queries (not applicable)
+- Circuit breaker implemented for external file operations
+
+## Completed Work (This Review Session)
+
+All planned issues addressed in this session:
+
+| Priority | Issue | Status | Commit |
+|----------|-------|--------|--------|
+| P1 | Repeated JustAttributes() | ✅ Fixed | `bbe17bc` |
+| P1 | Unused Attrs field | ✅ N/A (actually used) | - |
+| P1 | Regex recompiled in Fix | ⚠️ Deferred | - |
+| P2 | Misleading isLowerLetter | ✅ Fixed | `5009e05` |
+| P2 | Value pattern recompiled | ⚠️ Deferred | - |
+| P2 | Ignored SetMode error | ⚠️ Deferred | - |
+| P3 | Duplicate block extraction | ⚠️ Deferred | - |
+| P3 | Map initialization | ⚠️ Deferred | - |
+| P3 | Hardcoded pattern | ✅ Fixed | `affd850` |
 
 ---
 
+*Analysis Coverage: ~40 source files*
 *Generated: 2026-04-24*
-*Review Coverage: ~40 source files analyzed*
