@@ -123,15 +123,6 @@ func (l *Loader) LoadForFile(filename string) (*Rules, error) {
 }
 
 func (l *Loader) loadConfigFile(path string) (*Rules, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config %s: %w", path, err)
-	}
-
-	if strings.HasSuffix(path, ".json") {
-		return loadJSONConfig(data, path)
-	}
-
 	if strings.HasSuffix(path, ".hcl") {
 		return loadHCLConfig(path)
 	}

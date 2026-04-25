@@ -5,7 +5,7 @@ rules {
   }
 
   array_format {
-    enabled            = false
+    enabled             = false
     multiline_threshold = 2
   }
 
@@ -27,13 +27,13 @@ rules {
   }
 
   blank_lines {
-    enabled        = true
+    enabled       = true
     within_blocks = true
   }
 
   terragrunt_functions {
-    enabled                   = true
+    enabled                       = true
     find_in_parent_folders_exists = true
-    get_env_has_default        = true
+    get_env_has_default           = true
   }
 }

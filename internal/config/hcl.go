@@ -4,21 +4,35 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
 func loadHCLConfig(path string) (*Rules, error) {
-	data, err := os.ReadFile(path)
+	return loadHCLConfigWithVisited(path, map[string]bool{})
+}
+
+func loadHCLConfigWithVisited(path string, visited map[string]bool) (*Rules, error) {
+	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config %s: %w", path, err)
+		return nil, fmt.Errorf("failed to resolve path %s: %w", path, err)
+	}
+	if visited[absPath] {
+		return nil, fmt.Errorf("circular extends reference detected: %s", absPath)
+	}
+	visited[absPath] = true
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config %s: %w", absPath, err)
 	}
 
 	parser := hclparse.NewParser()
-	file, diags := parser.ParseHCL(data, path)
+	file, diags := parser.ParseHCL(data, absPath)
 	if diags.HasErrors() {
-		return nil, fmt.Errorf("failed to parse HCL config %s: %w", path, diags)
+		return nil, fmt.Errorf("failed to parse HCL config %s: %w", absPath, diags)
 	}
 
 	syntaxBody, ok := file.Body.(*hclsyntax.Body)
@@ -27,6 +41,17 @@ func loadHCLConfig(path string) (*Rules, error) {
 	}
 
 	rules := &Rules{}
+
+	if attr, ok := syntaxBody.Attributes["extends"]; ok {
+		if val, attrDiags := attr.Expr.Value(nil); !attrDiags.HasErrors() {
+			basePath := resolveExtendsPath(absPath, val.AsString())
+			baseRules, baseErr := loadHCLConfigWithVisited(basePath, visited)
+			if baseErr != nil {
+				return nil, fmt.Errorf("failed to load extended config %q: %w", val.AsString(), baseErr)
+			}
+			*rules = *baseRules
+		}
+	}
 
 	for _, block := range syntaxBody.Blocks {
 		if block.Type != "rules" {
@@ -37,6 +62,14 @@ func loadHCLConfig(path string) (*Rules, error) {
 	}
 
 	return rules, nil
+}
+
+func resolveExtendsPath(currentPath, ref string) string {
+	dir := filepath.Dir(currentPath)
+	if filepath.Ext(ref) == "" {
+		ref += ".hcl"
+	}
+	return filepath.Join(dir, ref)
 }
 
 func parseHCLRulesBlock(body *hclsyntax.Body, rules *Rules) {

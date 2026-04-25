@@ -1,6 +1,7 @@
 package fix
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
@@ -767,6 +769,113 @@ func (f *Fixer) FixFiles(paths []string, maxConcurrency int) []*FixResult {
 			defer func() { <-sem }()
 
 			result, err := f.FixFile(p)
+			if err != nil {
+				result = &FixResult{
+					File:  p,
+					Error: err,
+				}
+			}
+			results <- result
+		}(path)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	var allResults []*FixResult
+	for r := range results {
+		allResults = append(allResults, r)
+	}
+	return allResults
+}
+
+var defaultFormatBlockOrder = &config.BlockOrderConfig{
+	Enabled: true,
+	Order:   []string{"include", "locals", "terraform", "dependency", "inputs"},
+}
+
+func (f *Fixer) FormatFixFile(path string) (*FixResult, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &FixResult{
+		File:    path,
+		Changes: 0,
+	}
+
+	parser := ast.NewParser()
+	file, diags := parser.ParseFile(path)
+	if diags.HasErrors() {
+		return nil, fmt.Errorf("parse error: %s", diags.Error())
+	}
+
+	blocks := ast.GetTopLevelBlocks(file)
+	contentStr := string(content)
+
+	newContent := f.fixBlockOrder(contentStr, blocks, defaultFormatBlockOrder)
+	if newContent != contentStr {
+		contentStr = newContent
+		result.Changes++
+		parser = ast.NewParser()
+		file, _ = parser.ParseContent([]byte(contentStr), path)
+		blocks = ast.GetTopLevelBlocks(file)
+	}
+
+	newContent2, changes := f.fixArrays(contentStr)
+	if changes > 0 {
+		contentStr = newContent2
+		result.Changes += changes
+		parser = ast.NewParser()
+		file, _ = parser.ParseContent([]byte(contentStr), path)
+		blocks = ast.GetTopLevelBlocks(file)
+	}
+
+	attrs := ast.GetTopLevelAttributes(file)
+	newContent3, changes2 := f.fixBlankLinesWithinBlocks(contentStr, blocks, attrs)
+	if changes2 > 0 {
+		contentStr = newContent3
+		result.Changes += changes2
+	}
+
+	// Apply hclwrite.Format for final whitespace cleanup
+	formattedBytes := hclwrite.Format([]byte(contentStr))
+	if !bytes.Equal(formattedBytes, []byte(contentStr)) {
+		contentStr = string(formattedBytes)
+		result.Changes++
+	}
+
+	if result.Changes > 0 {
+		if err := os.WriteFile(path, []byte(contentStr), 0o644); err != nil {
+			return nil, err
+		}
+	}
+
+	result.Content = contentStr
+	result.Success = true
+	return result, nil
+}
+
+func (f *Fixer) FormatFixFiles(paths []string, maxConcurrency int) []*FixResult {
+	if maxConcurrency <= 0 {
+		maxConcurrency = runtime.NumCPU()
+	}
+
+	sem := make(chan struct{}, maxConcurrency)
+	var wg sync.WaitGroup
+	results := make(chan *FixResult, len(paths))
+
+	for _, path := range paths {
+		wg.Add(1)
+		go func(p string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			result, err := f.FormatFixFile(p)
 			if err != nil {
 				result = &FixResult{
 					File:  p,

@@ -51,8 +51,11 @@ hcl-linter lint ./
 # Check and exit 1 if issues found
 hcl-linter check ./
 
-# Auto-fix formatting issues
+# Auto-fix formatting issues (uses configured rules)
 hcl-linter fix ./
+
+# Apply default formatting without any config required
+hcl-linter fix ./ --format
 ```
 
 ## Configuration
@@ -61,32 +64,47 @@ Create a `.hcl-linter/` directory with config files:
 
 ```
 .hcl-linter/
-├── default.json       # Base config for all files
-├── terragrunt.json   # Rules for terragrunt.hcl
-└── root.json         # Rules for root.hcl
+├── default.hcl      # Base config for all files
+├── terragrunt.hcl   # Rules for terragrunt.hcl
+└── root.hcl         # Rules for root.hcl
 ```
 
-Example `default.json`:
+Example `default.hcl`:
 
-```json
-{
-  "rules": {
-    "block_order": {
-      "enabled": true,
-      "order": ["include", "locals", "terraform", "dependency", "inputs"]
-    },
-    "required_blocks": {
-      "required": [
-        {
-          "type": "terraform",
-          "count": "once",
-          "error": "missing terraform block"
-        }
-      ]
+```hcl
+rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+  }
+
+  required_blocks {
+    required {
+      type  = "terraform"
+      count = "once"
+      error = "missing terraform block"
     }
   }
 }
 ```
+
+### Config Inheritance
+
+Use `extends` to inherit from another config in the same directory. Child rules override the base rule block entirely; unset rules are inherited as-is.
+
+```hcl
+# .hcl-linter/terragrunt.hcl — inherits all rules from default, overrides block_order
+extends = "default"
+
+rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+}
+```
+
+Chains are supported (`A extends B extends C`). Circular references are detected and reported as errors.
 
 ## Formatting
 
@@ -96,28 +114,15 @@ The `fix` command auto-fixes formatting issues:
 - **Array format** - Converts inline arrays to multiline when threshold exceeded
 - **Block order** - Reorders blocks to match configured order
 
-Enable rules in your config:
+Use `--format` to apply default formatting to any file without needing a config:
 
-```json
-{
-  "rules": {
-    "blank_lines": {
-      "enabled": true,
-      "within_blocks": true
-    },
-    "array_format": {
-      "enabled": true,
-      "multiline_threshold": 2
-    },
-    "block_order": {
-      "enabled": true,
-      "order": ["include", "locals", "terraform"]
-    }
-  }
-}
+```bash
+hcl-linter fix ./ --format
 ```
 
-Enable in HCL config:
+This applies: block ordering (`include → locals → terraform → dependency → inputs`), array normalization, and blank line cleanup.
+
+Enable rules in your config:
 
 ```hcl
 rules {
@@ -159,21 +164,10 @@ inputs = {
 }
 ```
 
-```json
-{
-  "rules": {
-    "blank_lines": {
-      "enabled": true,
-      "within_blocks": true
-    }
-  }
-}
-```
-
 ```hcl
 rules {
   blank_lines {
-    enabled        = true
+    enabled       = true
     within_blocks = true
   }
 }
@@ -186,6 +180,9 @@ rules {
 --filter             Filter files by name pattern (glob supported)
 --concurrency        Max concurrent workers (default: CPU count)
 --verbose, -v        Show detailed output
+
+# fix-only flag:
+--format             Apply default formatting without requiring config rules
 ```
 
 ## Environment Variables

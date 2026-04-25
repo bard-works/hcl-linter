@@ -18,24 +18,30 @@ func createTestConfigDir(t *testing.T) string {
 
 func setupTestConfig(t *testing.T, tmpDir string, name string, content string) {
 	t.Helper()
-	configFile := filepath.Join(tmpDir, name)
-	if err := os.WriteFile(configFile, []byte(content), 0o644); err != nil {
+	configDir := filepath.Join(tmpDir, ".linter-rules")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(configDir, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func newTestLoader(t *testing.T, tmpDir string) *config.Loader {
+	t.Helper()
+	return config.NewLoader(filepath.Join(tmpDir, ".linter-rules"))
 }
 
 func TestBlockOrderRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform"]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name        string
@@ -71,7 +77,7 @@ terraform {}
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -107,18 +113,16 @@ terraform {}
 func TestNestedBlockOrderRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["terraform"],
-				"nested_order": {
-					"terraform": ["before_hooks", "after_hooks"]
-				}
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  block_order {
+    enabled      = true
+    order        = ["terraform"]
+    nested_order = {
+      terraform = ["before_hooks", "after_hooks"]
+    }
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name        string
@@ -163,7 +167,7 @@ func TestNestedBlockOrderRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -199,16 +203,14 @@ func TestNestedBlockOrderRule(t *testing.T) {
 func TestNameValidationRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"name_validation": {
-				"enabled": true,
-				"pattern": "^[a-z][a-z0-9_]*$",
-				"blocks": ["include", "dependency"]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  name_validation {
+    enabled = true
+    pattern = "^[a-z][a-z0-9_]*$"
+    blocks  = ["include", "dependency"]
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name        string
@@ -241,7 +243,7 @@ func TestNameValidationRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -277,15 +279,13 @@ func TestNameValidationRule(t *testing.T) {
 func TestDuplicatesRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"duplicates": {
-				"enabled": true,
-				"blocks": ["dependency", "include"]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  duplicates {
+    enabled = true
+    blocks  = ["dependency", "include"]
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name        string
@@ -315,7 +315,7 @@ include "root" {}
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -351,16 +351,14 @@ include "root" {}
 func TestRequiredFieldsRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"required_fields": {
-				"include": {
-					"expose": true
-				}
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  required_fields {
+    include {
+      expose = true
+    }
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name        string
@@ -393,7 +391,7 @@ func TestRequiredFieldsRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -429,22 +427,18 @@ func TestRequiredFieldsRule(t *testing.T) {
 func TestLintTerraformMissingSource(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"required_blocks": {
-				"required": [
-					{
-						"type": "terraform",
-						"count": "once",
-						"error": "missing terraform block"
-					}
-				]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  required_blocks {
+    required {
+      type  = "terraform"
+      count = "once"
+      error = "missing terraform block"
+    }
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	input := `include "root" {
@@ -485,15 +479,13 @@ func TestDependencyPathExistsRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	configContent := `{
-		"rules": {
-			"terragrunt": {
-				"enabled": true,
-				"dependency_path_exists": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt {
+    enabled                = true
+    dependency_path_exists = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name          string
@@ -543,7 +535,7 @@ dependency "db" {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -586,15 +578,13 @@ func TestIncludePathExistsRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	configContent := `{
-		"rules": {
-			"terragrunt": {
-				"enabled": true,
-				"include_path_exists": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt {
+    enabled             = true
+    include_path_exists = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name          string
@@ -631,7 +621,7 @@ func TestIncludePathExistsRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -669,15 +659,13 @@ func TestIncludePathExistsRule(t *testing.T) {
 func TestRemoteStateConfigRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terragrunt": {
-				"enabled": true,
-				"remote_state_config": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt {
+    enabled             = true
+    remote_state_config = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name        string
@@ -731,7 +719,7 @@ func TestRemoteStateConfigRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -772,15 +760,13 @@ func TestFindInParentFoldersRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	configContent := `{
-		"rules": {
-			"terragrunt_functions": {
-				"enabled": true,
-				"find_in_parent_folders_exists": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt_functions {
+    enabled                       = true
+    find_in_parent_folders_exists = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	childDir := filepath.Join(parentDir, "child")
 	if err := os.MkdirAll(childDir, 0o755); err != nil {
@@ -831,7 +817,7 @@ func TestFindInParentFoldersRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -868,15 +854,13 @@ func TestFindInParentFoldersRule(t *testing.T) {
 func TestGetEnvHasDefaultRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terragrunt_functions": {
-				"enabled": true,
-				"get_env_has_default": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt_functions {
+    enabled             = true
+    get_env_has_default = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name        string
@@ -921,7 +905,7 @@ func TestGetEnvHasDefaultRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -957,22 +941,20 @@ func TestGetEnvHasDefaultRule(t *testing.T) {
 func TestDependencyPathExistsWithAbsolutePath(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	configContent := `{
-		"rules": {
-			"terragrunt": {
-				"enabled": true,
-				"dependency_path_exists": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt {
+    enabled                = true
+    dependency_path_exists = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	existingDir := filepath.Join(tmpDir, "existing")
 	if err := os.MkdirAll(existingDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	absPath := existingDir
@@ -1001,22 +983,20 @@ func TestDependencyPathExistsWithAbsolutePath(t *testing.T) {
 func TestIncludePathExistsWithAbsolutePath(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	configContent := `{
-		"rules": {
-			"terragrunt": {
-				"enabled": true,
-				"include_path_exists": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt {
+    enabled             = true
+    include_path_exists = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	existingDir := filepath.Join(tmpDir, "existing")
 	if err := os.MkdirAll(existingDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	absPath := existingDir
@@ -1045,17 +1025,15 @@ func TestIncludePathExistsWithAbsolutePath(t *testing.T) {
 func TestFindInParentFoldersInTerraformBlock(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terragrunt_functions": {
-				"enabled": true,
-				"find_in_parent_folders_exists": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt_functions {
+    enabled                       = true
+    find_in_parent_folders_exists = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	content := `terraform {
@@ -1083,17 +1061,15 @@ func TestFindInParentFoldersInTerraformBlock(t *testing.T) {
 func TestGetEnvInInputsBlock(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terragrunt_functions": {
-				"enabled": true,
-				"get_env_has_default": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt_functions {
+    enabled             = true
+    get_env_has_default = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	content := `inputs = {
@@ -1133,17 +1109,15 @@ func TestMultipleDependenciesWithMixedPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	configContent := `{
-		"rules": {
-			"terragrunt": {
-				"enabled": true,
-				"dependency_path_exists": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt {
+    enabled                = true
+    dependency_path_exists = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	content := `dependency "vpc" {
@@ -1183,17 +1157,15 @@ dependency "db" {
 func TestRemoteStateConfigWithBackendAndEmptyString(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terragrunt": {
-				"enabled": true,
-				"remote_state_config": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt {
+    enabled             = true
+    remote_state_config = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	content := `terraform {
@@ -1232,15 +1204,13 @@ func TestRemoteStateConfigWithBackendAndEmptyString(t *testing.T) {
 func TestTerraformSourceRequired(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terraform_block": {
-				"enabled": true,
-				"source_required": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terraform_block {
+    enabled         = true
+    source_required = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name          string
@@ -1277,7 +1247,7 @@ func TestTerraformSourceRequired(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -1315,15 +1285,13 @@ func TestTerraformSourceRequired(t *testing.T) {
 func TestTerraformVersionFormat(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terraform_block": {
-				"enabled": true,
-				"version_format": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terraform_block {
+    enabled        = true
+    version_format = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name          string
@@ -1387,7 +1355,7 @@ func TestTerraformVersionFormat(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -1425,15 +1393,13 @@ func TestTerraformVersionFormat(t *testing.T) {
 func TestTerraformExtraArguments(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terraform_block": {
-				"enabled": true,
-				"extra_arguments_valid": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terraform_block {
+    enabled               = true
+    extra_arguments_valid = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name          string
@@ -1498,7 +1464,7 @@ func TestTerraformExtraArguments(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -1536,15 +1502,13 @@ func TestTerraformExtraArguments(t *testing.T) {
 func TestTerraformDeprecatedFields(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terraform_block": {
-				"enabled": true,
-				"no_deprecated_fields": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terraform_block {
+    enabled              = true
+    no_deprecated_fields = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name          string
@@ -1605,7 +1569,7 @@ func TestTerraformDeprecatedFields(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -1643,18 +1607,16 @@ func TestTerraformDeprecatedFields(t *testing.T) {
 func TestFunctionNotEvaluatedWhenDisabled(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"terragrunt_functions": {
-				"enabled": true,
-				"find_in_parent_folders_exists": false,
-				"get_env_has_default": false
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  terragrunt_functions {
+    enabled                       = true
+    find_in_parent_folders_exists = false
+    get_env_has_default           = false
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	content := `include "root" {
@@ -1686,15 +1648,13 @@ locals {
 func TestKeyCaseRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"key_value": {
-				"enabled": true,
-				"key_case": "snake_case"
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  key_value {
+    enabled  = true
+    key_case = "snake_case"
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name        string
@@ -1730,7 +1690,7 @@ func TestKeyCaseRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -1766,15 +1726,13 @@ func TestKeyCaseRule(t *testing.T) {
 func TestDisallowedKeysRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"key_value": {
-				"enabled": true,
-				"disallowed": ["secret", "password"]
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  key_value {
+    enabled    = true
+    disallowed = ["secret", "password"]
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name        string
@@ -1807,7 +1765,7 @@ func TestDisallowedKeysRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -1843,17 +1801,15 @@ func TestDisallowedKeysRule(t *testing.T) {
 func TestValuePatternRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"key_value": {
-				"enabled": true,
-				"value_pattern": {
-					"region": "^us-[a-z]+-[0-9]+$"
-				}
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  key_value {
+    enabled = true
+    value_pattern = {
+      region = "^us-[a-z]+-[0-9]+$"
+    }
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name          string
@@ -1881,7 +1837,7 @@ func TestValuePatternRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -1919,17 +1875,15 @@ func TestValuePatternRule(t *testing.T) {
 func TestCountForEachRule(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"count_for_each": {
-				"enabled": true,
-				"warn_on_count_zero": true,
-				"warn_on_empty_for_each": true,
-				"warn_on_conflict": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  count_for_each {
+    enabled                = true
+    warn_on_count_zero     = true
+    warn_on_empty_for_each = true
+    warn_on_conflict       = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	tests := []struct {
 		name          string
@@ -1981,7 +1935,7 @@ func TestCountForEachRule(t *testing.T) {
 		},
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	for _, tt := range tests {
@@ -2038,14 +1992,12 @@ func TestDependencyOutputsRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	configContent := `{
-		"rules": {
-			"dependency_outputs": {
-				"enabled": true
-			}
-		}
-	}`
-	setupTestConfig(t, tmpDir, "terragrunt.json", configContent)
+	configContent := `rules {
+  dependency_outputs {
+    enabled = true
+  }
+}`
+	setupTestConfig(t, tmpDir, "terragrunt.hcl", configContent)
 
 	terragruntHcl := filepath.Join(tmpDir, "terragrunt.hcl")
 	hclContent := `dependency "vpc" {
@@ -2060,7 +2012,7 @@ inputs = {
 		t.Fatal(err)
 	}
 
-	loader := config.NewLoader(tmpDir)
+	loader := newTestLoader(t, tmpDir)
 	l := NewLinter(loader)
 
 	result, err := l.LintFile(terragruntHcl)

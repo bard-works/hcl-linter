@@ -5,7 +5,7 @@ rules {
   }
 
   array_format {
-    enabled            = false
+    enabled             = false
     multiline_threshold = 2
   }
 
@@ -27,7 +27,7 @@ rules {
   }
 
   blank_lines {
-    enabled        = true
+    enabled       = true
     within_blocks = true
   }
 }

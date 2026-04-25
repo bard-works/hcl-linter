@@ -18,6 +18,7 @@ var (
 	flagConfigSrc   string
 	flagFilter      []string
 	flagConcurrency int
+	flagFormat      bool
 
 	Version   = "dev"
 	BuildDate = "unknown"
@@ -56,6 +57,7 @@ func main() {
 		Args:  cobra.ExactArgs(1),
 		RunE:  runFix,
 	}
+	fixCmd.Flags().BoolVar(&flagFormat, "format", false, "Apply default formatting (block ordering, array formatting, blank line normalization) without requiring config rules")
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
@@ -196,6 +198,9 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 }
 
 func runFix(cmd *cobra.Command, args []string) error {
+	if flagFormat {
+		return runFormatMode(cmd, args)
+	}
 	return run(cmd, args, false, true)
 }
 
@@ -373,6 +378,68 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 
 	if checkMode && hasErrors {
 		return errors.New("lint check failed")
+	}
+
+	return nil
+}
+
+func runFormatMode(_ *cobra.Command, args []string) error {
+	path := args[0]
+
+	loader, configResult := getLoader()
+	if configResult.Source != config.ConfigSourceNone {
+		fmt.Printf("Using config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
+	}
+	if loader == nil {
+		loader = &config.Loader{}
+	}
+
+	var files []string
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("path error: %w", err)
+	}
+	if info.IsDir() {
+		files = findHCLFiles(path)
+	} else {
+		files = []string{path}
+	}
+	if len(flagFilter) > 0 {
+		files = filterFiles(files)
+	}
+
+	fixer := fix.NewFixer(loader)
+
+	maxConcurrency := flagConcurrency
+	if maxConcurrency <= 0 {
+		maxConcurrency = config.GetMaxConcurrency(nil)
+	}
+	if flagVerbose && len(files) > 1 {
+		fmt.Printf("Formatting %d files with concurrency %d\n", len(files), maxConcurrency)
+	}
+
+	results := fixer.FormatFixFiles(files, maxConcurrency)
+
+	totalChanges := 0
+	for _, result := range results {
+		relPath, _ := filepath.Rel(".", result.File)
+		if relPath == "" {
+			relPath = result.File
+		}
+		if result.Error != nil {
+			fmt.Printf("Error fixing %s: %v\n", relPath, result.Error)
+			continue
+		}
+		if result.Changes > 0 {
+			fmt.Printf("Fixed %s: %d change(s)\n", relPath, result.Changes)
+			totalChanges += result.Changes
+		}
+	}
+
+	if totalChanges > 0 {
+		fmt.Printf("\nTotal: %d change(s) applied\n", totalChanges)
+	} else {
+		fmt.Println("No changes needed")
 	}
 
 	return nil

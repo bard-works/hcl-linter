@@ -1,6 +1,6 @@
 rules {
   blank_lines {
-    enabled        = true
+    enabled       = true
     within_blocks = true
   }
 
@@ -10,14 +10,14 @@ rules {
   }
 
   array_format {
-    enabled            = true
+    enabled             = true
     multiline_threshold = 2
   }
 
   count_for_each {
-    enabled             = true
-    warn_on_count_zero  = true
+    enabled                = true
+    warn_on_count_zero     = true
     warn_on_empty_for_each = true
-    warn_on_conflict    = true
+    warn_on_conflict       = true
   }
 }

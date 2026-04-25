@@ -17,10 +17,18 @@ func createFixTestConfigDir(t *testing.T) string {
 
 func setupFixTestConfig(t *testing.T, tmpDir string, content string) {
 	t.Helper()
-	configFile := filepath.Join(tmpDir, "terragrunt.json")
-	if err := os.WriteFile(configFile, []byte(content), 0o644); err != nil {
+	configDir := filepath.Join(tmpDir, ".linter-rules")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(configDir, "terragrunt.hcl"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func newFixTestLoader(t *testing.T, tmpDir string) *config.Loader {
+	t.Helper()
+	return config.NewLoader(filepath.Join(tmpDir, ".linter-rules"))
 }
 
 func createHCLFile(t *testing.T, tmpDir string, filename string, content string) string {
@@ -35,22 +43,20 @@ func createHCLFile(t *testing.T, tmpDir string, filename string, content string)
 func TestFixerFixFile(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform"]
-			},
-			"required_fields": {
-				"include": {
-					"expose": true
-				}
-			}
-		}
-	}`
+	configContent := `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+  required_fields {
+    include {
+      expose = true
+    }
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	tests := []struct {
@@ -92,17 +98,15 @@ func TestFixerFixFile(t *testing.T) {
 func TestFixBlockOrder(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform"]
-			}
-		}
-	}`
+	configContent := `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	tests := []struct {
@@ -146,18 +150,16 @@ func TestFixBlockOrder(t *testing.T) {
 func TestFixNameValidation(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"name_validation": {
-				"enabled": true,
-				"pattern": "^[a-z][a-z0-9_]*$",
-				"blocks": ["include", "dependency"]
-			}
-		}
-	}`
+	configContent := `rules {
+  name_validation {
+    enabled = true
+    pattern = "^[a-z][a-z0-9_]*$"
+    blocks  = ["include", "dependency"]
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	tests := []struct {
@@ -211,18 +213,16 @@ func TestFixNameValidation(t *testing.T) {
 func TestFixRequiredFields(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"required_fields": {
-				"include": {
-					"expose": true
-				}
-			}
-		}
-	}`
+	configContent := `rules {
+  required_fields {
+    include {
+      expose = true
+    }
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	tests := []struct {
@@ -294,27 +294,25 @@ func TestFixFileNoConfig(t *testing.T) {
 func TestFixFileMultipleIssues(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform"]
-			},
-			"name_validation": {
-				"enabled": true,
-				"pattern": "^[a-z][a-z0-9_]*$",
-				"blocks": ["include"]
-			},
-			"required_fields": {
-				"include": {
-					"expose": true
-				}
-			}
-		}
-	}`
+	configContent := `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+  name_validation {
+    enabled = true
+    pattern = "^[a-z][a-z0-9_]*$"
+    blocks  = ["include"]
+  }
+  required_fields {
+    include {
+      expose = true
+    }
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `locals {}
@@ -345,17 +343,15 @@ terraform {}
 func TestFixBlankLinesWithinBlocks(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	tests := []struct {
@@ -468,17 +464,15 @@ func TestFixBlankLinesWithinBlocks(t *testing.T) {
 func TestFixBlankLinesNestedBlocks(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	tests := []struct {
@@ -555,17 +549,15 @@ func TestFixBlankLinesNestedBlocks(t *testing.T) {
 func TestFixBlankLinesDisabled(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": false,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = false
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `inputs = {
@@ -590,17 +582,15 @@ func TestFixBlankLinesDisabled(t *testing.T) {
 func TestFixFilesConcurrent(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	files := []string{
@@ -625,17 +615,15 @@ func TestFixFilesConcurrent(t *testing.T) {
 func TestFixFilesNoConcurrency(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	file := createHCLFile(t, tmpDir, "test.hcl", "inputs = {\n\n  a = \"b\"\n\n}\n")
@@ -649,21 +637,19 @@ func TestFixFilesNoConcurrency(t *testing.T) {
 func TestFixBlockOrderWithBlankLines(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform", "inputs"]
-			},
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform", "inputs"]
+  }
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	tests := []struct {
@@ -725,21 +711,19 @@ locals {}
 func TestFixPreservesComplexExpressions(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform", "dependency", "inputs"]
-			},
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+  }
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `terraform {
@@ -774,17 +758,15 @@ inputs = {
 func TestFixMultipleObjectAttributes(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `inputs = {
@@ -831,17 +813,15 @@ other = {
 func TestFixTrailingNewline(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `inputs = {
@@ -866,21 +846,19 @@ func TestFixTrailingNewline(t *testing.T) {
 func TestFixNoHangOnComplexFile(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			},
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform", "dependency", "inputs"]
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `inputs = {
@@ -944,17 +922,15 @@ include "root" {
 func TestFixRegressionDuplicateBlocks(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform", "inputs"]
-			}
-		}
-	}`
+	configContent := `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform", "inputs"]
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `terraform {}
@@ -989,21 +965,19 @@ inputs = {}
 func TestFixTerraformRealisticBlocks(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			},
-			"block_order": {
-				"enabled": true,
-				"order": ["include", "locals", "terraform", "inputs"]
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform", "inputs"]
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `locals {}
@@ -1069,17 +1043,15 @@ inputs = {
 func TestFixTerraformWithRemoteState(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `terraform {
@@ -1132,17 +1104,15 @@ func TestFixTerraformWithRemoteState(t *testing.T) {
 func TestFixTerraformPreservesAllAttributes(t *testing.T) {
 	tmpDir := createFixTestConfigDir(t)
 
-	configContent := `{
-		"rules": {
-			"blank_lines": {
-				"enabled": true,
-				"within_blocks": true
-			}
-		}
-	}`
+	configContent := `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`
 	setupFixTestConfig(t, tmpDir, configContent)
 
-	loader := config.NewLoader(tmpDir)
+	loader := newFixTestLoader(t, tmpDir)
 	fixer := NewFixer(loader)
 
 	input := `terraform {
