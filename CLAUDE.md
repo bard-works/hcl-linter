@@ -2,8 +2,7 @@
 
 ## Project
 
-A configurable HCL 2 linter and auto-fixer, written in Go. The core rules are
-HCL-generic; Terragrunt- and Terraform-specific rule sets ship as built-ins.
+Configurable HCL 2 linter and auto-fixer, written in Go. Core rules HCL-generic; Terragrunt- and Terraform-specific rule sets ship as built-ins.
 Module: `github.com/bard-works/hcl-linter`
 
 ## Commands
@@ -17,7 +16,7 @@ make lint            # run golangci-lint
 make fmt && make vet # format and vet
 ```
 
-Always run `go test ./...` after any code change before reporting done.
+Run `go test ./...` after any code change before reporting done.
 
 ## Package structure
 
@@ -64,69 +63,38 @@ Context:         FilePath, Content, File, Blocks, Attrs, Config
 
 ## Conventions for new rules
 
-When adding or modifying a rule in `internal/rules/`:
+When adding or modifying rule in `internal/rules/`:
 
-- **Register it.** Implement `Rule` (`Name() / Priority() / Enabled(cfg) / Check(ctx) []Issue / Doc() RuleDoc`)
-  and call `Register(FooRule{})` from an `init()` function in the rule file. A rule that isn't
-  registered is dead code. Implement `Fixer` only when the issue is
-  auto-fixable - most rules are `Check`-only.
-- **Document it.** Every rule must implement `Doc() RuleDoc` with a non-empty `Summary`,
-  `Severity`, and `ConfigBlock`. Include at least one `ConfigField` entry and an `Example.Violation`
-  where meaningful. `hcl-linter explain` surfaces this data directly.
-- **Use `internal/ast` helpers, not `hcl/v2` directly.** Reach for
-  `ast.GetTopLevelBlocks`, `ast.GetBlockAttributes`,
-  `ast.GetBlockNestedBlocks`, `ast.GetBodyAttributes`. Rules should not
-  walk `hclsyntax.Body` by hand except where an existing helper can't
-  express what's needed (the `remote_state` nested-block walk in
-  `remote_state.go` is the rare exception).
-- **Guard config access.** Both `Enabled()` and `Check()` should nil-check the
-  way other rules do:
+- **Register it.** Implement `Rule` (`Name() / Priority() / Enabled(cfg) / Check(ctx) []Issue / Doc() RuleDoc`) and call `Register(FooRule{})` from `init()` in rule file. Unregistered rule = dead code. Implement `Fixer` only when issue is auto-fixable — most rules are `Check`-only.
+- **Document it.** Every rule must implement `Doc() RuleDoc` with non-empty `Summary`, `Severity`, `ConfigBlock`. Include at least one `ConfigField` entry and `Example.Violation` where meaningful. `hcl-linter explain` surfaces this data directly.
+- **Use `internal/ast` helpers, not `hcl/v2` directly.** Use `ast.GetTopLevelBlocks`, `ast.GetBlockAttributes`, `ast.GetBlockNestedBlocks`, `ast.GetBodyAttributes`. Rules must not walk `hclsyntax.Body` by hand except where existing helper can't express what's needed (`remote_state` nested-block walk in `remote_state.go` is rare exception).
+- **Guard config access.** Both `Enabled()` and `Check()` nil-check:
   ```go
   func (r FooRule) Enabled(cfg *config.Rules) bool {
       return cfg != nil && cfg.Foo != nil && cfg.Foo.Enabled
   }
   ```
-  `Check` runs only when `Enabled` returns true, but still read config fields
-  defensively.
-- **Severity constants.** Emit `diag.SeverityError` or `diag.SeverityWarning`
-  - never raw strings.
-- **Check is read-only; Fix mutates.** `Check(ctx) []diag.Issue` must not
-  touch `ctx.Content`. `Fix(ctx) (int, error)` mutates `ctx.Content` in place and returns the
-  number of edits made (0 = no-op) and an error.
-- **Every rule has a matching `_test.go`.** For every
-  `internal/rules/<rule>.go`, there must be an `internal/rules/<rule>_test.go`
-  that exercises `Check` (and `Fix`, if present). A test living in another
-  file doesn't count - keep them co-located so "is this rule tested?" is a
-  filesystem question. The `/add-rule` command enforces this in step 5.
+  `Check` runs only when `Enabled` returns true, but still read config fields defensively.
+- **Severity constants.** Emit `diag.SeverityError` or `diag.SeverityWarning` — never raw strings.
+- **Check is read-only; Fix mutates.** `Check(ctx) []diag.Issue` must not touch `ctx.Content`. `Fix(ctx) (int, error)` mutates `ctx.Content` in place, returns edit count (0 = no-op) and error.
+- **Every rule has matching `_test.go`.** For every `internal/rules/<rule>.go`, must have `internal/rules/<rule>_test.go` exercising `Check` (and `Fix` if present). Test in another file doesn't count — co-locate so "is this rule tested?" is filesystem question. `/add-rule` command enforces this in step 5.
 
 ## Config format
 
-HCL only - JSON support was intentionally removed. Config files live in
-`.hcl-linter/` and are matched by filename (`terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`,
-fallback to `.hcl-linter/default.hcl`).
+HCL only — JSON support intentionally removed. Config files in `.hcl-linter/`, matched by filename (`terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`, fallback `.hcl-linter/default.hcl`).
 
 ## Cross-platform paths
 
-CI runs on Ubuntu, macOS, and Windows (see `.github/workflows/ci.yml`). Tests and
-code that assume POSIX separators will pass locally and fail on Windows.
+CI runs on Ubuntu, macOS, Windows (see `.github/workflows/ci.yml`). Tests assuming POSIX separators pass locally, fail on Windows.
 
-- Never concatenate `/` into a path. Use `filepath.Join(a, b)` - not `a + "/" + b`.
-- Comparing paths from `filepath.Join`/`filepath.Dir` against string literals is
-  a bug: `filepath.Join("/a", "b")` is `\a\b` on Windows. In tests either build
-  the expected value the same way, or normalize with `filepath.ToSlash` on both
-  sides before comparing.
-- For a POSIX literal in test input, wrap it in `filepath.FromSlash("/a/b")` so
-  it becomes `\a\b` on Windows.
-- When embedding an OS path into HCL string content in tests, wrap it in
-  `filepath.ToSlash(p)`. HCL strings treat `\` as an escape character, so raw
-  Windows paths (`C:\Users\…`) break the parse. HCL, `filepath.IsAbs`, and
-  `os.Stat` on Windows all accept forward slashes, so the forward-slash form
-  round-trips cleanly.
+- Never concatenate `/` into path. Use `filepath.Join(a, b)` — not `a + "/" + b`.
+- Comparing paths from `filepath.Join`/`filepath.Dir` against string literals is bug: `filepath.Join("/a", "b")` = `\a\b` on Windows. In tests, build expected value same way or normalize with `filepath.ToSlash` on both sides.
+- For POSIX literal in test input, wrap in `filepath.FromSlash("/a/b")` so it becomes `\a\b` on Windows.
+- When embedding OS path into HCL string in tests, wrap in `filepath.ToSlash(p)`. HCL treats `\` as escape, so raw Windows paths (`C:\Users\…`) break parse. HCL, `filepath.IsAbs`, `os.Stat` on Windows all accept forward slashes — forward-slash form round-trips cleanly.
 
 ## Test conventions
 
-- Config files and lint-target files are both named `terragrunt.hcl` in tests.
-  To avoid overwriting one with the other, write configs into a subdirectory:
+Config files and lint-target files both named `terragrunt.hcl` in tests. Avoid overwriting one with other — write configs into subdirectory:
 
   ```go
   func newTestLoader(t *testing.T, tmpDir string) *config.Loader {
@@ -142,7 +110,7 @@ code that assume POSIX separators will pass locally and fail on Windows.
   }
   ```
 
-- HCL config content in tests uses this shape:
+HCL config content in tests:
 
   ```hcl
   rules {
@@ -155,7 +123,7 @@ code that assume POSIX separators will pass locally and fail on Windows.
 
 ## `fix --format` flag
 
-`hcl-linter fix ./ --format` applies default formatting without requiring any config:
+`hcl-linter fix ./ --format` applies default formatting without config:
 - Block order: `include → locals → terraform → dependency → inputs`
 - Array normalization (2+ items → multiline)
 - Blank line cleanup within blocks
@@ -165,7 +133,7 @@ Implemented via `Engine.FormatFixFile` / `Engine.FormatFixFiles` in `internal/en
 ## Do not
 
 - Re-introduce JSON config support anywhere
-- Add comments explaining *what* code does - only add a comment when the *why* is non-obvious
+- Add comments explaining *what* code does — only add when *why* is non-obvious
 - Create `.md` documentation files unless explicitly asked
 - Add error handling for scenarios that can't happen
 - Suggest or implement features not explicitly requested
