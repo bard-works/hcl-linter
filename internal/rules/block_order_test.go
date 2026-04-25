@@ -153,6 +153,46 @@ func TestBlockOrderRuleNestedCheck(t *testing.T) {
 	}
 }
 
+func TestBlockOrderNestedSingleBlock(t *testing.T) {
+	// Only one nested block → len(nestedBlocks) < 2 → no order check performed
+	cfg := &config.Rules{
+		BlockOrder: &config.BlockOrderConfig{
+			Enabled: true,
+			Order:   []string{"terraform"},
+			NestedOrder: map[string][]string{
+				"terraform": {"before_hooks", "after_hooks"},
+			},
+		},
+	}
+	content := `terraform {
+  before_hooks {
+    command = "echo before"
+  }
+}
+`
+	ctx := buildContext(t, content, cfg)
+	issues := (rules.BlockOrderRule{}).Check(ctx)
+	for _, issue := range issues {
+		if issue.Rule == "block_order" && strings.Contains(issue.Message, "nested block") {
+			t.Errorf("unexpected nested block_order issue for single nested block: %s", issue.Message)
+		}
+	}
+}
+
+func TestFixBlockOrderNoBlocks(t *testing.T) {
+	// Content with no blocks: FixBlockOrder should return unchanged content
+	cfg := &config.BlockOrderConfig{
+		Enabled: true,
+		Order:   []string{"include", "locals", "terraform"},
+	}
+	content := "# just a comment\n"
+	result := rules.FixBlockOrder(content, nil, cfg)
+	// Result may differ in whitespace; key check: no panic, returns a string
+	if result == "" {
+		t.Error("expected non-empty result from FixBlockOrder with no blocks")
+	}
+}
+
 func TestBlockOrderRuleFix(t *testing.T) {
 	cfg := &config.Rules{
 		BlockOrder: &config.BlockOrderConfig{

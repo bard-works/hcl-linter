@@ -107,6 +107,44 @@ func TestDependencyPathsWithAbsolutePath(t *testing.T) {
 	}
 }
 
+func TestDependencyPathsNoConfigPathAttr(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Rules{
+		DependencyPaths: &config.DependencyPathsConfig{Enabled: true},
+	}
+
+	// dependency block with no config_path attr → Check skips it
+	content := `dependency "vpc" { mock_outputs = {} }` + "\n"
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	writeFile(t, file, content)
+	ctx := buildContextFromFile(t, file, cfg)
+
+	for _, issue := range (rules.DependencyPathsRule{}).Check(ctx) {
+		if issue.Rule == "dependency_path_exists" {
+			t.Error("unexpected dependency_path_exists issue for block without config_path")
+		}
+	}
+}
+
+func TestDependencyPathsEmptyStringPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Rules{
+		DependencyPaths: &config.DependencyPathsConfig{Enabled: true},
+	}
+
+	// config_path is a non-literal expression → hclStringValue returns "" → skipped
+	content := `dependency "vpc" { config_path = local.vpc_path }` + "\n"
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	writeFile(t, file, content)
+	ctx := buildContextFromFile(t, file, cfg)
+
+	for _, issue := range (rules.DependencyPathsRule{}).Check(ctx) {
+		if issue.Rule == "dependency_path_exists" {
+			t.Error("unexpected dependency_path_exists issue for non-literal config_path")
+		}
+	}
+}
+
 func TestMultipleDependenciesWithMixedPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 

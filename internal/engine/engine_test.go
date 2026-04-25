@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/rules"
 )
 
 func createTestConfigDir(t *testing.T) string {
@@ -1556,6 +1557,69 @@ func TestFormatFixFileAlreadyClean(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result")
+	}
+}
+
+func TestParseError(t *testing.T) {
+	pe := &ParseError{File: "test.hcl", Cause: "unexpected token"}
+	if pe.Error() == "" {
+		t.Error("expected non-empty Error() string")
+	}
+	if pe.Unwrap() == nil {
+		t.Error("expected non-nil Unwrap()")
+	}
+}
+
+func TestNewWithRegistry(t *testing.T) {
+	reg := rules.DefaultRegistry()
+	eng := New(nil, WithRegistry(reg))
+	if eng == nil {
+		t.Fatal("expected non-nil engine")
+	}
+	if eng.registry != reg {
+		t.Error("expected custom registry to be set via WithRegistry")
+	}
+}
+
+func TestLintFilesHandlesError(t *testing.T) {
+	// File with no config → LintFile returns error → goroutine wraps it as linter_error issue
+	configDir := createTestConfigDir(t)
+	loader := config.NewLoader(configDir) // empty dir, no config files
+	eng := New(loader)
+
+	srcDir := t.TempDir()
+	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
+
+	results := eng.LintFiles([]string{file}, 1)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	hasLinterError := false
+	for _, issue := range results[0].Issues {
+		if issue.Rule == "linter_error" {
+			hasLinterError = true
+		}
+	}
+	if !hasLinterError {
+		t.Error("expected linter_error issue for file without config")
+	}
+}
+
+func TestFixFilesHandlesError(t *testing.T) {
+	// File with no config → FixFile returns error → goroutine stores it in result.Error
+	configDir := createTestConfigDir(t)
+	loader := config.NewLoader(configDir)
+	eng := New(loader)
+
+	srcDir := t.TempDir()
+	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
+
+	results := eng.FixFiles([]string{file}, 1)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Error == nil {
+		t.Error("expected non-nil Error for file without config")
 	}
 }
 

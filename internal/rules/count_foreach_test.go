@@ -80,6 +80,35 @@ func TestCountForEachRule(t *testing.T) {
 		}
 	})
 
+	// Non-evaluable expressions (reference/function): diags.HasErrors() → continue, no issue
+	t.Run("non-evaluable count skipped", func(t *testing.T) {
+		ctx := buildContext(t, "resource \"aws_instance\" \"x\" {\n  count = local.count_val\n}\n", cfg)
+		for _, i := range (rules.CountForEachRule{}).Check(ctx) {
+			if i.Rule == "count_zero" {
+				t.Error("unexpected count_zero issue for non-evaluable count expression")
+			}
+		}
+	})
+
+	t.Run("non-evaluable for_each skipped", func(t *testing.T) {
+		ctx := buildContext(t, "resource \"aws_instance\" \"x\" {\n  for_each = local.items\n}\n", cfg)
+		for _, i := range (rules.CountForEachRule{}).Check(ctx) {
+			if i.Rule == "empty_for_each" {
+				t.Error("unexpected empty_for_each issue for non-evaluable for_each expression")
+			}
+		}
+	})
+
+	t.Run("non-numeric count skipped", func(t *testing.T) {
+		// count = "two" is a string, not cty.Number → val.Type() != cty.Number → no issue
+		ctx := buildContext(t, "resource \"aws_instance\" \"x\" {\n  count = \"two\"\n}\n", cfg)
+		for _, i := range (rules.CountForEachRule{}).Check(ctx) {
+			if i.Rule == "count_zero" {
+				t.Error("unexpected count_zero issue for non-numeric count value")
+			}
+		}
+	})
+
 	r := rules.CountForEachRule{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

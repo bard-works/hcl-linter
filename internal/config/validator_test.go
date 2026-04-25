@@ -235,6 +235,58 @@ func TestValidateKeyValueWithDisallowedOk(t *testing.T) {
 
 // --- ValidateDir ---
 
+func TestValidateConfigFileMalformedHCL(t *testing.T) {
+	dir := t.TempDir()
+	// "}" is an unexpected close-brace; definitely causes a parse error.
+	path := writeConfig(t, dir, "bad.hcl", "}\n")
+
+	// detectUnknownBlocks: ParseHCL fails → diags.HasErrors() true → returns nil
+	// loadHCLConfig: also fails → ValidateConfigFile returns early
+	issues := ValidateConfigFile(path)
+	for _, i := range issues {
+		if contains(i.Message, "unknown rule block") {
+			t.Errorf("unexpected unknown-block issue for malformed HCL: %s", i)
+		}
+	}
+}
+
+func TestValidateDirSkipsNonHCLFiles(t *testing.T) {
+	dir := t.TempDir()
+	// Non-.hcl file and a subdirectory: both should be skipped via continue.
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("text"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "subdir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	issues := ValidateDir(dir)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues when dir has only non-HCL files, got %d", len(issues))
+	}
+}
+
+func TestValidateDetectUnknownBlocksNonRulesOuter(t *testing.T) {
+	dir := t.TempDir()
+	// Config with a non-"rules" top-level block: the outer loop skips it via continue.
+	path := writeConfig(t, dir, "test.hcl", `other_block {
+  foo = "bar"
+}
+rules {
+  block_order {
+    enabled = true
+    order   = ["include"]
+  }
+}`)
+	issues := ValidateConfigFile(path)
+	// "other_block" is at top level, not inside rules → not flagged as unknown rule block.
+	for _, i := range issues {
+		if contains(i.Message, "other_block") {
+			t.Errorf("unexpected issue for non-rules outer block: %s", i)
+		}
+	}
+}
+
 func TestValidateDirMultipleFiles(t *testing.T) {
 	dir := t.TempDir()
 	writeConfig(t, dir, "default.hcl", `rules {
