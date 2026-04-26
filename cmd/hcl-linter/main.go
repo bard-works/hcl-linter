@@ -7,10 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/fix"
-	"github.com/bard-works/hcl-linter/internal/linter"
 	"github.com/spf13/cobra"
+
+	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/engine"
+	"github.com/bard-works/hcl-linter/internal/linter"
 )
 
 var (
@@ -126,7 +127,7 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 		files = filterFiles(files)
 	}
 
-	l := linter.NewLinter(loader)
+	eng := engine.New(loader)
 
 	var filesToLint []string
 	for _, file := range files {
@@ -152,7 +153,7 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 
 	fmt.Printf("\nChecking %d file(s)...\n", len(filesToLint))
 
-	allResults := l.LintFiles(filesToLint, maxConcurrency)
+	allResults := eng.LintFiles(filesToLint, maxConcurrency)
 
 	hasErrors := false
 	errorFiles := 0
@@ -307,7 +308,7 @@ func matchGlob(filename, pattern string) bool {
 }
 
 func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
-	l := linter.NewLinter(loader)
+	eng := engine.New(loader)
 
 	var filesToLint []string
 	for _, file := range files {
@@ -334,7 +335,7 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 		fmt.Printf("Linting %d files with concurrency %d\n", len(filesToLint), maxConcurrency)
 	}
 
-	allResults := l.LintFiles(filesToLint, maxConcurrency)
+	allResults := eng.LintFiles(filesToLint, maxConcurrency)
 
 	hasErrors := false
 	for _, result := range allResults {
@@ -408,7 +409,7 @@ func runFormatMode(_ *cobra.Command, args []string) error {
 		files = filterFiles(files)
 	}
 
-	fixer := fix.NewFixer(loader)
+	eng := engine.New(loader)
 
 	maxConcurrency := flagConcurrency
 	if maxConcurrency <= 0 {
@@ -418,7 +419,7 @@ func runFormatMode(_ *cobra.Command, args []string) error {
 		fmt.Printf("Formatting %d files with concurrency %d\n", len(files), maxConcurrency)
 	}
 
-	results := fixer.FormatFixFiles(files, maxConcurrency)
+	results := eng.FormatFixFiles(files, maxConcurrency)
 
 	totalChanges := 0
 	for _, result := range results {
@@ -446,7 +447,7 @@ func runFormatMode(_ *cobra.Command, args []string) error {
 }
 
 func runFixMode(loader *config.Loader, files []string) error {
-	fixer := fix.NewFixer(loader)
+	eng := engine.New(loader)
 
 	var filesToFix []string
 	for _, file := range files {
@@ -477,7 +478,7 @@ func runFixMode(loader *config.Loader, files []string) error {
 		fmt.Printf("Fixing %d files with concurrency %d\n", len(filesToFix), maxConcurrency)
 	}
 
-	results := fixer.FixFiles(filesToFix, maxConcurrency)
+	results := eng.FixFiles(filesToFix, maxConcurrency)
 
 	totalChanges := 0
 	for _, result := range results {

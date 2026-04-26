@@ -181,6 +181,18 @@ func IsObjectAttribute(expr hcl.Expression) bool {
 	return ok
 }
 
+func GetBlockInfoFromBlocks(blocks []*hclsyntax.Block) []BlockInfo {
+	result := make([]BlockInfo, 0, len(blocks))
+	for _, block := range blocks {
+		result = append(result, BlockInfo{
+			Type:   block.Type,
+			Labels: block.Labels,
+			Block:  block,
+		})
+	}
+	return result
+}
+
 func GetAttributeRange(expr hcl.Expression) (startLine, endLine int) {
 	if obj, ok := expr.(*hclsyntax.ObjectConsExpr); ok {
 		r := obj.Range()

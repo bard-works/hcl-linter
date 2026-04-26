@@ -6,7 +6,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/bartlomiejdanek/hcl-linter
+        - github.com/bard-works/hcl-linter
 
 issues:
   max-issues-per-linter: 0
@@ -101,7 +101,7 @@ linters:
         - name: bool-literal-in-expr
         - name: context-as-argument
           arguments:
-            - allow-types-before: '*testing.T,testing.TB'
+            - allow-types-before: "*testing.T,testing.TB"
         - name: context-keys-type
           disabled: true
         - name: dot-imports

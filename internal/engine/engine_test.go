@@ -1,4 +1,4 @@
-package fix
+package engine
 
 import (
 	"os"
@@ -9,13 +9,12 @@ import (
 	"github.com/bard-works/hcl-linter/internal/config"
 )
 
-func createFixTestConfigDir(t *testing.T) string {
+func createTestConfigDir(t *testing.T) string {
 	t.Helper()
-	tmpDir := t.TempDir()
-	return tmpDir
+	return t.TempDir()
 }
 
-func setupFixTestConfig(t *testing.T, tmpDir string, content string) {
+func setupTestConfig(t *testing.T, tmpDir string, content string) {
 	t.Helper()
 	configDir := filepath.Join(tmpDir, ".linter-rules")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
@@ -26,7 +25,7 @@ func setupFixTestConfig(t *testing.T, tmpDir string, content string) {
 	}
 }
 
-func newFixTestLoader(t *testing.T, tmpDir string) *config.Loader {
+func newTestLoader(t *testing.T, tmpDir string) *config.Loader {
 	t.Helper()
 	return config.NewLoader(filepath.Join(tmpDir, ".linter-rules"))
 }
@@ -41,7 +40,7 @@ func createHCLFile(t *testing.T, tmpDir string, filename string, content string)
 }
 
 func TestFixerFixFile(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   block_order {
@@ -54,10 +53,10 @@ func TestFixerFixFile(t *testing.T) {
     }
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	tests := []struct {
 		name         string
@@ -77,7 +76,7 @@ func TestFixerFixFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.content)
 
-			result, err := fixer.FixFile(file)
+			result, err := eng.FixFile(file)
 			if err != nil {
 				t.Fatalf("FixFile failed: %v", err)
 			}
@@ -96,7 +95,7 @@ func TestFixerFixFile(t *testing.T) {
 }
 
 func TestFixBlockOrder(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   block_order {
@@ -104,10 +103,10 @@ func TestFixBlockOrder(t *testing.T) {
     order   = ["include", "locals", "terraform"]
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	tests := []struct {
 		name            string
@@ -130,7 +129,7 @@ func TestFixBlockOrder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.input)
 
-			result, err := fixer.FixFile(file)
+			result, err := eng.FixFile(file)
 			if err != nil {
 				t.Fatalf("FixFile failed: %v", err)
 			}
@@ -148,7 +147,7 @@ func TestFixBlockOrder(t *testing.T) {
 }
 
 func TestFixNameValidation(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   name_validation {
@@ -157,10 +156,10 @@ func TestFixNameValidation(t *testing.T) {
     blocks  = ["include", "dependency"]
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	tests := []struct {
 		name          string
@@ -194,7 +193,7 @@ func TestFixNameValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.input)
 
-			result, err := fixer.FixFile(file)
+			result, err := eng.FixFile(file)
 			if err != nil {
 				t.Fatalf("FixFile failed: %v", err)
 			}
@@ -211,7 +210,7 @@ func TestFixNameValidation(t *testing.T) {
 }
 
 func TestFixRequiredFields(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   required_fields {
@@ -220,10 +219,10 @@ func TestFixRequiredFields(t *testing.T) {
     }
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	tests := []struct {
 		name          string
@@ -261,7 +260,7 @@ func TestFixRequiredFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.input)
 
-			result, err := fixer.FixFile(file)
+			result, err := eng.FixFile(file)
 			if err != nil {
 				t.Fatalf("FixFile failed: %v", err)
 			}
@@ -278,21 +277,21 @@ func TestFixRequiredFields(t *testing.T) {
 }
 
 func TestFixFileNoConfig(t *testing.T) {
-	configDir := createFixTestConfigDir(t)
+	configDir := createTestConfigDir(t)
 	loader := config.NewLoader(configDir)
-	fixer := NewFixer(loader)
+	eng := New(loader)
 
 	srcDir := t.TempDir()
 	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
 
-	_, err := fixer.FixFile(file)
+	_, err := eng.FixFile(file)
 	if err == nil {
 		t.Error("expected error for file without config")
 	}
 }
 
 func TestFixFileMultipleIssues(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   block_order {
@@ -310,10 +309,10 @@ func TestFixFileMultipleIssues(t *testing.T) {
     }
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `locals {}
 include "vault-azuread" {}
@@ -322,7 +321,7 @@ terraform {}
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -341,7 +340,7 @@ terraform {}
 }
 
 func TestFixBlankLinesWithinBlocks(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -349,10 +348,10 @@ func TestFixBlankLinesWithinBlocks(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	tests := []struct {
 		name          string
@@ -441,7 +440,7 @@ func TestFixBlankLinesWithinBlocks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.input)
 
-			result, err := fixer.FixFile(file)
+			result, err := eng.FixFile(file)
 			if err != nil {
 				t.Fatalf("FixFile failed: %v", err)
 			}
@@ -462,7 +461,7 @@ func TestFixBlankLinesWithinBlocks(t *testing.T) {
 }
 
 func TestFixBlankLinesNestedBlocks(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -470,10 +469,10 @@ func TestFixBlankLinesNestedBlocks(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	tests := []struct {
 		name         string
@@ -530,7 +529,7 @@ func TestFixBlankLinesNestedBlocks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.input)
 
-			result, err := fixer.FixFile(file)
+			result, err := eng.FixFile(file)
 			if err != nil {
 				t.Fatalf("FixFile failed: %v", err)
 			}
@@ -547,7 +546,7 @@ func TestFixBlankLinesNestedBlocks(t *testing.T) {
 }
 
 func TestFixBlankLinesDisabled(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -555,10 +554,10 @@ func TestFixBlankLinesDisabled(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `inputs = {
 
@@ -569,7 +568,7 @@ func TestFixBlankLinesDisabled(t *testing.T) {
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -580,7 +579,7 @@ func TestFixBlankLinesDisabled(t *testing.T) {
 }
 
 func TestFixFilesConcurrent(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -588,10 +587,10 @@ func TestFixFilesConcurrent(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	files := []string{
 		createHCLFile(t, tmpDir, "file1.hcl", "inputs = {\n\n  a = \"b\"\n\n}\n"),
@@ -599,7 +598,7 @@ func TestFixFilesConcurrent(t *testing.T) {
 		createHCLFile(t, tmpDir, "file3.hcl", "inputs = {\n\n  e = \"f\"\n\n}\n"),
 	}
 
-	results := fixer.FixFiles(files, 2)
+	results := eng.FixFiles(files, 2)
 
 	if len(results) != 3 {
 		t.Errorf("expected 3 results, got %d", len(results))
@@ -613,7 +612,7 @@ func TestFixFilesConcurrent(t *testing.T) {
 }
 
 func TestFixFilesNoConcurrency(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -621,21 +620,21 @@ func TestFixFilesNoConcurrency(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	file := createHCLFile(t, tmpDir, "test.hcl", "inputs = {\n\n  a = \"b\"\n\n}\n")
 
-	results := fixer.FixFiles([]string{file}, 0)
+	results := eng.FixFiles([]string{file}, 0)
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}
 }
 
 func TestFixBlockOrderWithBlankLines(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   block_order {
@@ -647,10 +646,10 @@ func TestFixBlockOrderWithBlankLines(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	tests := []struct {
 		name         string
@@ -696,7 +695,7 @@ locals {}
 		t.Run(tt.name, func(t *testing.T) {
 			file := createHCLFile(t, tmpDir, "terragrunt.hcl", tt.input)
 
-			result, err := fixer.FixFile(file)
+			result, err := eng.FixFile(file)
 			if err != nil {
 				t.Fatalf("FixFile failed: %v", err)
 			}
@@ -709,7 +708,7 @@ locals {}
 }
 
 func TestFixPreservesComplexExpressions(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   block_order {
@@ -721,10 +720,10 @@ func TestFixPreservesComplexExpressions(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `terraform {
   source = "."
@@ -741,7 +740,7 @@ inputs = {
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -756,7 +755,7 @@ inputs = {
 }
 
 func TestFixMultipleObjectAttributes(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -764,10 +763,10 @@ func TestFixMultipleObjectAttributes(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `inputs = {
 
@@ -796,7 +795,7 @@ other = {
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -811,7 +810,7 @@ other = {
 }
 
 func TestFixTrailingNewline(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -819,10 +818,10 @@ func TestFixTrailingNewline(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `inputs = {
 
@@ -833,7 +832,7 @@ func TestFixTrailingNewline(t *testing.T) {
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -844,7 +843,7 @@ func TestFixTrailingNewline(t *testing.T) {
 }
 
 func TestFixNoHangOnComplexFile(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -856,10 +855,10 @@ func TestFixNoHangOnComplexFile(t *testing.T) {
     order   = ["include", "locals", "terraform", "dependency", "inputs"]
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `inputs = {
 
@@ -888,7 +887,7 @@ include "root" {
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -920,7 +919,7 @@ include "root" {
 }
 
 func TestFixRegressionDuplicateBlocks(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   block_order {
@@ -928,10 +927,10 @@ func TestFixRegressionDuplicateBlocks(t *testing.T) {
     order   = ["include", "locals", "terraform", "inputs"]
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `terraform {}
 
@@ -942,7 +941,7 @@ inputs = {}
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -963,7 +962,7 @@ inputs = {}
 }
 
 func TestFixTerraformRealisticBlocks(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -975,10 +974,10 @@ func TestFixTerraformRealisticBlocks(t *testing.T) {
     order   = ["include", "locals", "terraform", "inputs"]
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `locals {}
 
@@ -1013,7 +1012,7 @@ inputs = {
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -1041,7 +1040,7 @@ inputs = {
 }
 
 func TestFixTerraformWithRemoteState(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -1049,10 +1048,10 @@ func TestFixTerraformWithRemoteState(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `terraform {
 
@@ -1079,7 +1078,7 @@ func TestFixTerraformWithRemoteState(t *testing.T) {
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -1102,7 +1101,7 @@ func TestFixTerraformWithRemoteState(t *testing.T) {
 }
 
 func TestFixTerraformPreservesAllAttributes(t *testing.T) {
-	tmpDir := createFixTestConfigDir(t)
+	tmpDir := createTestConfigDir(t)
 
 	configContent := `rules {
   blank_lines {
@@ -1110,10 +1109,10 @@ func TestFixTerraformPreservesAllAttributes(t *testing.T) {
     within_blocks = true
   }
 }`
-	setupFixTestConfig(t, tmpDir, configContent)
+	setupTestConfig(t, tmpDir, configContent)
 
-	loader := newFixTestLoader(t, tmpDir)
-	fixer := NewFixer(loader)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
 
 	input := `terraform {
 
@@ -1148,7 +1147,7 @@ func TestFixTerraformPreservesAllAttributes(t *testing.T) {
 
 	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
 
-	result, err := fixer.FixFile(file)
+	result, err := eng.FixFile(file)
 	if err != nil {
 		t.Fatalf("FixFile failed: %v", err)
 	}
@@ -1167,5 +1166,120 @@ func TestFixTerraformPreservesAllAttributes(t *testing.T) {
 		if !strings.Contains(result.Content, content) {
 			t.Errorf("expected content to contain %q", content)
 		}
+	}
+}
+
+// TestFixArraySortDisabled verifies that when sort is not configured (defaults
+// to false), array items are expanded to multiline but their original order is
+// preserved.
+func TestFixArraySortDisabled(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `rules {
+  array_format {
+    enabled = true
+  }
+}`
+	setupTestConfig(t, tmpDir, configContent)
+
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	// Items are intentionally out of alphabetical order.
+	input := `arr = ["charlie", "alpha", "bravo"]
+`
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := eng.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes == 0 {
+		t.Fatal("expected array to be expanded to multiline, got 0 changes")
+	}
+
+	// Items should appear in their original order, not sorted.
+	charlieIdx := strings.Index(result.Content, "charlie")
+	alphaIdx := strings.Index(result.Content, "alpha")
+	bravoIdx := strings.Index(result.Content, "bravo")
+
+	if charlieIdx == -1 || alphaIdx == -1 || bravoIdx == -1 {
+		t.Fatalf("missing items in output:\n%s", result.Content)
+	}
+
+	if charlieIdx > alphaIdx {
+		t.Errorf("items were sorted even though sort = false: charlie should appear before alpha\n%s", result.Content)
+	}
+}
+
+// TestFixArraySortEnabled verifies that when sort = true, array items are
+// sorted alphabetically after expansion.
+func TestFixArraySortEnabled(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	configContent := `rules {
+  array_format {
+    enabled = true
+    sort    = true
+  }
+}`
+	setupTestConfig(t, tmpDir, configContent)
+
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	input := `arr = ["charlie", "alpha", "bravo"]
+`
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", input)
+
+	result, err := eng.FixFile(file)
+	if err != nil {
+		t.Fatalf("FixFile failed: %v", err)
+	}
+
+	if result.Changes == 0 {
+		t.Fatal("expected changes, got 0")
+	}
+
+	alphaIdx := strings.Index(result.Content, "alpha")
+	bravoIdx := strings.Index(result.Content, "bravo")
+	charlieIdx := strings.Index(result.Content, "charlie")
+
+	if alphaIdx == -1 || bravoIdx == -1 || charlieIdx == -1 {
+		t.Fatalf("missing items in output:\n%s", result.Content)
+	}
+
+	if alphaIdx >= bravoIdx || bravoIdx >= charlieIdx {
+		t.Errorf("expected items to be sorted alphabetically (alpha < bravo < charlie), got:\n%s", result.Content)
+	}
+}
+
+// TestFormatFixFileArraySort verifies that fix --format always sorts array
+// items regardless of config, maintaining its original opinionated behaviour.
+func TestFormatFixFileArraySort(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	input := `arr = ["charlie", "alpha", "bravo"]
+`
+	file := createHCLFile(t, tmpDir, "format_test.hcl", input)
+
+	result, err := eng.FormatFixFile(file)
+	if err != nil {
+		t.Fatalf("FormatFixFile failed: %v", err)
+	}
+
+	alphaIdx := strings.Index(result.Content, "alpha")
+	bravoIdx := strings.Index(result.Content, "bravo")
+	charlieIdx := strings.Index(result.Content, "charlie")
+
+	if alphaIdx == -1 || bravoIdx == -1 || charlieIdx == -1 {
+		t.Fatalf("missing items in output:\n%s", result.Content)
+	}
+
+	if alphaIdx >= bravoIdx || bravoIdx >= charlieIdx {
+		t.Errorf("expected --format to always sort items (alpha < bravo < charlie), got:\n%s", result.Content)
 	}
 }

@@ -141,6 +141,11 @@ func parseHCLArrayFormat(body *hclsyntax.Body) *ArrayFormatConfig {
 			cfg.MultilineThreshold = int(f)
 		}
 	}
+	if attr, ok := body.Attributes["sort"]; ok {
+		if val, diags := attr.Expr.Value(nil); !diags.HasErrors() {
+			cfg.Sort = val.True()
+		}
+	}
 	return cfg
 }
 

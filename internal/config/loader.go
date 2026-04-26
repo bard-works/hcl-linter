@@ -43,13 +43,16 @@ func getCwdConfigDir() (string, error) {
 }
 
 func findConfigDir(loader *Loader) *ConfigResult {
-	for source, dir := range map[ConfigSource]string{
-		ConfigSourceCLI: loader.configDir,
-		ConfigSourceEnv: os.Getenv("HCL_LINTER_CONFIG_DIR"),
+	for _, entry := range []struct {
+		source ConfigSource
+		dir    string
+	}{
+		{ConfigSourceCLI, loader.configDir},
+		{ConfigSourceEnv, os.Getenv("HCL_LINTER_CONFIG_DIR")},
 	} {
-		if resolved, ok := resolveConfigDir(dir); ok {
+		if resolved, ok := resolveConfigDir(entry.dir); ok {
 			return &ConfigResult{
-				Source:     source,
+				Source:     entry.source,
 				SourcePath: resolved,
 			}
 		}
