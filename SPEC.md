@@ -748,9 +748,31 @@ hcl-linter --concurrency 4 lint ./
 
 # Print version information
 hcl-linter version
+
+# Validate config files for typos and misconfigurations (exits non-zero on errors)
+hcl-linter validate-config
+hcl-linter validate-config /path/to/.hcl-linter
 ```
 
 **Note:** Files without a matching config (e.g., `something-special.hcl` without a `something-special.hcl` or `default.hcl` in `.hcl-linter/`) are warned and skipped. Use `--format` to apply formatting to any file without requiring config.
+
+### `validate-config` Command
+
+Validates every `.hcl` file in the config directory and exits non-zero if any issues are found.
+
+**Checks performed:**
+
+- **Unknown rule blocks** — any block name inside `rules {}` that doesn't match a known rule is reported as an error. This catches silent typos: the HCL parser ignores unrecognised blocks, so `blokc_order {}` would silently do nothing without this check.
+- **Enabled rules with missing required fields:**
+
+| Rule | Required when enabled |
+|------|-----------------------|
+| `block_order` | `order` list must be non-empty |
+| `name_validation` | `pattern` must be set |
+| `required_blocks` | at least one `required` entry must exist |
+| `key_value` | at least one of `key_case`, `value_pattern`, or `disallowed` must be set |
+
+**Startup warnings:** `lint`, `check`, and `fix` run the same checks automatically and print any issues as warnings to stderr. The dedicated subcommand is useful in CI where you want a hard failure on config problems.
 
 ### `fix --format` Flag
 
@@ -815,24 +837,98 @@ Matched files:
 
 ## Architecture
 
+### Package layout
+
 ```
-cmd/hcl-linter/main.go           # CLI entrypoint
+cmd/hcl-linter/main.go       # CLI entrypoint (cobra: lint, check, fix, version)
 internal/
+├── engine/
+│   └── engine.go            # Engine: single entry point for all lint and fix ops
+│                            #   LintFile / LintFiles / FixFile / FixFiles
+│                            #   FormatFixFile / FormatFixFiles
+├── rules/
+│   ├── rule.go              # Rule, Fixer interfaces; Context struct
+│   ├── registry.go          # Registry: Register / Enabled / All
+│   ├── block_order.go       # BlockOrderRule      — Check + Fix
+│   ├── array_format.go      # ArrayFormatRule     — Check + Fix
+│   ├── blank_lines.go       # BlankLinesRule      — Fix only
+│   ├── name_validation.go   # NameValidationRule  — Check + Fix
+│   ├── required_fields.go   # RequiredFieldsRule  — Check + Fix
+│   ├── required_blocks.go   # RequiredBlocksRule  — Check
+│   ├── duplicates.go        # DuplicatesRule      — Check
+│   ├── terragrunt.go        # TerragruntRule      — Check
+│   ├── terragrunt_functions.go  # TerragruntFunctionsRule — Check
+│   ├── terraform_block.go   # TerraformBlockRule  — Check
+│   ├── key_value.go         # KeyValueRule        — Check
+│   ├── count_foreach.go     # CountForEachRule    — Check
+│   └── dependency_outputs.go # DependencyOutputsRule — Check
 ├── config/
-│   └── loader.go                # Load configs (multiple sources)
+│   ├── loader.go            # Config discovery and loading
+│   ├── hcl.go               # HCL config parser + extends resolution
+│   └── types.go             # Config structs (Rules, BlockOrderConfig, …)
 ├── linter/
-│   ├── linter.go                 # Main linting logic
-│   ├── result.go                 # Result types
-│   ├── block_order.go            # Block ordering checks
-│   ├── array_format.go           # Array format checks
-│   ├── validation.go             # Name validation, duplicates, required fields/blocks
-│   ├── terragrunt.go             # Terragrunt path and function validation
-│   └── terraform.go              # Terraform block validation
-├── fix/
-│   └── fixer.go                  # Auto-fix logic (FixFile, FormatFixFile, FixFiles, FormatFixFiles)
+│   └── result.go            # Types only: Issue, Result, Severity
 └── ast/
-    └── parser.go                 # HCL AST utilities
+    └── parser.go            # HCL parse helpers (blocks, attributes, expressions)
 ```
+
+### Data flow
+
+```
+                    ┌─────────────────────────────────┐
+                    │           CLI (cobra)            │
+                    │    lint / check / fix / version  │
+                    └────────────────┬────────────────┘
+                                     │ path(s)
+                    ┌────────────────▼────────────────┐
+                    │             Engine              │
+                    │  buildContext(path)              │
+                    │    ├─ Config Loader              │
+                    │    │    LoadForFile → *Rules     │
+                    │    ├─ AST Parser                 │
+                    │    │    ParseFile → *hcl.File    │
+                    │    │    GetTopLevelBlocks/Attrs  │
+                    │    └─ → Context{FilePath,        │
+                    │           Content, File,         │
+                    │           Blocks, Attrs, Config} │
+                    └────────────────┬────────────────┘
+                                     │ ctx
+                    ┌────────────────▼────────────────┐
+                    │    Registry.Enabled(cfg)        │
+                    │    returns rules where           │
+                    │    rule.Enabled(cfg) == true     │
+                    └──┬───────┬──────┬──────┬────────┘
+                       │       │      │      │
+              ┌────────▼──┐ ┌──▼──┐ ┌─▼──┐ ┌▼──────┐
+              │BlockOrder │ │Name │ │ … │ │Dep    │
+              │Check / Fix│ │Valid│ │   │ │Outputs│
+              └───────────┘ └─────┘ └───┘ └───────┘
+                       │       │      │      │
+                    ┌──▼───────▼──────▼──────▼──────┐
+                    │   []Issue (lint) or []byte (fix)│
+                    └────────────────────────────────┘
+```
+
+### Rule and Fixer interfaces
+
+```go
+// Every rule implements Rule.
+type Rule interface {
+    Name()    string
+    Enabled(cfg *config.Rules) bool
+    Check(ctx *Context) []linter.Issue
+}
+
+// Rules that can auto-correct also implement Fixer.
+type Fixer interface {
+    Rule
+    Fix(ctx *Context) ([]byte, bool, error)
+}
+```
+
+Fix is applied by the engine in a fixed pipeline order (BlockOrder → NameValidation →
+RequiredFields → ArrayFormat → BlankLines) rather than via the registry, because each
+fix step re-parses the file before the next one runs.
 
 ## Implementation Notes
 
