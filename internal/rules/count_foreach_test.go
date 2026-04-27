@@ -11,10 +11,10 @@ import (
 func TestCountForEachRule(t *testing.T) {
 	cfg := &config.Rules{
 		CountForEach: &config.CountForEachConfig{
-			Enabled:              true,
-			WarnOnCountZero:      true,
-			WarnOnEmptyForEach:   true,
-			WarnOnConflict:       true,
+			Enabled:            true,
+			WarnOnCountZero:    true,
+			WarnOnEmptyForEach: true,
+			WarnOnConflict:     true,
 		},
 	}
 

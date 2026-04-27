@@ -1283,3 +1283,153 @@ func TestFormatFixFileArraySort(t *testing.T) {
 		t.Errorf("expected --format to always sort items (alpha < bravo < charlie), got:\n%s", result.Content)
 	}
 }
+
+func TestFormatFixFilesConcurrent(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	files := []string{
+		createHCLFile(t, tmpDir, "a.hcl", `arr = ["c", "b", "a"]`+"\n"),
+		createHCLFile(t, tmpDir, "b.hcl", `arr = ["z", "y", "x"]`+"\n"),
+		createHCLFile(t, tmpDir, "c.hcl", `arr = ["f", "e", "d"]`+"\n"),
+	}
+
+	results := eng.FormatFixFiles(files, 2)
+
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	for _, r := range results {
+		if r.Error != nil {
+			t.Errorf("unexpected error for %s: %v", r.File, r.Error)
+		}
+		if r.Changes == 0 {
+			t.Errorf("expected changes for %s", r.File)
+		}
+	}
+	// results must be sorted by file path
+	for i := 1; i < len(results); i++ {
+		if results[i-1].File > results[i].File {
+			t.Errorf("results not sorted: %s > %s", results[i-1].File, results[i].File)
+		}
+	}
+}
+
+func TestLintFileFindsIssues(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	setupTestConfig(t, tmpDir, `rules {
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "terraform"]
+  }
+  name_validation {
+    enabled = true
+    pattern = "^[a-z][a-z0-9_]*$"
+    blocks  = ["include"]
+  }
+}`)
+
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", `terraform {}
+include "My-Bad-Name" {}
+locals {}
+`)
+
+	result, err := eng.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+
+	if len(result.Issues) == 0 {
+		t.Error("expected issues, got none")
+	}
+
+	var ruleNames []string
+	for _, issue := range result.Issues {
+		ruleNames = append(ruleNames, issue.Rule)
+	}
+	hasBlockOrder := false
+	hasNameValidation := false
+	for _, name := range ruleNames {
+		if name == "block_order" {
+			hasBlockOrder = true
+		}
+		if name == "name_validation" {
+			hasNameValidation = true
+		}
+	}
+	if !hasBlockOrder {
+		t.Errorf("expected block_order issue, got rules: %v", ruleNames)
+	}
+	if !hasNameValidation {
+		t.Errorf("expected name_validation issue, got rules: %v", ruleNames)
+	}
+}
+
+func TestLintFilesReturnsSortedResults(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	setupTestConfig(t, tmpDir, `rules {
+  name_validation {
+    enabled = true
+    pattern = "^[a-z][a-z0-9_]*$"
+    blocks  = ["include"]
+  }
+}`)
+
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	files := []string{
+		createHCLFile(t, tmpDir, "c.hcl", `include "Bad-Name" {}`+"\n"),
+		createHCLFile(t, tmpDir, "a.hcl", `include "Bad-Name" {}`+"\n"),
+		createHCLFile(t, tmpDir, "b.hcl", `include "Bad-Name" {}`+"\n"),
+	}
+
+	// Pass in non-sorted order; results must come back sorted.
+	results := eng.LintFiles(files, 0)
+
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	for i := 1; i < len(results); i++ {
+		if results[i-1].File > results[i].File {
+			t.Errorf("results not sorted: %s > %s", results[i-1].File, results[i].File)
+		}
+	}
+}
+
+func TestFixFilesReturnsSortedResults(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+
+	setupTestConfig(t, tmpDir, `rules {
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`)
+
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	files := []string{
+		createHCLFile(t, tmpDir, "c.hcl", "inputs = {\n\n  a = \"1\"\n\n}\n"),
+		createHCLFile(t, tmpDir, "a.hcl", "inputs = {\n\n  b = \"2\"\n\n}\n"),
+		createHCLFile(t, tmpDir, "b.hcl", "inputs = {\n\n  c = \"3\"\n\n}\n"),
+	}
+
+	results := eng.FixFiles(files, 0)
+
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	for i := 1; i < len(results); i++ {
+		if results[i-1].File > results[i].File {
+			t.Errorf("results not sorted: %s > %s", results[i-1].File, results[i].File)
+		}
+	}
+}

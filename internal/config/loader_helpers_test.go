@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -74,7 +75,7 @@ func TestResolveConfigDir(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, ok := resolveConfigDir(dir + "/.hcl-linter")
+		got, ok := resolveConfigDir(filepath.FromSlash(dir + "/.hcl-linter"))
 		if !ok {
 			t.Error("expected true")
 		}
@@ -86,10 +87,11 @@ func TestResolveConfigDir(t *testing.T) {
 
 func TestFindConfigFiles(t *testing.T) {
 	t.Run("empty baseName defaults to default", func(t *testing.T) {
-		files := findConfigFiles("/config", "")
+		dir := filepath.FromSlash("/config")
+		files := findConfigFiles(dir, "")
 		want := []string{
-			"/config/default.hcl",
-			"/config/default",
+			filepath.Join(dir, "default.hcl"),
+			filepath.Join(dir, "default"),
 		}
 		if len(files) != len(want) {
 			t.Fatalf("got %d files, want %d", len(files), len(want))
@@ -98,40 +100,69 @@ func TestFindConfigFiles(t *testing.T) {
 			if files[i] != w {
 				t.Errorf("files[%d]: got %s, want %s", i, files[i], w)
 			}
+		}
+	})
+
+	t.Run("generates hcl and no extension files in correct order", func(t *testing.T) {
+		dir := t.TempDir()
+
+		hcl := filepath.Join(dir, "myfile.hcl")
+		raw := filepath.Join(dir, "myfile")
+
+		if err := os.WriteFile(hcl, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(raw, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		files := findConfigFiles(dir, "myfile")
+
+		want := []string{hcl, raw}
+
+		if !reflect.DeepEqual(files, want) {
+			t.Fatalf("got %v, want %v", files, want)
 		}
 	})
 
 	t.Run("generates hcl and no extension files", func(t *testing.T) {
-		files := findConfigFiles("/config", "myfile")
-		want := []string{
-			"/config/myfile.hcl",
-			"/config/myfile",
-		}
-		if len(files) != len(want) {
-			t.Fatalf("got %d files, want %d", len(files), len(want))
-		}
-		for i, w := range want {
-			if files[i] != w {
-				t.Errorf("files[%d]: got %s, want %s", i, files[i], w)
-			}
-		}
-	})
+		dir := t.TempDir()
 
-	t.Run("uses provided dir", func(t *testing.T) {
-		files := findConfigFiles("/custom/dir", "test")
-		want := []string{
-			"/custom/dir/test.hcl",
-			"/custom/dir/test",
+		// create files
+		hcl := filepath.Join(dir, "myfile.hcl")
+		raw := filepath.Join(dir, "myfile")
+
+		if err := os.WriteFile(hcl, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
 		}
-		for i, w := range want {
-			if files[i] != w {
-				t.Errorf("files[%d]: got %s, want %s", i, files[i], w)
+		if err := os.WriteFile(raw, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		files := findConfigFiles(dir, "myfile")
+
+		want := []string{hcl, raw}
+
+		if len(files) != len(want) {
+			t.Fatalf("got %d files, want %d (%v)", len(files), len(want), files)
+		}
+
+		gotSet := make(map[string]struct{}, len(files))
+		for _, f := range files {
+			gotSet[f] = struct{}{}
+		}
+
+		for _, w := range want {
+			if _, ok := gotSet[w]; !ok {
+				t.Errorf("missing expected file: %s (got %v)", w, files)
 			}
 		}
 	})
 }
 
 func TestResolveExtendsPath(t *testing.T) {
+	configDir := filepath.FromSlash("/config/dir")
+	abDir := filepath.FromSlash("/a/b")
 	tests := []struct {
 		name        string
 		currentPath string
@@ -140,21 +171,21 @@ func TestResolveExtendsPath(t *testing.T) {
 	}{
 		{
 			name:        "name without extension gets .hcl appended",
-			currentPath: "/config/dir/child.hcl",
+			currentPath: filepath.Join(configDir, "child.hcl"),
 			ref:         "base",
-			want:        "/config/dir/base.hcl",
+			want:        filepath.Join(configDir, "base.hcl"),
 		},
 		{
 			name:        "name with .hcl extension unchanged",
-			currentPath: "/config/dir/child.hcl",
+			currentPath: filepath.Join(configDir, "child.hcl"),
 			ref:         "base.hcl",
-			want:        "/config/dir/base.hcl",
+			want:        filepath.Join(configDir, "base.hcl"),
 		},
 		{
 			name:        "resolves relative to current file directory",
-			currentPath: "/a/b/c.hcl",
+			currentPath: filepath.Join(abDir, "c.hcl"),
 			ref:         "default",
-			want:        "/a/b/default.hcl",
+			want:        filepath.Join(abDir, "default.hcl"),
 		},
 	}
 

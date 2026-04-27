@@ -125,7 +125,7 @@ func TestDependencyPathExistsWithAbsolutePath(t *testing.T) {
 		Terragrunt: &config.TerragruntConfig{Enabled: true, DependencyPathExists: true},
 	}
 
-	content := fmt.Sprintf(`dependency "vpc" { config_path = "%s" }`+"\n", existingDir)
+	content := fmt.Sprintf(`dependency "vpc" { config_path = "%s" }`+"\n", filepath.ToSlash(existingDir))
 	file := filepath.Join(tmpDir, "terragrunt.hcl")
 	writeFile(t, file, content)
 
@@ -212,7 +212,7 @@ func TestIncludePathExistsWithAbsolutePath(t *testing.T) {
 		Terragrunt: &config.TerragruntConfig{Enabled: true, IncludePathExists: true},
 	}
 
-	content := fmt.Sprintf(`include "root" { path = "%s" }`+"\n", existingDir)
+	content := fmt.Sprintf(`include "root" { path = "%s" }`+"\n", filepath.ToSlash(existingDir))
 	file := filepath.Join(tmpDir, "terragrunt.hcl")
 	writeFile(t, file, content)
 

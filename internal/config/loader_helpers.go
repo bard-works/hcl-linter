@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 func resolveConfigDir(path string) (string, bool) {
@@ -11,16 +10,25 @@ func resolveConfigDir(path string) (string, bool) {
 		return "", false
 	}
 
-	dir := path
-	if !strings.HasSuffix(dir, ".hcl-linter") && !strings.HasSuffix(dir, "/.hcl-linter") {
-		dir = filepath.Join(path, ".hcl-linter")
+	// If already pointing to .hcl-linter
+	if filepath.Base(path) == ".hcl-linter" {
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			return path, true
+		}
+		return "", false
 	}
-	if _, err := os.Stat(dir); err == nil {
-		return dir, true
+
+	// Try <path>/.hcl-linter
+	configDir := filepath.Join(path, ".hcl-linter")
+	if info, err := os.Stat(configDir); err == nil && info.IsDir() {
+		return configDir, true
 	}
-	if _, err := os.Stat(path); err == nil {
+
+	// Fallback: only if path itself is a dir (questionable design)
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
 		return path, true
 	}
+
 	return "", false
 }
 

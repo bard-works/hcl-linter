@@ -70,6 +70,9 @@ func detectUnknownBlocks(path string) []ValidationIssue {
 	if diags.HasErrors() {
 		return nil
 	}
+	if file == nil {
+		return nil
+	}
 	syntaxBody, ok := file.Body.(*hclsyntax.Body)
 	if !ok {
 		return nil
