@@ -123,6 +123,7 @@ hcl-linter validate-config . --recursive
 - [docs/configuration.md](docs/configuration.md) - config format, precedence, inheritance
 - [docs/cli.md](docs/cli.md) - commands, flags, exit codes, colour
 - [docs/architecture.md](docs/architecture.md) - package layout and data flow
+- [docs/demo/README.md](docs/demo/README.md) - demo files and run commands
 
 ## Contributing
 

@@ -147,6 +147,50 @@ While `SetMode` currently only fails on invalid mode (which shouldn't happen in 
 
 ---
 
+### Issue 10: `required_blocks` Config Format Verbose
+
+**Problem**: The current block syntax for multiple required blocks is verbose:
+
+```hcl
+required_blocks {
+  required {
+    type  = "terraform"
+    count = "at_least_one"
+    error = "terraform block is required but missing"
+  }
+  required {
+    type  = "include"
+    count = "once"
+    error = "include block is required but missing"
+  }
+}
+```
+
+This repeats the `required` block keyword for each entry.
+
+**Suggested Fix**: Switch to array syntax (more idiomatic HCL):
+
+```hcl
+required_blocks {
+  required = [
+    {
+      type  = "terraform"
+      count = "at_least_one"
+      error = "terraform block is required but missing"
+    },
+    {
+      type  = "include"
+      count = "once"
+      error = "include block is required but missing"
+    },
+  ]
+}
+```
+
+Requires refactoring `parseHCLRequiredBlocks()` in `internal/config/hcl.go:217-242` to handle array syntax.
+
+---
+
 ## P3 - MINOR (Style / Polish)
 
 ### Issue 7: Duplicate BlockInfo Extraction Pattern
@@ -236,6 +280,7 @@ const DefaultNamePattern = `^[a-z][a-z0-9_]*$`
 | P2 | Misleading isLowerLetter | Correctness | Low |
 | P2 | Value pattern recompiled | Performance | Medium |
 | P2 | Ignored SetMode error | Consistency | Low |
+| P2 | Required blocks config verbose | Usability | Medium |
 | P3 | Duplicate block extraction | DRY | Low |
 | P3 | Map initialization | DRY | Low |
 | P3 | Hardcoded pattern | Maintainability | Low |
@@ -264,6 +309,7 @@ All planned issues addressed in this session:
 | P2 | Misleading isLowerLetter | ✅ Fixed | `5009e05` |
 | P2 | Value pattern recompiled | ⚠️ Deferred | - |
 | P2 | Ignored SetMode error | ⚠️ Deferred | - |
+| P2 | Required blocks config verbose | ⚠️ Deferred | - |
 | P3 | Duplicate block extraction | ⚠️ Deferred | - |
 | P3 | Map initialization | ⚠️ Deferred | - |
 | P3 | Hardcoded pattern | ✅ Fixed | `affd850` |
