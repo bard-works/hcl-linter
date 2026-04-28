@@ -10,3 +10,8 @@ dependency "my-vpc" {
 dependency "db- primary" {
   config_path = "../database"
 }
+
+locals {
+  vpc_id  = dependency.my-vpc.outputs.id
+  db_name = dependency["db- primary"].outputs.name
+}
