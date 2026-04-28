@@ -12,7 +12,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 	"github.com/bard-works/hcl-linter/internal/rules"
 )
 
@@ -20,6 +20,11 @@ import (
 type Engine struct {
 	configLoader *config.Loader
 	registry     *rules.Registry
+
+	// DryRun, when true, skips writing fix results to disk. FixResult.Content
+	// still carries the proposed bytes so callers can diff them against the
+	// original file.
+	DryRun bool
 }
 
 type FixResult struct {
@@ -83,13 +88,13 @@ func (e *Engine) buildContext(path string) (*rules.Context, error) {
 
 // --- Lint ---
 
-func (e *Engine) LintFile(path string) (*linter.Result, error) {
+func (e *Engine) LintFile(path string) (*diag.Result, error) {
 	ctx, err := e.buildContext(path)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &linter.Result{File: path, Issues: []linter.Issue{}}
+	result := &diag.Result{File: path, Issues: []diag.Issue{}}
 
 	for _, rule := range e.registry.Enabled(ctx.Config) {
 		result.Issues = append(result.Issues, rule.Check(ctx)...)
@@ -98,14 +103,14 @@ func (e *Engine) LintFile(path string) (*linter.Result, error) {
 	return result, nil
 }
 
-func (e *Engine) LintFiles(paths []string, maxConcurrency int) []*linter.Result {
+func (e *Engine) LintFiles(paths []string, maxConcurrency int) []*diag.Result {
 	if maxConcurrency <= 0 {
 		maxConcurrency = runtime.NumCPU()
 	}
 
 	sem := make(chan struct{}, maxConcurrency)
 	var wg sync.WaitGroup
-	ch := make(chan *linter.Result, len(paths))
+	ch := make(chan *diag.Result, len(paths))
 
 	for _, path := range paths {
 		wg.Add(1)
@@ -116,10 +121,10 @@ func (e *Engine) LintFiles(paths []string, maxConcurrency int) []*linter.Result 
 
 			result, err := e.LintFile(p)
 			if err != nil {
-				result = &linter.Result{
+				result = &diag.Result{
 					File: p,
-					Issues: []linter.Issue{{
-						Severity: linter.SeverityError,
+					Issues: []diag.Issue{{
+						Severity: diag.SeverityError,
 						Rule:     "linter_error",
 						Message:  err.Error(),
 					}},
@@ -134,7 +139,7 @@ func (e *Engine) LintFiles(paths []string, maxConcurrency int) []*linter.Result 
 		close(ch)
 	}()
 
-	var allResults []*linter.Result
+	var allResults []*diag.Result
 	for r := range ch {
 		allResults = append(allResults, r)
 	}
@@ -220,7 +225,7 @@ func (e *Engine) FixFile(path string) (*FixResult, error) {
 		}
 	}
 
-	if result.Changes > 0 {
+	if result.Changes > 0 && !e.DryRun {
 		if err := os.WriteFile(path, []byte(contentStr), 0o644); err != nil {
 			return nil, err
 		}
@@ -326,7 +331,7 @@ func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 		result.Changes++
 	}
 
-	if result.Changes > 0 {
+	if result.Changes > 0 && !e.DryRun {
 		if err := os.WriteFile(path, []byte(contentStr), 0o644); err != nil {
 			return nil, err
 		}

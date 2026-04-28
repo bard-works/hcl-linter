@@ -91,4 +91,3 @@ func TestRequiredFieldsRuleFix(t *testing.T) {
 		t.Errorf("expected expose = true in output:\n%s", string(out))
 	}
 }
-

@@ -9,7 +9,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type KeyValueRule struct{}
@@ -20,9 +20,9 @@ func (r KeyValueRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.KeyValue != nil && cfg.KeyValue.Enabled
 }
 
-func (r KeyValueRule) Check(ctx *Context) []linter.Issue {
+func (r KeyValueRule) Check(ctx *Context) []diag.Issue {
 	cfg := ctx.Config.KeyValue
-	var issues []linter.Issue
+	var issues []diag.Issue
 
 	if cfg.KeyCase != "" {
 		kvCheckKeyCase(&issues, ctx.Blocks, cfg.KeyCase)
@@ -37,7 +37,7 @@ func (r KeyValueRule) Check(ctx *Context) []linter.Issue {
 	return issues
 }
 
-func kvCheckKeyCase(issues *[]linter.Issue, blocks []ast.BlockInfo, caseType string) {
+func kvCheckKeyCase(issues *[]diag.Issue, blocks []ast.BlockInfo, caseType string) {
 	var pattern *regexp.Regexp
 	switch strings.ToLower(caseType) {
 	case "camelcase":
@@ -59,12 +59,12 @@ func kvCheckKeyCase(issues *[]linter.Issue, blocks []ast.BlockInfo, caseType str
 	}
 }
 
-func kvCheckBlockKeyCase(issues *[]linter.Issue, body hcl.Body, pattern *regexp.Regexp, caseType string) {
+func kvCheckBlockKeyCase(issues *[]diag.Issue, body hcl.Body, pattern *regexp.Regexp, caseType string) {
 	attrs, _ := body.JustAttributes()
 	for name := range attrs {
 		if !pattern.MatchString(name) {
-			*issues = append(*issues, linter.Issue{
-				Severity: linter.SeverityError,
+			*issues = append(*issues, diag.Issue{
+				Severity: diag.SeverityError,
 				Rule:     "key_case",
 				Message:  fmt.Sprintf("attribute %q should be %s", name, caseType),
 				Location: attrs[name].Expr.Range(),
@@ -73,7 +73,7 @@ func kvCheckBlockKeyCase(issues *[]linter.Issue, body hcl.Body, pattern *regexp.
 	}
 }
 
-func kvCheckDisallowedKeys(issues *[]linter.Issue, blocks []ast.BlockInfo, disallowed []string) {
+func kvCheckDisallowedKeys(issues *[]diag.Issue, blocks []ast.BlockInfo, disallowed []string) {
 	disallowedMap := make(map[string]bool)
 	for _, k := range disallowed {
 		disallowedMap[k] = true
@@ -88,12 +88,12 @@ func kvCheckDisallowedKeys(issues *[]linter.Issue, blocks []ast.BlockInfo, disal
 	}
 }
 
-func kvCheckBlockDisallowedKeys(issues *[]linter.Issue, body hcl.Body, disallowed map[string]bool) {
+func kvCheckBlockDisallowedKeys(issues *[]diag.Issue, body hcl.Body, disallowed map[string]bool) {
 	attrs, _ := body.JustAttributes()
 	for name := range attrs {
 		if disallowed[name] {
-			*issues = append(*issues, linter.Issue{
-				Severity: linter.SeverityError,
+			*issues = append(*issues, diag.Issue{
+				Severity: diag.SeverityError,
 				Rule:     "disallowed_keys",
 				Message:  fmt.Sprintf("attribute %q is not allowed", name),
 				Location: attrs[name].Expr.Range(),
@@ -102,7 +102,7 @@ func kvCheckBlockDisallowedKeys(issues *[]linter.Issue, body hcl.Body, disallowe
 	}
 }
 
-func kvCheckValuePattern(issues *[]linter.Issue, blocks []ast.BlockInfo, patterns map[string]string) {
+func kvCheckValuePattern(issues *[]diag.Issue, blocks []ast.BlockInfo, patterns map[string]string) {
 	compiled := make(map[string]*regexp.Regexp)
 	for key, pat := range patterns {
 		if p, err := regexp.Compile(pat); err == nil {
@@ -119,7 +119,7 @@ func kvCheckValuePattern(issues *[]linter.Issue, blocks []ast.BlockInfo, pattern
 	}
 }
 
-func kvCheckBlockValuePattern(issues *[]linter.Issue, body hcl.Body, patterns map[string]*regexp.Regexp) {
+func kvCheckBlockValuePattern(issues *[]diag.Issue, body hcl.Body, patterns map[string]*regexp.Regexp) {
 	attrs, _ := body.JustAttributes()
 	for key, attr := range attrs {
 		if pattern, ok := patterns[key]; ok {
@@ -129,8 +129,8 @@ func kvCheckBlockValuePattern(issues *[]linter.Issue, body hcl.Body, patterns ma
 			}
 			strVal := val.AsString()
 			if !pattern.MatchString(strVal) {
-				*issues = append(*issues, linter.Issue{
-					Severity: linter.SeverityWarning,
+				*issues = append(*issues, diag.Issue{
+					Severity: diag.SeverityWarning,
 					Rule:     "value_pattern",
 					Message:  fmt.Sprintf("attribute %q value %q does not match pattern %q", key, strVal, pattern.String()),
 					Location: attr.Expr.Range(),

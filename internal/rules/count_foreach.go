@@ -7,7 +7,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 type CountForEachRule struct{}
@@ -18,9 +18,9 @@ func (r CountForEachRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.CountForEach != nil && cfg.CountForEach.Enabled
 }
 
-func (r CountForEachRule) Check(ctx *Context) []linter.Issue {
+func (r CountForEachRule) Check(ctx *Context) []diag.Issue {
 	cfg := ctx.Config.CountForEach
-	var issues []linter.Issue
+	var issues []diag.Issue
 
 	if cfg.WarnOnCountZero || cfg.WarnOnEmptyForEach || cfg.WarnOnConflict {
 		cfeCheckCountZero(&issues, ctx.Blocks, cfg.WarnOnCountZero)
@@ -31,7 +31,7 @@ func (r CountForEachRule) Check(ctx *Context) []linter.Issue {
 	return issues
 }
 
-func cfeCheckCountZero(issues *[]linter.Issue, blocks []ast.BlockInfo, enabled bool) {
+func cfeCheckCountZero(issues *[]diag.Issue, blocks []ast.BlockInfo, enabled bool) {
 	if !enabled {
 		return
 	}
@@ -55,8 +55,8 @@ func cfeCheckCountZero(issues *[]linter.Issue, blocks []ast.BlockInfo, enabled b
 		if val.Type() == cty.Number {
 			numVal := val.AsBigFloat()
 			if numVal.Cmp(big.NewFloat(0)) == 0 {
-				*issues = append(*issues, linter.Issue{
-					Severity: linter.SeverityWarning,
+				*issues = append(*issues, diag.Issue{
+					Severity: diag.SeverityWarning,
 					Rule:     "count_zero",
 					Message:  block.Type + " block has count = 0, resource will not be created",
 					Location: countAttr.Range(),
@@ -66,7 +66,7 @@ func cfeCheckCountZero(issues *[]linter.Issue, blocks []ast.BlockInfo, enabled b
 	}
 }
 
-func cfeCheckEmptyForEach(issues *[]linter.Issue, blocks []ast.BlockInfo, enabled bool) {
+func cfeCheckEmptyForEach(issues *[]diag.Issue, blocks []ast.BlockInfo, enabled bool) {
 	if !enabled {
 		return
 	}
@@ -89,8 +89,8 @@ func cfeCheckEmptyForEach(issues *[]linter.Issue, blocks []ast.BlockInfo, enable
 
 		valMap := val.AsValueMap()
 		if len(valMap) == 0 {
-			*issues = append(*issues, linter.Issue{
-				Severity: linter.SeverityWarning,
+			*issues = append(*issues, diag.Issue{
+				Severity: diag.SeverityWarning,
 				Rule:     "empty_for_each",
 				Message:  block.Type + " block has empty for_each, resource will not be created",
 				Location: forEachAttr.Range(),
@@ -99,7 +99,7 @@ func cfeCheckEmptyForEach(issues *[]linter.Issue, blocks []ast.BlockInfo, enable
 	}
 }
 
-func cfeCheckConflict(issues *[]linter.Issue, blocks []ast.BlockInfo, enabled bool) {
+func cfeCheckConflict(issues *[]diag.Issue, blocks []ast.BlockInfo, enabled bool) {
 	if !enabled {
 		return
 	}
@@ -115,8 +115,8 @@ func cfeCheckConflict(issues *[]linter.Issue, blocks []ast.BlockInfo, enabled bo
 
 		if hasCount && hasForEach {
 			countAttr := attrs["count"]
-			*issues = append(*issues, linter.Issue{
-				Severity: linter.SeverityError,
+			*issues = append(*issues, diag.Issue{
+				Severity: diag.SeverityError,
 				Rule:     "count_for_each_conflict",
 				Message:  block.Type + " block has both count and for_each, which cannot be used together",
 				Location: countAttr.Range(),

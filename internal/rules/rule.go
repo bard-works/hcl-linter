@@ -5,7 +5,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/linter"
+	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
 // Context holds all parsed state passed to every rule.
@@ -22,7 +22,7 @@ type Context struct {
 type Rule interface {
 	Name() string
 	Enabled(cfg *config.Rules) bool
-	Check(ctx *Context) []linter.Issue
+	Check(ctx *Context) []diag.Issue
 }
 
 // Fixer is implemented by rules that can auto-correct violations.

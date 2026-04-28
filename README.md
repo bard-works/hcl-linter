@@ -46,7 +46,7 @@ Download pre-built binaries from the [latest release](https://github.com/bard-wo
 ### Build from Source
 
 ```bash
-go install github.com/bard-works/hcl-linter@latest
+go install github.com/bard-works/hcl-linter/cmd/hcl-linter@latest
 ```
 
 ## Quick Start
@@ -63,6 +63,9 @@ hcl-linter fix ./
 
 # Apply default formatting without any config required
 hcl-linter fix ./ --format
+
+# Preview changes without writing; exits non-zero if any file would change
+hcl-linter fix ./ --dry-run
 ```
 
 ## Configuration
@@ -134,12 +137,12 @@ Enable rules in your config:
 ```hcl
 rules {
   blank_lines {
-    enabled        = true
+    enabled       = true
     within_blocks = true
   }
 
   array_format {
-    enabled            = true
+    enabled             = true
     multiline_threshold = 2
   }
 
@@ -171,15 +174,6 @@ inputs = {
 }
 ```
 
-```hcl
-rules {
-  blank_lines {
-    enabled       = true
-    within_blocks = true
-  }
-}
-```
-
 ## Validating Config Files
 
 Config files are plain HCL — typos in rule block names (e.g. `blokc_order`) are silently ignored by the parser. Use `validate-config` to catch these before they cause silent no-ops:
@@ -203,19 +197,37 @@ During normal `lint`, `check`, and `fix` runs the same checks run automatically 
 --filter             Filter files by name pattern (glob supported)
 --concurrency        Max concurrent workers (default: CPU count)
 --verbose, -v        Show detailed output
+--color              Colour output: auto (default), always, never
 
-# fix-only flag:
+# fix-only flags:
 --format             Apply default formatting without requiring config rules
+--dry-run            Show diff without writing; exit 1 if any changes needed
 ```
+
+In `--color=auto` (the default), colour is enabled only when stdout is a TTY
+and neither `NO_COLOR` nor `TERM=dumb` is set. Use `--color=always` to force
+colour through pipes (e.g. `less -R`) or `--color=never` to disable it.
 
 ## Environment Variables
 
 - `HCL_LINTER_CONFIG_DIR` - Path to config directory
 - `HCL_LINTER_MAX_CONCURRENCY` - Max concurrent workers
+- `NO_COLOR` - When set to any non-empty value, disables coloured output in `--color=auto` mode (see https://no-color.org)
 
 ## Full Documentation
 
-See [SPEC.md](SPEC.md) for complete documentation including all rules and configuration options.
+- [docs/rules.md](docs/rules.md) — every rule, its config fields, rule IDs, and default severities
+- [docs/configuration.md](docs/configuration.md) — config file format, source precedence, and `extends` inheritance
+- [docs/cli.md](docs/cli.md) — command reference, flags, exit codes, and coloured output
+- [docs/architecture.md](docs/architecture.md) — internal package layout and data flow
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, rule conventions, and PR guidelines.
+
+## Security
+
+Please report vulnerabilities privately via [GitHub Security Advisories](https://github.com/bard-works/hcl-linter/security/advisories). See [SECURITY.md](SECURITY.md).
 
 ## License
 
