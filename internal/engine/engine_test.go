@@ -1761,7 +1761,9 @@ func TestBuildContextTOCTOU(t *testing.T) {
 	// a file replaced between preStat and postStat is detected.
 	// This test is exploratory; the TOCTOU guard uses SameFile which
 	// compares inodes, so replacing the file with a new one should trigger.
-	os.WriteFile(path, []byte("locals {\n  y = 2\n}\n"), 0o644)
+	if err := os.WriteFile(path, []byte("locals {\n  y = 2\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	ctx, err := eng.buildContext(path)
 	if err != nil {
