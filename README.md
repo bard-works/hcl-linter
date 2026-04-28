@@ -4,7 +4,7 @@
   <img src="docs/assets/hcl-linter-banner.png" alt="HCL Linter" width="680"/>
 </p>
 
-A configurable linter for Terragrunt HCL files that enforces consistency standards across large codebases.
+A configurable HCL linter that enforces consistency standards across large codebases. Ships with built-in rule sets for Terragrunt and Terraform, and works against any HCL 2 file.
 
 [![CI](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/bard-works/hcl-linter)](https://github.com/bard-works/hcl-linter)
@@ -18,9 +18,11 @@ A configurable linter for Terragrunt HCL files that enforces consistency standar
 - **Duplicate detection** - Detect duplicate block definitions
 - **Required fields** - Enforce required attributes per block type
 - **Required blocks** - Enforce presence of required block types
-- **Terragrunt validation** - Validate paths, include files, and remote state config
-- **Terragrunt functions** - Validate `find_in_parent_folders()` and `get_env()` calls
-- **Terraform block** - Validate terraform blocks for source, version, and deprecated fields
+- **Dependency paths** - Validate `config_path` on `dependency` blocks points to an existing directory
+- **Include paths** - Validate `path` on `include` blocks points to an existing file or directory
+- **Remote state** - Require `backend` on `remote_state` blocks nested inside the `terraform` block
+- **HCL functions** - Validate common HCL function calls (`find_in_parent_folders()`, `get_env()`)
+- **Terraform block** - Validate the `terraform { }` HCL block for source, version, and deprecated fields
 - **Key-value validation** - Enforce key case, value patterns, and disallowed attributes
 - **Count/for_each** - Detect count=0, empty for_each, and count+for_each conflicts
 - **Dependency outputs** - Validate `dependency.*.outputs.*` references against `.tf` files

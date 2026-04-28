@@ -19,7 +19,6 @@ import (
 // Engine is the single entry point for lint and fix operations.
 type Engine struct {
 	configLoader *config.Loader
-	linter       *linter.Linter
 	registry     *rules.Registry
 }
 
@@ -40,8 +39,10 @@ func New(loader *config.Loader) *Engine {
 	reg.Register(rules.RequiredFieldsRule{})
 	reg.Register(rules.RequiredBlocksRule{})
 	reg.Register(rules.BlankLinesRule{})
-	reg.Register(rules.TerragruntRule{})
-	reg.Register(rules.TerragruntFunctionsRule{})
+	reg.Register(rules.DependencyPathsRule{})
+	reg.Register(rules.IncludePathsRule{})
+	reg.Register(rules.RemoteStateRule{})
+	reg.Register(rules.HCLFunctionsRule{})
 	reg.Register(rules.TerraformBlockRule{})
 	reg.Register(rules.KeyValueRule{})
 	reg.Register(rules.CountForEachRule{})
@@ -49,7 +50,6 @@ func New(loader *config.Loader) *Engine {
 
 	return &Engine{
 		configLoader: loader,
-		linter:       linter.NewLinter(loader),
 		registry:     reg,
 	}
 }
@@ -94,12 +94,6 @@ func (e *Engine) LintFile(path string) (*linter.Result, error) {
 	for _, rule := range e.registry.Enabled(ctx.Config) {
 		result.Issues = append(result.Issues, rule.Check(ctx)...)
 	}
-
-	oldResult, err := e.linter.LintFile(path)
-	if err != nil {
-		return nil, err
-	}
-	result.Issues = append(result.Issues, oldResult.Issues...)
 
 	return result, nil
 }

@@ -27,9 +27,16 @@ var (
 )
 
 func main() {
+	if err := newRootCmd().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "hcl-linter",
-		Short: "A configurable linter for Terragrunt HCL files",
+		Short: "A configurable HCL linter with built-in rule sets for Terragrunt and Terraform",
 		Run: func(cmd *cobra.Command, _ []string) {
 			_ = cmd.Help()
 		},
@@ -76,11 +83,7 @@ func main() {
 	}
 
 	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd, validateConfigCmd, versionCmd)
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	return rootCmd
 }
 
 func getLoader() (*config.Loader, *config.ConfigResult) {

@@ -24,10 +24,6 @@ func (p *Parser) ParseContent(content []byte, filename string) (*hcl.File, hcl.D
 	return p.parser.ParseHCL(content, filename)
 }
 
-func (p *Parser) ParseJSON(content []byte, filename string) (*hcl.File, hcl.Diagnostics) {
-	return p.parser.ParseJSON(content, filename)
-}
-
 type BlockInfo struct {
 	Type      string
 	Labels    []string
@@ -63,24 +59,6 @@ func GetBlockAttributes(body hcl.Body) map[string]hcl.Expression {
 		result[name] = attr.Expr
 	}
 	return result
-}
-
-func GetBlockBodyAttributes(body hcl.Body) (map[string]hcl.Expression, error) {
-	schema := &hcl.BodySchema{
-		Attributes: []hcl.AttributeSchema{
-			{},
-		},
-	}
-	content, _, diags := body.PartialContent(schema)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
-	result := make(map[string]hcl.Expression)
-	for name, attr := range content.Attributes {
-		result[name] = attr.Expr
-	}
-	return result, nil
 }
 
 func GetBlockNestedBlocks(body hcl.Body, blockType string) []*hcl.Block {

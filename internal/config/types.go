@@ -50,20 +50,22 @@ type Config struct {
 
 // Rules contains all rule configurations.
 type Rules struct {
-	BlockOrder          *BlockOrderConfig          `json:"block_order,omitempty"`
-	ArrayFormat         *ArrayFormatConfig         `json:"array_format,omitempty"`
-	NameValidation      *NameValidationConfig      `json:"name_validation,omitempty"`
-	Duplicates          *DuplicatesConfig          `json:"duplicates,omitempty"`
-	RequiredFields      *RequiredFieldsConfig      `json:"required_fields,omitempty"`
-	BlankLines          *BlankLinesConfig          `json:"blank_lines,omitempty"`
-	RequiredBlocks      *RequiredBlocksConfig      `json:"required_blocks,omitempty"`
-	Terragrunt          *TerragruntConfig          `json:"terragrunt,omitempty"`
-	TerragruntFunctions *TerragruntFunctionsConfig `json:"terragrunt_functions,omitempty"`
-	TerraformBlock      *TerraformBlockConfig      `json:"terraform_block,omitempty"`
-	KeyValue            *KeyValueConfig            `json:"key_value,omitempty"`
-	CountForEach        *CountForEachConfig        `json:"count_for_each,omitempty"`
-	DependencyOutputs   *DependencyOutputsConfig   `json:"dependency_outputs,omitempty"`
-	MaxConcurrency      int                        `json:"max_concurrency,omitempty"`
+	BlockOrder        *BlockOrderConfig        `json:"block_order,omitempty"`
+	ArrayFormat       *ArrayFormatConfig       `json:"array_format,omitempty"`
+	NameValidation    *NameValidationConfig    `json:"name_validation,omitempty"`
+	Duplicates        *DuplicatesConfig        `json:"duplicates,omitempty"`
+	RequiredFields    *RequiredFieldsConfig    `json:"required_fields,omitempty"`
+	BlankLines        *BlankLinesConfig        `json:"blank_lines,omitempty"`
+	RequiredBlocks    *RequiredBlocksConfig    `json:"required_blocks,omitempty"`
+	DependencyPaths   *DependencyPathsConfig   `json:"dependency_paths,omitempty"`
+	IncludePaths      *IncludePathsConfig      `json:"include_paths,omitempty"`
+	RemoteState       *RemoteStateConfig       `json:"remote_state,omitempty"`
+	HCLFunctions      *HCLFunctionsConfig      `json:"hcl_functions,omitempty"`
+	TerraformBlock    *TerraformBlockConfig    `json:"terraform_block,omitempty"`
+	KeyValue          *KeyValueConfig          `json:"key_value,omitempty"`
+	CountForEach      *CountForEachConfig      `json:"count_for_each,omitempty"`
+	DependencyOutputs *DependencyOutputsConfig `json:"dependency_outputs,omitempty"`
+	MaxConcurrency    int                      `json:"max_concurrency,omitempty"`
 }
 
 const EnvMaxConcurrency = "HCL_LINTER_MAX_CONCURRENCY"
@@ -85,8 +87,9 @@ func GetMaxConcurrency(cfg *Rules) int {
 func (r *Rules) IsEnabled() bool {
 	return r.BlockOrder != nil || r.ArrayFormat != nil ||
 		r.NameValidation != nil || r.Duplicates != nil || r.RequiredFields != nil ||
-		r.BlankLines != nil || r.RequiredBlocks != nil || r.Terragrunt != nil ||
-		r.TerragruntFunctions != nil || r.TerraformBlock != nil || r.KeyValue != nil ||
+		r.BlankLines != nil || r.RequiredBlocks != nil ||
+		r.DependencyPaths != nil || r.IncludePaths != nil || r.RemoteState != nil ||
+		r.HCLFunctions != nil || r.TerraformBlock != nil || r.KeyValue != nil ||
 		r.CountForEach != nil || r.DependencyOutputs != nil
 }
 
@@ -139,12 +142,20 @@ type RequiredBlockSpec struct {
 	Error string `json:"error"`
 }
 
-// TerragruntConfig configures Terragrunt validation rules.
-type TerragruntConfig struct {
-	Enabled              bool `json:"enabled"`
-	DependencyPathExists bool `json:"dependency_path_exists"`
-	IncludePathExists    bool `json:"include_path_exists"`
-	RemoteStateConfig    bool `json:"remote_state_config"`
+// DependencyPathsConfig configures validation of dependency-block config_path attributes.
+type DependencyPathsConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+// IncludePathsConfig configures validation of include-block path attributes.
+type IncludePathsConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+// RemoteStateConfig configures validation of remote_state blocks (nested inside the terraform block).
+type RemoteStateConfig struct {
+	Enabled        bool `json:"enabled"`
+	RequireBackend bool `json:"require_backend"`
 }
 
 // DependencyBlockSpec represents a dependency block label.
@@ -166,8 +177,9 @@ type RemoteStateBlockSpec struct {
 	}
 }
 
-// TerragruntFunctionsConfig configures Terragrunt function validation rules.
-type TerragruntFunctionsConfig struct {
+// HCLFunctionsConfig configures validation of HCL function calls
+// (currently: Terragrunt's find_in_parent_folders and get_env).
+type HCLFunctionsConfig struct {
 	Enabled                   bool `json:"enabled"`
 	FindInParentFoldersExists bool `json:"find_in_parent_folders_exists"`
 	GetEnvHasDefault          bool `json:"get_env_has_default"`
@@ -209,9 +221,3 @@ type BlankLinesConfig struct {
 	WithinBlocks bool `json:"within_blocks"`
 }
 
-// DeprecatedField represents a deprecated field.
-type DeprecatedField struct {
-	Name    string `json:"name"`
-	Block   string `json:"block"`
-	Message string `json:"message"`
-}

@@ -84,9 +84,11 @@ func TestValidateAllKnownBlocksClean(t *testing.T) {
   array_format { enabled = true }
   blank_lines  { enabled = true; within_blocks = true }
   duplicates   { enabled = true }
-  terragrunt   { enabled = true }
-  terragrunt_functions { enabled = true }
-  terraform_block      { enabled = true }
+  dependency_paths { enabled = true }
+  include_paths    { enabled = true }
+  remote_state     { enabled = true }
+  hcl_functions    { enabled = true }
+  terraform_block  { enabled = true }
   count_for_each       { enabled = true }
   dependency_outputs   { enabled = true }
   key_value {

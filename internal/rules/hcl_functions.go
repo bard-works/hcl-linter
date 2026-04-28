@@ -12,16 +12,18 @@ import (
 	"github.com/bard-works/hcl-linter/internal/linter"
 )
 
-type TerragruntFunctionsRule struct{}
+// HCLFunctionsRule validates HCL function calls. Currently recognizes
+// Terragrunt's `find_in_parent_folders` and `get_env`.
+type HCLFunctionsRule struct{}
 
-func (r TerragruntFunctionsRule) Name() string { return "terragrunt_functions" }
+func (r HCLFunctionsRule) Name() string { return "hcl_functions" }
 
-func (r TerragruntFunctionsRule) Enabled(cfg *config.Rules) bool {
-	return cfg != nil && cfg.TerragruntFunctions != nil && cfg.TerragruntFunctions.Enabled
+func (r HCLFunctionsRule) Enabled(cfg *config.Rules) bool {
+	return cfg != nil && cfg.HCLFunctions != nil && cfg.HCLFunctions.Enabled
 }
 
-func (r TerragruntFunctionsRule) Check(ctx *Context) []linter.Issue {
-	cfg := ctx.Config.TerragruntFunctions
+func (r HCLFunctionsRule) Check(ctx *Context) []linter.Issue {
+	cfg := ctx.Config.HCLFunctions
 	if !cfg.FindInParentFoldersExists && !cfg.GetEnvHasDefault {
 		return nil
 	}
@@ -34,7 +36,7 @@ func (r TerragruntFunctionsRule) Check(ctx *Context) []linter.Issue {
 		return nil
 	}
 
-	_ = hclsyntax.Walk(body, &tgFunctionWalker{
+	_ = hclsyntax.Walk(body, &functionCallWalker{
 		issues:  &issues,
 		fileDir: fileDir,
 		cfg:     cfg,
@@ -43,13 +45,13 @@ func (r TerragruntFunctionsRule) Check(ctx *Context) []linter.Issue {
 	return issues
 }
 
-type tgFunctionWalker struct {
+type functionCallWalker struct {
 	issues  *[]linter.Issue
 	fileDir string
-	cfg     *config.TerragruntFunctionsConfig
+	cfg     *config.HCLFunctionsConfig
 }
 
-func (w *tgFunctionWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
+func (w *functionCallWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
 	funcCall, ok := node.(*hclsyntax.FunctionCallExpr)
 	if !ok {
 		return nil
@@ -58,20 +60,20 @@ func (w *tgFunctionWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
 	switch funcCall.Name {
 	case "find_in_parent_folders":
 		if w.cfg.FindInParentFoldersExists {
-			checkTgFindInParentFolders(w.issues, w.fileDir, funcCall)
+			checkFindInParentFolders(w.issues, w.fileDir, funcCall)
 		}
 	case "get_env":
 		if w.cfg.GetEnvHasDefault {
-			checkTgGetEnvHasDefault(w.issues, funcCall)
+			checkGetEnvHasDefault(w.issues, funcCall)
 		}
 	}
 
 	return nil
 }
 
-func (w *tgFunctionWalker) Exit(_ hclsyntax.Node) hcl.Diagnostics { return nil }
+func (w *functionCallWalker) Exit(_ hclsyntax.Node) hcl.Diagnostics { return nil }
 
-func checkTgFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall *hclsyntax.FunctionCallExpr) {
+func checkFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall *hclsyntax.FunctionCallExpr) {
 	defaultFile := "terragrunt.hcl"
 	var filename string
 
@@ -84,10 +86,10 @@ func checkTgFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall
 		}
 	}
 
-	if tgFindInParent(fileDir, filename) == "" {
-		msg := "find_in_parent_folders() could not find terragrunt.hcl in parent directories"
-		if filename != defaultFile {
-			msg = fmt.Sprintf("find_in_parent_folders(%q) could not find file in parent directories", filename)
+	if findFileInAncestors(fileDir, filename) == "" {
+		msg := fmt.Sprintf("find_in_parent_folders(%q) could not find file in parent directories", filename)
+		if len(funcCall.Args) == 0 {
+			msg = "find_in_parent_folders() could not find terragrunt.hcl in parent directories"
 		}
 		*issues = append(*issues, linter.Issue{
 			Severity: linter.SeverityError,
@@ -98,7 +100,7 @@ func checkTgFindInParentFolders(issues *[]linter.Issue, fileDir string, funcCall
 	}
 }
 
-func checkTgGetEnvHasDefault(issues *[]linter.Issue, funcCall *hclsyntax.FunctionCallExpr) {
+func checkGetEnvHasDefault(issues *[]linter.Issue, funcCall *hclsyntax.FunctionCallExpr) {
 	if len(funcCall.Args) < 2 {
 		*issues = append(*issues, linter.Issue{
 			Severity: linter.SeverityWarning,
@@ -109,7 +111,7 @@ func checkTgGetEnvHasDefault(issues *[]linter.Issue, funcCall *hclsyntax.Functio
 	}
 }
 
-func tgFindInParent(dir, filename string) string {
+func findFileInAncestors(dir, filename string) string {
 	current := dir
 	for {
 		testPath := filepath.Join(current, filename)
