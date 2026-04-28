@@ -106,10 +106,13 @@ func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameV
 			continue
 		}
 		for _, label := range block.Labels {
-			if !regex.MatchString(label) && strings.Contains(label, "-") {
+			if !regex.MatchString(label) {
 				newLabel := strings.ReplaceAll(label, "-", "_")
-				content = strings.ReplaceAll(content, fmt.Sprintf("%q", label), fmt.Sprintf("%q", newLabel))
-				hasChanges = true
+				newLabel = strings.Join(strings.Fields(newLabel), "")
+				if newLabel != label {
+					content = strings.ReplaceAll(content, fmt.Sprintf("%q", label), fmt.Sprintf("%q", newLabel))
+					hasChanges = true
+				}
 			}
 		}
 	}

@@ -235,3 +235,35 @@ func TestNameValidationRuleFix(t *testing.T) {
 		t.Errorf("expected hyphen replaced with underscore, got:\n%s", got)
 	}
 }
+
+func TestNameValidationFixSpacesInLabel(t *testing.T) {
+	cfg := &config.Rules{
+		NameValidation: &config.NameValidationConfig{
+			Enabled: true,
+			Pattern: `^[a-z][a-z0-9_]*$`,
+			Blocks:  []string{"dependency"},
+		},
+	}
+	// Label with hyphen and space - should become "db_primary"
+	content := `dependency "db- primary" {
+  config_path = "../database"
+}
+`
+	ctx := buildContext(t, content, cfg)
+
+	rule := rules.NameValidationRule{}
+	n, err := rule.Fix(ctx)
+	if err != nil {
+		t.Fatalf("Fix error: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected Fix to report a change")
+	}
+	got := string(ctx.Content)
+	if strings.Contains(got, "db- primary") {
+		t.Errorf("expected space and hyphen removed, got:\n%s", got)
+	}
+	if !strings.Contains(got, "db_primary") {
+		t.Errorf("expected cleaned label 'db_primary', got:\n%s", got)
+	}
+}
