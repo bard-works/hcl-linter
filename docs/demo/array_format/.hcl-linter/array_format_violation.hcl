@@ -1,6 +1,6 @@
 rules {
   array_format {
-    enabled            = true
+    enabled             = true
     multiline_threshold = 2
   }
 }

@@ -1,6 +1,13 @@
 rules {
   block_order {
     enabled = true
-    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+    order = [
+      "dependency",
+      "include",
+      "inputs",
+      "locals",
+      "terraform",
+    ]
   }
 }
+
