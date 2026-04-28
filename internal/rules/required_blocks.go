@@ -42,17 +42,34 @@ func (r RequiredBlocksRule) Check(ctx *Context) []diag.Issue {
 		blockCounts[block.Type]++
 	}
 	for _, req := range ctx.Config.RequiredBlocks.Required {
-		if req.Count == "once" && blockCounts[req.Type] != 1 {
-			issues = append(issues, diag.Issue{
-				Severity: diag.SeverityError,
-				Rule:     "required_blocks",
-				Message:  req.Error,
-				Location: hcl.Range{
-					Filename: ctx.FilePath,
-					Start:    hcl.Pos{Line: 1, Column: 1},
-					End:      hcl.Pos{Line: 1, Column: 1},
-				},
-			})
+		count := blockCounts[req.Type]
+		switch req.Count {
+		case "once":
+			if count != 1 {
+				issues = append(issues, diag.Issue{
+					Severity: diag.SeverityError,
+					Rule:     "required_blocks",
+					Message:  req.Error,
+					Location: hcl.Range{
+						Filename: ctx.FilePath,
+						Start:    hcl.Pos{Line: 1, Column: 1},
+						End:      hcl.Pos{Line: 1, Column: 1},
+					},
+				})
+			}
+		case "at_least_one":
+			if count == 0 {
+				issues = append(issues, diag.Issue{
+					Severity: diag.SeverityError,
+					Rule:     "required_blocks",
+					Message:  req.Error,
+					Location: hcl.Range{
+						Filename: ctx.FilePath,
+						Start:    hcl.Pos{Line: 1, Column: 1},
+						End:      hcl.Pos{Line: 1, Column: 1},
+					},
+				})
+			}
 		}
 	}
 	return issues

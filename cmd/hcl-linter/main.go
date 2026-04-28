@@ -123,6 +123,16 @@ func runLint(_ *cobra.Command, args []string) error {
 	if len(filesToLint) == 0 {
 		return nil
 	}
+	if flagVerbose {
+		fmt.Println("Checking files:")
+		for _, f := range filesToLint {
+			rel, _ := filepath.Rel(".", f)
+			if rel == "" {
+				rel = f
+			}
+			fmt.Printf("  %s\n", rel)
+		}
+	}
 	maxConcurrency := resolveConcurrency()
 	allResults := eng.LintFiles(filesToLint, maxConcurrency)
 	printLintResults(allResults, false)
@@ -139,6 +149,16 @@ func runCheck(_ *cobra.Command, args []string) error {
 	filesToLint := filterFilesByConfig(loader, nil, path)
 	if len(filesToLint) == 0 {
 		return nil
+	}
+	if flagVerbose {
+		fmt.Println("Checking files:")
+		for _, f := range filesToLint {
+			rel, _ := filepath.Rel(".", f)
+			if rel == "" {
+				rel = f
+			}
+			fmt.Printf("  %s\n", rel)
+		}
 	}
 	maxConcurrency := resolveConcurrency()
 	allResults := eng.LintFiles(filesToLint, maxConcurrency)
