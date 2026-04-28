@@ -14,6 +14,7 @@ import (
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/diag"
+	"github.com/bard-works/hcl-linter/internal/fsutil"
 	"github.com/bard-works/hcl-linter/internal/rules"
 )
 
@@ -72,9 +73,19 @@ func (e *Engine) buildContext(path string) (*rules.Context, error) {
 		return nil, err
 	}
 
+	preInfo, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+
+	postInfo, err := os.Stat(path)
+	if err == nil && !os.SameFile(preInfo, postInfo) {
+		return nil, fmt.Errorf("file modified during read: %s", path)
 	}
 
 	parser := ast.NewParser()
@@ -209,7 +220,7 @@ func (e *Engine) FixFile(path string) (*FixResult, error) {
 
 	result := &FixResult{File: path, Changes: changes}
 	if changes > 0 && !e.DryRun {
-		if err := os.WriteFile(path, ctx.Content, 0o644); err != nil {
+		if err := fsutil.WriteFileSafe(path, ctx.Content, 0o644); err != nil {
 			return nil, err
 		}
 	}
@@ -273,9 +284,19 @@ func defaultFormatConfig() *config.Rules {
 }
 
 func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
+	preInfo, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+
+	postInfo, err := os.Stat(path)
+	if err == nil && !os.SameFile(preInfo, postInfo) {
+		return nil, fmt.Errorf("file modified during read: %s", path)
 	}
 
 	parser := ast.NewParser()
@@ -307,7 +328,7 @@ func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 
 	result := &FixResult{File: path, Changes: changes}
 	if changes > 0 && !e.DryRun {
-		if err := os.WriteFile(path, ctx.Content, 0o644); err != nil {
+		if err := fsutil.WriteFileSafe(path, ctx.Content, 0o644); err != nil {
 			return nil, err
 		}
 	}

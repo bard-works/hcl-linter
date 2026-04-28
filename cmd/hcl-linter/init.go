@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/bard-works/hcl-linter/internal/fsutil"
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
 
@@ -159,7 +160,7 @@ func writeInitFiles(configDir string, proposed map[string]string) error {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 	for _, path := range sortedKeys(proposed) {
-		if err := os.WriteFile(path, []byte(proposed[path]), 0o644); err != nil {
+		if err := fsutil.WriteFileSafe(path, []byte(proposed[path]), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}

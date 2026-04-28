@@ -278,3 +278,25 @@ func TestWriteInitFilesError(t *testing.T) {
 		t.Error("expected error when configDir can't be created")
 	}
 }
+
+func TestWriteInitFilesSymlinkRejected(t *testing.T) {
+	tmp := t.TempDir()
+	configDir := filepath.Join(tmp, ".hcl-linter")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	realFile := filepath.Join(tmp, "real.hcl")
+	if err := os.WriteFile(realFile, []byte("rules {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symlink := filepath.Join(configDir, "link.hcl")
+	if err := os.Symlink(realFile, symlink); err != nil {
+		t.Skip("symlinks not supported on this platform")
+	}
+
+	err := writeInitFiles(configDir, map[string]string{symlink: "rules {}"})
+	if err == nil {
+		t.Fatal("expected error for symlink write")
+	}
+}

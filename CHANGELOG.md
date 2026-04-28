@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `validate-config --recursive` walks a path and validates every
   `.hcl-linter/` directory found.
 
-## [0.1.0] - 2026-04-21
+## [0.0.1-alpha] - 2026-05-01
 
 Initial public release.
 
@@ -67,5 +67,5 @@ Initial public release.
   windows amd64) with sha256 checksums.
 - Homebrew tap formula.
 
-[Unreleased]: https://github.com/bard-works/hcl-linter/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/bard-works/hcl-linter/releases/tag/v0.1.0
+[Unreleased]: https://github.com/bard-works/hcl-linter/compare/v0.0.1-alpha...HEAD
+[0.0.1-alpha]: https://github.com/bard-works/hcl-linter/releases/tag/v0.0.1-alpha
