@@ -60,6 +60,7 @@ func resetFlags(t *testing.T) {
 	flagDryRun = false
 	flagInitForce = false
 	flagValidateRecursive = false
+	flagIncludeHidden = false
 	t.Cleanup(func() {
 		flagVerbose = false
 		flagConfigSrc = ""
@@ -67,6 +68,7 @@ func resetFlags(t *testing.T) {
 		flagConcurrency = 0
 		flagFormat = false
 		flagDryRun = false
+		flagIncludeHidden = false
 	})
 }
 
@@ -269,6 +271,90 @@ func TestFindHCLFiles_Walks(t *testing.T) {
 		if strings.Contains(f, ".git") {
 			t.Errorf("hidden dir not skipped: %s", f)
 		}
+	}
+}
+
+func TestFindHCLFiles_IncludeHidden(t *testing.T) {
+	root := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(root, "a.hcl"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hiddenDir := filepath.Join(root, ".hidden")
+	if err := os.MkdirAll(hiddenDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hiddenDir, "hidden.hcl"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flagIncludeHidden = false
+	files := findHCLFiles(root)
+	if len(files) != 1 {
+		t.Errorf("expected 1 file without --include-hidden, got %d: %v", len(files), files)
+	}
+
+	flagIncludeHidden = true
+	t.Cleanup(func() { flagIncludeHidden = false })
+	files = findHCLFiles(root)
+	if len(files) != 2 {
+		t.Errorf("expected 2 files with --include-hidden, got %d: %v", len(files), files)
+	}
+	var foundHidden bool
+	for _, f := range files {
+		if strings.Contains(filepath.ToSlash(f), "/.hidden/") {
+			foundHidden = true
+		}
+	}
+	if !foundHidden {
+		t.Errorf("hidden dir file not found in results: %v", files)
+	}
+}
+
+func TestRunLint_IncludeHidden(t *testing.T) {
+	silenceStdout(t)
+	resetFlags(t)
+
+	root := t.TempDir()
+
+	configDir := filepath.Join(root, ".hcl-linter")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "terragrunt.hcl"), []byte(`rules {}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	hiddenDir := filepath.Join(root, ".hidden")
+	if err := os.MkdirAll(hiddenDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hiddenDir, "terragrunt.hcl"), []byte(`locals { foo = "bar" }`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flagConfigSrc = configDir
+
+	flagIncludeHidden = false
+	files := resolveFiles(root)
+	if len(files) != 0 {
+		t.Errorf("expected 0 files without --include-hidden, got %d", len(files))
+	}
+
+	flagIncludeHidden = true
+	files = resolveFiles(root)
+	// .hcl-linter/terragrunt.hcl and .hidden/terragrunt.hcl both discovered
+	if len(files) != 2 {
+		t.Errorf("expected 2 files with --include-hidden, got %d: %v", len(files), files)
+	}
+	var foundHidden bool
+	for _, f := range files {
+		if strings.Contains(filepath.ToSlash(f), "/.hidden/") {
+			foundHidden = true
+		}
+	}
+	if !foundHidden {
+		t.Errorf("hidden dir file not found: %v", files)
 	}
 }
 

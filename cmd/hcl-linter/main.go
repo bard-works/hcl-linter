@@ -24,6 +24,7 @@ var (
 	flagDryRun            bool
 	flagColor             string
 	flagValidateRecursive bool
+	flagIncludeHidden     bool
 
 	Version   = "dev"
 	BuildDate = "unknown"
@@ -54,6 +55,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringArrayVar(&flagFilter, "filter", nil, "Filter files by name pattern (glob supported, can be specified multiple times)")
 	rootCmd.PersistentFlags().IntVar(&flagConcurrency, "concurrency", 0, "Max number of concurrent workers (0 = auto-detect based on CPU count, or use HCL_LINTER_MAX_CONCURRENCY env var)")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", termcolor.ModeAuto, "Colour output: auto, always, never")
+	rootCmd.PersistentFlags().BoolVar(&flagIncludeHidden, "include-hidden", false, "Include files in hidden directories (directories starting with .)")
 
 	lintCmd := &cobra.Command{
 		Use:   "lint [path]",
@@ -566,7 +568,7 @@ func findHCLFiles(root string) []string {
 		}
 
 		if info.IsDir() {
-			if strings.HasPrefix(info.Name(), ".") {
+			if !flagIncludeHidden && strings.HasPrefix(info.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil

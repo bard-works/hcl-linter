@@ -96,6 +96,7 @@ Applies opinionated defaults without a config file: block order `include → loc
 --concurrency         Max concurrent workers (default: CPU count)
 --verbose, -v         Detailed output
 --color               auto (default) | always | never
+--include-hidden      Include files in hidden directories (dirs starting with .)
 
 # fix only
 --format              Apply defaults without config
