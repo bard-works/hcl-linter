@@ -32,7 +32,7 @@ func TestArrayFormatCheck_TupleOfNonStrings(t *testing.T) {
 	r := rules.ArrayFormatRule{}
 	ctx := buildContextFromFile(t, file, cfg)
 
-	// Non-string tuples should NOT emit array_format warnings — only
+	// Non-string tuples should NOT emit array_format warnings - only
 	// string-literal tuples trigger.
 	for _, issue := range r.Check(ctx) {
 		if issue.Rule == "array_format" {
@@ -70,7 +70,7 @@ locals {
 	ctx := buildContextFromFile(t, file, cfg)
 	issues := r.Check(ctx)
 
-	// We don't assert exact issue count — this test primarily exists to
+	// We don't assert exact issue count - this test primarily exists to
 	// execute both tuple-of-strings and object-recursion branches.
 	if issues == nil {
 		t.Log("no issues emitted (acceptable; only checking traversal coverage)")

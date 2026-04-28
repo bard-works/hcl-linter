@@ -9,6 +9,48 @@ A configurable HCL linter that enforces consistency standards across large codeb
 [![CI](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/bard-works/hcl-linter)](https://github.com/bard-works/hcl-linter)
 
+## Why `hcl-linter`?
+
+Infrastructure code written in HCL tends to drift over time. Different teams adopt different conventions, formatting varies between editors, and subtle issues often slip through code review. What starts as flexibility quickly turns into inconsistency, noise, and risk.
+
+`hcl-linter` brings that under control.
+
+It gives teams a way to **define clear standards once** and enforce them everywhere-independently of IDEs, local tooling, or individual preferences.
+
+## Who is this for?
+
+- **Platform / Infrastructure teams** that want consistent standards across services and repositories  
+- **Engineering teams using HCL files** at scale  
+- **Organizations with multiple contributors and mixed development environments**
+
+If multiple people are modifying HCL files, consistency will eventually become a problem-this tool exists to solve that.
+
+## What problems does it solve?
+
+- **Inconsistent structure** → Enforce block ordering and required blocks  
+- **Style drift** → Normalize formatting (arrays, spacing, layout)  
+- **Naming chaos** → Apply predictable naming conventions  
+- **Hidden misconfigurations** → Catch invalid paths, missing outputs, incorrect patterns  
+- **Review fatigue** → Remove low-value comments about formatting and conventions  
+
+Instead of relying on reviewers to enforce rules manually, `hcl-linter` makes them automatic and repeatable.
+
+## How it helps your team
+
+- **Faster reviews** - less time spent on style, more on architecture  
+- **Cleaner diffs** - formatting is consistent, changes are meaningful  
+- **Lower onboarding cost** - new engineers don’t need to learn implicit rules  
+- **Stronger governance** - standards are enforced, not suggested  
+- **Tooling independence** - works the same across all editors and platforms  
+
+## Easy to adopt
+
+- Works out of the box with zero config (`fix --format`)  
+- Uses HCL for configuration-no new language to learn  
+- Supports inheritance (`extends`) for scalable rule management  
+- Integrates cleanly with CI (`check`, `fix --dry-run`)  
+- Gradual adoption: start with formatting, then enforce stricter rules  
+
 ## Features
 
 - **Block ordering** - Enforce consistent ordering of top-level and nested blocks
@@ -66,6 +108,9 @@ hcl-linter fix ./ --format
 
 # Preview changes without writing; exits non-zero if any file would change
 hcl-linter fix ./ --dry-run
+
+# Bootstrap a .hcl-linter/ config directory for the current project
+hcl-linter init
 ```
 
 ## Configuration
@@ -103,7 +148,7 @@ rules {
 Use `extends` to inherit from another config in the same directory. Child rules override the base rule block entirely; unset rules are inherited as-is.
 
 ```hcl
-# .hcl-linter/terragrunt.hcl — inherits all rules from default, overrides block_order
+# .hcl-linter/terragrunt.hcl - inherits all rules from default, overrides block_order
 extends = "default"
 
 rules {
@@ -176,7 +221,7 @@ inputs = {
 
 ## Validating Config Files
 
-Config files are plain HCL — typos in rule block names (e.g. `blokc_order`) are silently ignored by the parser. Use `validate-config` to catch these before they cause silent no-ops:
+Config files are plain HCL - typos in rule block names (e.g. `blokc_order`) are silently ignored by the parser. Use `validate-config` to catch these before they cause silent no-ops:
 
 ```bash
 hcl-linter validate-config
@@ -185,10 +230,10 @@ hcl-linter validate-config /path/to/.hcl-linter
 
 Exits non-zero and prints errors if any config file contains:
 
-- **Unknown rule blocks** — block names that don't match any known rule (likely a typo)
-- **Enabled rules with missing required fields** — e.g. `block_order` with no `order` list, `name_validation` with no `pattern`
+- **Unknown rule blocks** - block names that don't match any known rule (likely a typo)
+- **Enabled rules with missing required fields** - e.g. `block_order` with no `order` list, `name_validation` with no `pattern`
 
-During normal `lint`, `check`, and `fix` runs the same checks run automatically and print warnings to stderr — no separate step needed in CI unless you want a hard failure.
+During normal `lint`, `check`, and `fix` runs the same checks run automatically and print warnings to stderr - no separate step needed in CI unless you want a hard failure.
 
 ## CLI Options
 
@@ -216,10 +261,10 @@ colour through pipes (e.g. `less -R`) or `--color=never` to disable it.
 
 ## Full Documentation
 
-- [docs/rules.md](docs/rules.md) — every rule, its config fields, rule IDs, and default severities
-- [docs/configuration.md](docs/configuration.md) — config file format, source precedence, and `extends` inheritance
-- [docs/cli.md](docs/cli.md) — command reference, flags, exit codes, and coloured output
-- [docs/architecture.md](docs/architecture.md) — internal package layout and data flow
+- [docs/rules.md](docs/rules.md) - every rule, its config fields, rule IDs, and default severities
+- [docs/configuration.md](docs/configuration.md) - config file format, source precedence, and `extends` inheritance
+- [docs/cli.md](docs/cli.md) - command reference, flags, exit codes, and coloured output
+- [docs/architecture.md](docs/architecture.md) - internal package layout and data flow
 
 ## Contributing
 

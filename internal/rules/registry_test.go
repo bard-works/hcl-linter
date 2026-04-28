@@ -47,7 +47,7 @@ func TestRuleNamesAreUnique(t *testing.T) {
 }
 
 // TestRuleEnabledOnNilCfg pins that every rule's Enabled() returns false when
-// the config is nil — i.e. rules don't panic or unconditionally enable
+// the config is nil - i.e. rules don't panic or unconditionally enable
 // themselves when there's no user config.
 func TestRuleEnabledOnNilCfg(t *testing.T) {
 	for _, r := range allRegisteredRules() {
@@ -58,7 +58,7 @@ func TestRuleEnabledOnNilCfg(t *testing.T) {
 }
 
 // TestRuleEnabledOnEmptyRules pins that every rule's Enabled() returns false
-// when the Rules struct is zero-valued — protects against a rule that treats
+// when the Rules struct is zero-valued - protects against a rule that treats
 // "nil sub-config" as "enabled by default".
 func TestRuleEnabledOnEmptyRules(t *testing.T) {
 	for _, r := range allRegisteredRules() {

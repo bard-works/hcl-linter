@@ -38,7 +38,7 @@ Configs are loaded from the first source that exists, in this order:
 | 4        | `.hcl-linter/` in home      | User config in home directory    |
 | 5        | Project's `.hcl-linter/`    | Built-in defaults (fallback)     |
 
-**Full override:** user config completely replaces project configs — no
+**Full override:** user config completely replaces project configs - no
 merging across source locations. Within a single config directory, use
 `extends` for inheritance (see below).
 
@@ -84,7 +84,7 @@ rules {
 - Chains are supported: `child extends parent extends grandparent`
 - Circular references are detected and reported as an error
 
-**Example — shared base with per-file overrides:**
+**Example - shared base with per-file overrides:**
 
 ```
 .hcl-linter/
@@ -194,5 +194,5 @@ rules {
 
 Because config files are plain HCL, typos in rule block names (e.g.
 `blokc_order`) are silently ignored by the parser. The `validate-config`
-subcommand and startup warnings catch these — see
+subcommand and startup warnings catch these - see
 [cli.md → `validate-config`](cli.md#validate-config-command).

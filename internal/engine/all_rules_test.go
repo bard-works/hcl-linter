@@ -154,7 +154,7 @@ inputs = {
 	}
 
 	// Sanity: rule IDs we expect to fire given the target above. These are
-	// the IDs in issue.Rule — a mix of rule-names and sub-check IDs.
+	// the IDs in issue.Rule - a mix of rule-names and sub-check IDs.
 	wantRules := []string{
 		"dependency_path_exists",
 		"include_path_exists",

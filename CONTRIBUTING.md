@@ -30,7 +30,7 @@ Always run `go test ./...` after any code change before opening a PR.
 cmd/hcl-linter/               # CLI entrypoint (cobra): lint, check, fix, version
 internal/engine/              # Engine: entry point for lint and fix operations
 internal/rules/               # Rule implementations (Rule/Fixer interface)
-internal/config/              # Config loading — HCL only, file-based matching
+internal/config/              # Config loading - HCL only, file-based matching
 internal/diag/                # Types only: Issue, Result, Severity
 internal/ast/                 # HCL parse helpers
 internal/termcolor/           # ANSI colour helpers
@@ -68,7 +68,7 @@ When adding or modifying a rule in `internal/rules/`:
 
 - **Register it.** Implement `Rule` and add it to `engine.New()` via
   `reg.Register(...)`. A rule that isn't registered is dead code. Implement
-  `Fixer` only when the issue is auto-fixable — most rules are `Check`-only.
+  `Fixer` only when the issue is auto-fixable - most rules are `Check`-only.
 - **Use `internal/ast` helpers, not `hcl/v2` directly.** Reach for
   `ast.GetTopLevelBlocks`, `ast.GetBlockAttributes`,
   `ast.GetBlockNestedBlocks`. Rules should not walk `hclsyntax.Body` by hand
@@ -84,7 +84,7 @@ When adding or modifying a rule in `internal/rules/`:
   `Check` runs only when `Enabled` returns true, but still read config fields
   defensively.
 - **Severity constants.** Emit `diag.SeverityError` or `diag.SeverityWarning`
-  — never raw strings.
+  - never raw strings.
 - **Check is read-only; Fix mutates.** `Check(ctx) []diag.Issue` must not
   touch `ctx.Content`. `Fix(ctx) ([]byte, bool, error)` returns the new
   bytes, a `changed` bool (false = no-op, return original content), and an
@@ -92,12 +92,12 @@ When adding or modifying a rule in `internal/rules/`:
 - **Every rule has a co-located test.** For every
   `internal/rules/<rule>.go`, there must be an
   `internal/rules/<rule>_test.go` exercising `Check` (and `Fix`, if
-  present). A test living in another file doesn't count — keep them
+  present). A test living in another file doesn't count - keep them
   co-located so "is this rule tested?" is a filesystem question.
 
 ## Config format
 
-HCL only. JSON support was intentionally removed — do not reintroduce it.
+HCL only. JSON support was intentionally removed - do not reintroduce it.
 Config files live in `.hcl-linter/` and are matched by filename
 (`terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`, fallback to
 `.hcl-linter/default.hcl`).
@@ -108,7 +108,7 @@ CI runs on Ubuntu, macOS, and Windows (see `.github/workflows/ci.yml`).
 Tests and code that assume POSIX separators will pass locally and fail on
 Windows.
 
-- Never concatenate `/` into a path. Use `filepath.Join(a, b)` — not
+- Never concatenate `/` into a path. Use `filepath.Join(a, b)` - not
   `a + "/" + b`.
 - Comparing paths from `filepath.Join`/`filepath.Dir` against string
   literals is a bug: `filepath.Join("/a", "b")` is `\a\b` on Windows. In

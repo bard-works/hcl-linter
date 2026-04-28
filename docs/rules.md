@@ -13,21 +13,21 @@ dependency outputs) ship as built-ins.
 ## Contents
 
 1. [Summary table](#summary-table)
-2. [`block_order` — Block Order](#1-block-order-block_order)
-3. [`array_format` — Array Format](#2-array-format-array_format)
-4. [`blank_lines` — Blank Lines](#3-blank-lines-blank_lines)
-5. [`name_validation` — Name Validation](#4-name-validation-name_validation)
-6. [`duplicates` — Duplicate Detection](#5-duplicate-detection-duplicates)
-7. [`required_fields` — Required Fields](#6-required-fields-required_fields)
-8. [`required_blocks` — Required Blocks](#7-required-blocks-required_blocks)
-9. [`dependency_paths` — Dependency Paths](#8-dependency-paths-dependency_paths)
-10. [`include_paths` — Include Paths](#9-include-paths-include_paths)
-11. [`remote_state` — Remote State](#10-remote-state-remote_state)
-12. [`hcl_functions` — HCL Functions](#11-hcl-functions-hcl_functions)
-13. [`terraform_block` — Terraform Block](#12-terraform-block-terraform_block)
-14. [`key_value` — Key-Value Validation](#13-key-value-validation-key_value)
-15. [`count_for_each` — Count / ForEach](#14-countforeach-validation-count_for_each)
-16. [`dependency_outputs` — Dependency Outputs](#15-dependency-output-validation-dependency_outputs)
+2. [`block_order` - Block Order](#1-block-order-block_order)
+3. [`array_format` - Array Format](#2-array-format-array_format)
+4. [`blank_lines` - Blank Lines](#3-blank-lines-blank_lines)
+5. [`name_validation` - Name Validation](#4-name-validation-name_validation)
+6. [`duplicates` - Duplicate Detection](#5-duplicate-detection-duplicates)
+7. [`required_fields` - Required Fields](#6-required-fields-required_fields)
+8. [`required_blocks` - Required Blocks](#7-required-blocks-required_blocks)
+9. [`dependency_paths` - Dependency Paths](#8-dependency-paths-dependency_paths)
+10. [`include_paths` - Include Paths](#9-include-paths-include_paths)
+11. [`remote_state` - Remote State](#10-remote-state-remote_state)
+12. [`hcl_functions` - HCL Functions](#11-hcl-functions-hcl_functions)
+13. [`terraform_block` - Terraform Block](#12-terraform-block-terraform_block)
+14. [`key_value` - Key-Value Validation](#13-key-value-validation-key_value)
+15. [`count_for_each` - Count / ForEach](#14-countforeach-validation-count_for_each)
+16. [`dependency_outputs` - Dependency Outputs](#15-dependency-output-validation-dependency_outputs)
 
 ## Summary table
 
@@ -35,7 +35,7 @@ dependency outputs) ship as built-ins.
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | `block_order`        | `block_order`                                                                                                          | error            |
 | `array_format`       | `array_format`                                                                                                         | warning          |
-| `blank_lines`        | _(fix-only — no Check phase, emits no issues)_                                                                         | —                |
+| `blank_lines`        | _(fix-only - no Check phase, emits no issues)_                                                                         | -                |
 | `name_validation`    | `name_validation`                                                                                                      | error            |
 | `duplicates`         | `duplicates`                                                                                                           | error            |
 | `required_fields`    | `required_fields`                                                                                                      | error            |
@@ -55,7 +55,7 @@ dependency outputs) ship as built-ins.
 
 **Purpose:** Enforce consistent ordering of top-level blocks.
 
-**Rule ID:** `block_order` — **Severity:** error
+**Rule ID:** `block_order` - **Severity:** error
 
 **Behavior:**
 
@@ -130,7 +130,7 @@ terraform {
 
 **Purpose:** Normalize array formatting.
 
-**Rule ID:** `array_format` — **Severity:** warning
+**Rule ID:** `array_format` - **Severity:** warning
 
 **Rules:**
 
@@ -168,7 +168,7 @@ rules {
 
 **Behavior:**
 
-- `within_blocks: true` — Cleans blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
+- `within_blocks: true` - Cleans blank lines inside object attributes (`inputs = {}`) and top-level blocks (`terraform {}`)
 - Removes blank lines at the beginning (after `{`) and end (before `}`) of blocks
 - Reduces consecutive duplicate blank lines to a single blank line
 - Single blank lines between attributes are preserved
@@ -200,7 +200,7 @@ inputs = {
 
 **Purpose:** Ensure consistent naming conventions.
 
-**Rule ID:** `name_validation` — **Severity:** error
+**Rule ID:** `name_validation` - **Severity:** error
 
 **Checks:**
 
@@ -221,7 +221,7 @@ include "my_vpc" {}
 
 **Purpose:** Detect duplicate blocks.
 
-**Rule ID:** `duplicates` — **Severity:** error
+**Rule ID:** `duplicates` - **Severity:** error
 
 **Checks:**
 
@@ -240,7 +240,7 @@ dependency "vpc" {}  # ERROR: duplicate
 
 **Purpose:** Enforce required attributes per block type.
 
-**Rule ID:** `required_fields` — **Severity:** error
+**Rule ID:** `required_fields` - **Severity:** error
 
 **Configuration:**
 
@@ -263,7 +263,7 @@ rules {
 
 **Purpose:** Enforce that certain block types must exist in the file.
 
-**Rule ID:** `required_blocks` — **Severity:** error
+**Rule ID:** `required_blocks` - **Severity:** error
 
 **Configuration:**
 
@@ -281,7 +281,7 @@ rules {
 
 **Supported count values:**
 
-- `once` — Block must appear exactly once
+- `once` - Block must appear exactly once
 
 **Checks:**
 
@@ -307,7 +307,7 @@ locals {}
 resolve to existing directories. Targets the Terragrunt `dependency` block
 shape.
 
-**Rule ID:** `dependency_path_exists` — **Severity:** error
+**Rule ID:** `dependency_path_exists` - **Severity:** error
 
 **Configuration:**
 
@@ -333,7 +333,7 @@ dependency "vpc" {
 existing files or directories. Function-call values (e.g.
 `find_in_parent_folders()`) are skipped.
 
-**Rule ID:** `include_path_exists` — **Severity:** error
+**Rule ID:** `include_path_exists` - **Severity:** error
 
 **Configuration:**
 
@@ -359,7 +359,7 @@ include "root" {
 `terraform { }` block. When `require_backend = true`, the `backend`
 attribute must be set and non-empty.
 
-**Rule ID:** `remote_state_backend_required` — **Severity:** error
+**Rule ID:** `remote_state_backend_required` - **Severity:** error
 
 **Configuration:**
 
@@ -539,9 +539,9 @@ rules {
 
 **Supported case values:**
 
-- `camelCase` — `^[a-z][a-zA-Z0-9]*$`
-- `snake_case` — `^[a-z][a-z0-9_]*$`
-- `kebab-case` — `^[a-z][a-z0-9-]*$`
+- `camelCase` - `^[a-z][a-zA-Z0-9]*$`
+- `snake_case` - `^[a-z][a-z0-9_]*$`
+- `kebab-case` - `^[a-z][a-z0-9-]*$`
 
 **Example violations:**
 
@@ -621,7 +621,7 @@ resource "aws_instance" "test" {
 **Purpose:** Validate `dependency.*.outputs.*` references by walking the
 dependency chain.
 
-**Rule ID:** `dependency_outputs` — **Severity:** warning
+**Rule ID:** `dependency_outputs` - **Severity:** warning
 
 **Configuration:**
 
@@ -649,12 +649,12 @@ rules {
 3. **Mock outputs** (for development):
    - Support `.mock-outputs.json` in dependency module directory
    - Format: `{"outputs": {"vpc_id": {"value": "vpc-123", "type": "string"}}}`
-   - Optional — if not present, only validate against `.tf` files
+   - Optional - if not present, only validate against `.tf` files
 
 4. **Error handling:**
    - If output doesn't exist = warning
    - If dependency path doesn't exist = warning (validation skipped)
-   - No terraform/terragrunt execution — purely static analysis
+   - No terraform/terragrunt execution - purely static analysis
 
 **Example violations:**
 

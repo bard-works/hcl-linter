@@ -82,6 +82,16 @@ func newRootCmd() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE:  runValidateConfig,
 	}
+	initCmd := &cobra.Command{
+		Use:           "init [path]",
+		Short:         "Bootstrap a .hcl-linter/ config directory for the project",
+		Args:          cobra.MaximumNArgs(1),
+		RunE:          runInit,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	initCmd.Flags().BoolVar(&flagInitForce, "force", false, "Overwrite existing .hcl-linter/ contents")
+	initCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "Print proposed files to stdout without writing")
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
@@ -92,7 +102,7 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
-	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd, validateConfigCmd, versionCmd)
+	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd, validateConfigCmd, initCmd, versionCmd)
 	return rootCmd
 }
 
