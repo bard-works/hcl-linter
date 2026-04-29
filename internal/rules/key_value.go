@@ -14,7 +14,28 @@ import (
 
 type KeyValueRule struct{}
 
-func (r KeyValueRule) Name() string { return "key_value" }
+func (r KeyValueRule) Name() string  { return "key_value" }
+func (r KeyValueRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(KeyValueRule{}) }
+
+func (r KeyValueRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Enforces key naming conventions, value patterns, and disallowed attributes.",
+		Severity:    "error",
+		Fixable:     false,
+		ConfigBlock: "key_value",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "key_case", Type: "string", Required: false, Default: `""`, Doc: `Enforce key casing: "snake_case", "camelCase", or "kebab-case"`},
+			{Name: "value_pattern", Type: "map[string]string", Required: false, Default: "{}", Doc: "Regex patterns per attribute name that values must match"},
+			{Name: "disallowed", Type: "[]string", Required: false, Default: "[]", Doc: "Attribute names that must not appear"},
+		},
+		Example: Example{
+			Violation: `inputs = { myKey = "value" }  # violates snake_case`,
+		},
+	}
+}
 
 func (r KeyValueRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.KeyValue != nil && cfg.KeyValue.Enabled

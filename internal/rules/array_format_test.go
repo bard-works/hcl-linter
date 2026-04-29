@@ -84,14 +84,14 @@ func TestArrayFormatRuleFixSort(t *testing.T) {
 				ArrayFormat: &config.ArrayFormatConfig{Enabled: true, Sort: tt.sort},
 			}
 			ctx := buildContext(t, tt.input, cfg)
-			out, changed, err := rule.Fix(ctx)
+			n, err := rule.Fix(ctx)
 			if err != nil {
 				t.Fatalf("Fix error: %v", err)
 			}
-			if !changed {
+			if n == 0 {
 				t.Fatal("expected Fix to report a change")
 			}
-			got := string(out)
+			got := string(ctx.Content)
 			alphaIdx := strings.Index(got, "alpha")
 			charlieIdx := strings.Index(got, "charlie")
 			if tt.wantSort && alphaIdx > charlieIdx {

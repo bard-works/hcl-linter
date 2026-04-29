@@ -60,15 +60,15 @@ func TestBlankLinesRuleFix(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := buildContext(t, tt.content, cfg)
-			got, changed, err := r.Fix(ctx)
+			n, err := r.Fix(ctx)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if changed != tt.changed {
-				t.Errorf("changed: got %v, want %v", changed, tt.changed)
+			if (n > 0) != tt.changed {
+				t.Errorf("changed: got %v, want %v", n > 0, tt.changed)
 			}
-			if tt.want != "" && strings.TrimSpace(string(got)) != strings.TrimSpace(tt.want) {
-				t.Errorf("content mismatch:\ngot:  %q\nwant: %q", string(got), tt.want)
+			if tt.want != "" && strings.TrimSpace(string(ctx.Content)) != strings.TrimSpace(tt.want) {
+				t.Errorf("content mismatch:\ngot:  %q\nwant: %q", string(ctx.Content), tt.want)
 			}
 		})
 	}

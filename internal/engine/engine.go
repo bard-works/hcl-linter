@@ -36,26 +36,9 @@ type FixResult struct {
 }
 
 func New(loader *config.Loader) *Engine {
-	reg := &rules.Registry{}
-	reg.Register(rules.BlockOrderRule{})
-	reg.Register(rules.ArrayFormatRule{})
-	reg.Register(rules.NameValidationRule{})
-	reg.Register(rules.DuplicatesRule{})
-	reg.Register(rules.RequiredFieldsRule{})
-	reg.Register(rules.RequiredBlocksRule{})
-	reg.Register(rules.BlankLinesRule{})
-	reg.Register(rules.DependencyPathsRule{})
-	reg.Register(rules.IncludePathsRule{})
-	reg.Register(rules.RemoteStateRule{})
-	reg.Register(rules.HCLFunctionsRule{})
-	reg.Register(rules.TerraformBlockRule{})
-	reg.Register(rules.KeyValueRule{})
-	reg.Register(rules.CountForEachRule{})
-	reg.Register(rules.DependencyOutputsRule{})
-
 	return &Engine{
 		configLoader: loader,
-		registry:     reg,
+		registry:     rules.DefaultRegistry(),
 	}
 }
 
@@ -151,87 +134,62 @@ func (e *Engine) LintFiles(paths []string, maxConcurrency int) []*diag.Result {
 
 // --- Fix ---
 
-func (e *Engine) FixFile(path string) (*FixResult, error) {
-	cfg, err := e.configLoader.LoadForFile(path)
-	if err != nil {
-		return nil, err
+// runFixPipeline runs all enabled Fixer rules in priority order, refreshing the
+// parsed AST in ctx after each rule that makes changes.
+func (e *Engine) runFixPipeline(ctx *rules.Context) (int, error) {
+	total := 0
+	for _, rule := range e.registry.Sorted() {
+		if !rule.Enabled(ctx.Config) {
+			continue
+		}
+		fixer, ok := rule.(rules.Fixer)
+		if !ok {
+			continue
+		}
+		n, err := fixer.Fix(ctx)
+		if err != nil {
+			return total, err
+		}
+		if n > 0 {
+			total += n
+			if err := e.refreshContext(ctx); err != nil {
+				return total, err
+			}
+		}
 	}
+	return total, nil
+}
 
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &FixResult{File: path}
-
+func (e *Engine) refreshContext(ctx *rules.Context) error {
 	parser := ast.NewParser()
-	file, diags := parser.ParseFile(path)
+	file, diags := parser.ParseContent(ctx.Content, ctx.FilePath)
 	if diags.HasErrors() {
-		return nil, fmt.Errorf("parse error: %s", diags.Error())
+		return fmt.Errorf("parse error after fix: %s", diags.Error())
+	}
+	ctx.File = file
+	ctx.Blocks = ast.GetTopLevelBlocks(file)
+	ctx.Attrs = ast.GetTopLevelAttributes(file)
+	return nil
+}
+
+func (e *Engine) FixFile(path string) (*FixResult, error) {
+	ctx, err := e.buildContext(path)
+	if err != nil {
+		return nil, err
 	}
 
-	blocks := ast.GetTopLevelBlocks(file)
-	contentStr := string(content)
-
-	if cfg.BlockOrder != nil && cfg.BlockOrder.Enabled {
-		newContent := rules.FixBlockOrder(contentStr, blocks, cfg.BlockOrder)
-		if newContent != contentStr {
-			contentStr = newContent
-			result.Changes++
-			parser = ast.NewParser()
-			file, _ = parser.ParseContent([]byte(contentStr), path)
-			blocks = ast.GetTopLevelBlocks(file)
-		}
+	changes, err := e.runFixPipeline(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	if cfg.NameValidation != nil && cfg.NameValidation.Enabled {
-		newContent, changed := rules.FixNameValidation(contentStr, blocks, cfg.NameValidation)
-		if changed {
-			contentStr = newContent
-			result.Changes++
-			parser = ast.NewParser()
-			file, _ = parser.ParseContent([]byte(contentStr), path)
-			blocks = ast.GetTopLevelBlocks(file)
-		}
-	}
-
-	if cfg.RequiredFields != nil {
-		newContent, changed := rules.FixRequiredFields(contentStr, blocks, cfg.RequiredFields)
-		if changed {
-			contentStr = newContent
-			result.Changes++
-			parser = ast.NewParser()
-			_, _ = parser.ParseContent([]byte(contentStr), path)
-		}
-	}
-
-	if cfg.ArrayFormat != nil && cfg.ArrayFormat.Enabled {
-		newContent, changes := rules.FixArrays(contentStr, cfg.ArrayFormat.Sort)
-		if changes > 0 {
-			contentStr = newContent
-			result.Changes += changes
-			parser = ast.NewParser()
-			file, _ = parser.ParseContent([]byte(contentStr), path)
-			blocks = ast.GetTopLevelBlocks(file)
-		}
-	}
-
-	if cfg.BlankLines != nil && cfg.BlankLines.Enabled && cfg.BlankLines.WithinBlocks {
-		attrs := ast.GetTopLevelAttributes(file)
-		newContent, changes := rules.FixBlankLines(contentStr, blocks, attrs)
-		if changes > 0 {
-			contentStr = newContent
-			result.Changes += changes
-		}
-	}
-
-	if result.Changes > 0 && !e.DryRun {
-		if err := os.WriteFile(path, []byte(contentStr), 0o644); err != nil {
+	result := &FixResult{File: path, Changes: changes}
+	if changes > 0 && !e.DryRun {
+		if err := os.WriteFile(path, ctx.Content, 0o644); err != nil {
 			return nil, err
 		}
 	}
-
-	result.Content = contentStr
+	result.Content = string(ctx.Content)
 	result.Success = true
 	return result, nil
 }
@@ -282,13 +240,19 @@ var defaultFormatBlockOrder = &config.BlockOrderConfig{
 	Order:   []string{"include", "locals", "terraform", "dependency", "inputs"},
 }
 
+func defaultFormatConfig() *config.Rules {
+	return &config.Rules{
+		BlockOrder:  defaultFormatBlockOrder,
+		ArrayFormat: &config.ArrayFormatConfig{Enabled: true, Sort: true},
+		BlankLines:  &config.BlankLinesConfig{Enabled: true, WithinBlocks: true},
+	}
+}
+
 func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-
-	result := &FixResult{File: path}
 
 	parser := ast.NewParser()
 	file, diags := parser.ParseFile(path)
@@ -296,48 +260,34 @@ func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 		return nil, fmt.Errorf("parse error: %s", diags.Error())
 	}
 
-	blocks := ast.GetTopLevelBlocks(file)
-	contentStr := string(content)
-
-	newContent := rules.FixBlockOrder(contentStr, blocks, defaultFormatBlockOrder)
-	if newContent != contentStr {
-		contentStr = newContent
-		result.Changes++
-		parser = ast.NewParser()
-		file, _ = parser.ParseContent([]byte(contentStr), path)
-		blocks = ast.GetTopLevelBlocks(file)
+	ctx := &rules.Context{
+		FilePath: path,
+		Content:  content,
+		File:     file,
+		Blocks:   ast.GetTopLevelBlocks(file),
+		Attrs:    ast.GetTopLevelAttributes(file),
+		Config:   defaultFormatConfig(),
 	}
 
-	newContent2, changes := rules.FixArrays(contentStr, true) // --format always sorts
-	if changes > 0 {
-		contentStr = newContent2
-		result.Changes += changes
-		parser = ast.NewParser()
-		file, _ = parser.ParseContent([]byte(contentStr), path)
-		blocks = ast.GetTopLevelBlocks(file)
-	}
-
-	attrs := ast.GetTopLevelAttributes(file)
-	newContent3, changes2 := rules.FixBlankLines(contentStr, blocks, attrs)
-	if changes2 > 0 {
-		contentStr = newContent3
-		result.Changes += changes2
+	changes, err := e.runFixPipeline(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Apply hclwrite.Format for final whitespace cleanup
-	formattedBytes := hclwrite.Format([]byte(contentStr))
-	if !bytes.Equal(formattedBytes, []byte(contentStr)) {
-		contentStr = string(formattedBytes)
-		result.Changes++
+	formattedBytes := hclwrite.Format(ctx.Content)
+	if !bytes.Equal(formattedBytes, ctx.Content) {
+		ctx.Content = formattedBytes
+		changes++
 	}
 
-	if result.Changes > 0 && !e.DryRun {
-		if err := os.WriteFile(path, []byte(contentStr), 0o644); err != nil {
+	result := &FixResult{File: path, Changes: changes}
+	if changes > 0 && !e.DryRun {
+		if err := os.WriteFile(path, ctx.Content, 0o644); err != nil {
 			return nil, err
 		}
 	}
-
-	result.Content = contentStr
+	result.Content = string(ctx.Content)
 	result.Success = true
 	return result, nil
 }

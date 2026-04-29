@@ -111,6 +111,10 @@ hcl-linter fix ./ --dry-run
 
 # Bootstrap a .hcl-linter/ config directory for the current project
 hcl-linter init
+
+# List all rules / show full docs for one rule
+hcl-linter explain
+hcl-linter explain block_order
 ```
 
 ## Configuration
@@ -160,6 +164,13 @@ rules {
 ```
 
 Chains are supported (`A extends B extends C`). Circular references are detected and reported as errors.
+
+### Per-Directory Overrides
+
+A `.hcl-linter/` directory anywhere in the source tree overrides rules for
+files beneath it. Closer config wins; the root config is the fallback. Useful
+in monorepos where different services have different conventions. See
+[docs/configuration.md → Per-directory overrides](docs/configuration.md#per-directory-overrides).
 
 ## Formatting
 

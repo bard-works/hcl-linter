@@ -14,7 +14,28 @@ import (
 
 type NameValidationRule struct{}
 
-func (r NameValidationRule) Name() string { return "name_validation" }
+func (r NameValidationRule) Name() string  { return "name_validation" }
+func (r NameValidationRule) Priority() int { return PrioritySemantic }
+
+func init() { Register(NameValidationRule{}) }
+
+func (r NameValidationRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Enforces naming conventions for block labels.",
+		Severity:    "error",
+		Fixable:     true,
+		ConfigBlock: "name_validation",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "pattern", Type: "string", Required: false, Default: `"^[a-z][a-z0-9_]*$"`, Doc: "Regex that block labels must match"},
+			{Name: "blocks", Type: "[]string", Required: false, Default: "[]", Doc: "Block types to validate; empty = all block types"},
+		},
+		Example: Example{
+			Violation: `dependency "my-vpc" { config_path = "../vpc" }`,
+			Fixed:     `dependency "my_vpc" { config_path = "../vpc" }`,
+		},
+	}
+}
 
 func (r NameValidationRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.NameValidation != nil && cfg.NameValidation.Enabled
@@ -51,13 +72,13 @@ func (r NameValidationRule) Check(ctx *Context) []diag.Issue {
 	return issues
 }
 
-func (r NameValidationRule) Fix(ctx *Context) ([]byte, bool, error) {
-	cfg := ctx.Config.NameValidation
-	newContent, changed := FixNameValidation(string(ctx.Content), ctx.Blocks, cfg)
+func (r NameValidationRule) Fix(ctx *Context) (int, error) {
+	newContent, changed := FixNameValidation(string(ctx.Content), ctx.Blocks, ctx.Config.NameValidation)
 	if !changed {
-		return ctx.Content, false, nil
+		return 0, nil
 	}
-	return []byte(newContent), true, nil
+	ctx.Content = []byte(newContent)
+	return 1, nil
 }
 
 // FixNameValidation replaces hyphens with underscores in block labels that

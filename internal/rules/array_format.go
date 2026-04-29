@@ -14,7 +14,31 @@ import (
 
 type ArrayFormatRule struct{}
 
-func (r ArrayFormatRule) Name() string { return "array_format" }
+func (r ArrayFormatRule) Name() string  { return "array_format" }
+func (r ArrayFormatRule) Priority() int { return PriorityFormat }
+
+func init() { Register(ArrayFormatRule{}) }
+
+func (r ArrayFormatRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Normalizes inline arrays with 2+ items to multiline format.",
+		Severity:    "warning",
+		Fixable:     true,
+		ConfigBlock: "array_format",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "sort", Type: "bool", Required: false, Default: "false", Doc: "Sort array items alphabetically when reformatting"},
+		},
+		Example: Example{
+			Violation: `deps = ["a", "b", "c"]`,
+			Fixed: `deps = [
+  "a",
+  "b",
+  "c",
+]`,
+		},
+	}
+}
 
 func (r ArrayFormatRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.ArrayFormat != nil && cfg.ArrayFormat.Enabled
@@ -26,13 +50,14 @@ func (r ArrayFormatRule) Check(ctx *Context) []diag.Issue {
 	return issues
 }
 
-func (r ArrayFormatRule) Fix(ctx *Context) ([]byte, bool, error) {
+func (r ArrayFormatRule) Fix(ctx *Context) (int, error) {
 	sortItems := ctx.Config.ArrayFormat != nil && ctx.Config.ArrayFormat.Sort
 	newContent, changes := FixArrays(string(ctx.Content), sortItems)
 	if changes == 0 {
-		return ctx.Content, false, nil
+		return 0, nil
 	}
-	return []byte(newContent), true, nil
+	ctx.Content = []byte(newContent)
+	return changes, nil
 }
 
 // FixArrays converts single-line arrays with 2+ items to multiline format.
@@ -168,7 +193,11 @@ func formatMultilineArray(line string, items []string, sortItems bool) string {
 	if idx == -1 {
 		return ""
 	}
-	key := strings.TrimSpace(line[:idx])
+	eqIdx := strings.Index(line, "=")
+	if eqIdx < 0 || eqIdx > idx {
+		return ""
+	}
+	key := strings.TrimSpace(line[:eqIdx])
 
 	if sortItems {
 		sort.Strings(items)
@@ -220,7 +249,11 @@ func fixMultilineArray(lines []string, firstLine string, sortItems bool) string 
 	if idx == -1 {
 		return ""
 	}
-	key := strings.TrimSpace(firstLine[:idx])
+	eqIdx := strings.Index(firstLine, "=")
+	if eqIdx < 0 || eqIdx > idx {
+		return ""
+	}
+	key := strings.TrimSpace(firstLine[:eqIdx])
 
 	var items []string
 	for _, line := range lines[1 : len(lines)-1] {

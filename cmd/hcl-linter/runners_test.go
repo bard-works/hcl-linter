@@ -59,6 +59,7 @@ func resetFlags(t *testing.T) {
 	flagFormat = false
 	flagDryRun = false
 	flagInitForce = false
+	flagValidateRecursive = false
 	t.Cleanup(func() {
 		flagVerbose = false
 		flagConfigSrc = ""

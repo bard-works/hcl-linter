@@ -22,8 +22,8 @@ internal/
 │                            #   LintFile / LintFiles / FixFile / FixFiles
 │                            #   FormatFixFile / FormatFixFiles
 ├── rules/
-│   ├── rule.go              # Rule, Fixer interfaces; Context struct
-│   ├── registry.go          # Registry: Register / Enabled / All
+│   ├── rule.go              # Rule, Fixer interfaces; Context struct; priority constants
+│   ├── registry.go          # Registry: Register / Enabled / All / Sorted; global DefaultRegistry
 │   ├── block_order.go       # BlockOrderRule       - Check + Fix
 │   ├── array_format.go      # ArrayFormatRule      - Check + Fix
 │   ├── blank_lines.go       # BlankLinesRule       - Fix only
@@ -54,38 +54,39 @@ internal/
 ## Data flow
 
 ```
-                    ┌─────────────────────────────────┐
-                    │           CLI (cobra)            │
-                    │    lint / check / fix / version  │
-                    └────────────────┬────────────────┘
-                                     │ path(s)
-                    ┌────────────────▼────────────────┐
-                    │             Engine              │
-                    │  buildContext(path)              │
-                    │    ├─ Config Loader              │
-                    │    │    LoadForFile → *Rules     │
-                    │    ├─ AST Parser                 │
-                    │    │    ParseFile → *hcl.File    │
-                    │    │    GetTopLevelBlocks/Attrs  │
-                    │    └─ → Context{FilePath,        │
-                    │           Content, File,         │
-                    │           Blocks, Attrs, Config} │
-                    └────────────────┬────────────────┘
-                                     │ ctx
-                    ┌────────────────▼────────────────┐
-                    │    Registry.Enabled(cfg)        │
-                    │    returns rules where           │
-                    │    rule.Enabled(cfg) == true     │
-                    └──┬───────┬──────┬──────┬────────┘
-                       │       │      │      │
-              ┌────────▼──┐ ┌──▼──┐ ┌─▼──┐ ┌▼──────┐
-              │BlockOrder │ │Name │ │ … │ │Dep    │
-              │Check / Fix│ │Valid│ │   │ │Outputs│
-              └───────────┘ └─────┘ └───┘ └───────┘
-                       │       │      │      │
-                    ┌──▼───────▼──────▼──────▼──────┐
-                    │  []Issue (lint) or []byte (fix)│
-                    └────────────────────────────────┘
+      ┌─────────────────────────────────┐
+      │          CLI (cobra)            │
+      │   lint / check / fix / version  │
+      └────────────────┬────────────────┘
+                       │ path(s)
+      ┌────────────────▼────────────────┐
+      │             Engine              │
+      │  buildContext(path)             │
+      │    ├─ Config Loader             │
+      │    │    LoadForFile → *Rules    │
+      │    ├─ AST Parser                │
+      │    │   ParseFile → *hcl.File    │
+      │    │   GetTopLevelBlocks/Attrs  │
+      │    └─ → Context{FilePath,       │
+      │          Content, File,         │
+      │          Blocks, Attrs, Config} │
+      └────────────────┬────────────────┘
+                       │ ctx
+      ┌────────────────▼────────────────┐
+      │    Registry.Sorted()            │
+      │    rules ordered by Priority()  │
+      │    filtered by Enabled(cfg)     │
+      └──┬───────────┬──────┬──────┬────┘
+         │           │      │      │
+    ┌────▼──────┐ ┌──▼──┐ ┌─▼──┐ ┌─▼─────┐
+    │BlockOrder │ │Name │ │ …  │ │Dep    │
+    │Check / Fix│ │Valid│ │    │ │Outputs│
+    └────┬──────┘ └──┬──┘ └─┬──┘ └─┬─────┘
+         │           │      │      │
+      ┌──▼───────────▼──────▼──────▼───┐
+      │  []Issue (lint)                │
+      │  ctx.Content mutated (fix)     │
+      └────────────────────────────────┘
 ```
 
 ## Rule and Fixer interfaces
@@ -93,7 +94,8 @@ internal/
 ```go
 // Every rule implements Rule.
 type Rule interface {
-    Name()    string
+    Name()     string
+    Priority() int
     Enabled(cfg *config.Rules) bool
     Check(ctx *Context) []diag.Issue
 }
@@ -101,14 +103,27 @@ type Rule interface {
 // Rules that can auto-correct also implement Fixer.
 type Fixer interface {
     Rule
-    Fix(ctx *Context) ([]byte, bool, error)
+    // Fix mutates ctx.Content in place and returns the number of logical
+    // edits made (0 = no-op). The engine re-parses ctx after each non-zero
+    // return so subsequent rules see an updated AST.
+    Fix(ctx *Context) (int, error)
 }
 ```
 
-Fix is applied by the engine in a fixed pipeline order (BlockOrder →
-NameValidation → RequiredFields → ArrayFormat → BlankLines) rather than
-via the registry, because each fix step re-parses the file before the
-next one runs.
+Priority constants (lower = runs first):
+
+| Constant            | Value | Used by                                    |
+|---------------------|-------|--------------------------------------------|
+| `PriorityStructure` | 100   | `BlockOrderRule`                           |
+| `PrioritySemantic`  | 200   | all check-only rules, `NameValidationRule`, `RequiredFieldsRule` |
+| `PriorityFormat`    | 300   | `ArrayFormatRule`                          |
+| `PriorityFinal`     | 400   | `BlankLinesRule`                           |
+
+Rules register themselves into the global `DefaultRegistry()` via `init()`.
+The engine's `runFixPipeline` calls `registry.Sorted()` to iterate rules in
+priority order; after each `Fix` that returns `n > 0` the engine calls
+`refreshContext` to re-parse `ctx.Content` so subsequent rules see a
+consistent AST.
 
 ## Implementation notes
 

@@ -1,6 +1,18 @@
 package rules
 
-import "github.com/bard-works/hcl-linter/internal/config"
+import (
+	"sort"
+
+	"github.com/bard-works/hcl-linter/internal/config"
+)
+
+var defaultRegistry = &Registry{}
+
+// DefaultRegistry returns the global registry populated via init() calls.
+func DefaultRegistry() *Registry { return defaultRegistry }
+
+// Register adds a rule to the global default registry.
+func Register(rule Rule) { defaultRegistry.Register(rule) }
 
 // Registry holds all registered rules in declaration order.
 type Registry struct {
@@ -26,4 +38,15 @@ func (r *Registry) Enabled(cfg *config.Rules) []Rule {
 		}
 	}
 	return active
+}
+
+// Sorted returns a copy of the registry's rules sorted by Priority ascending,
+// preserving registration order within the same priority tier.
+func (r *Registry) Sorted() []Rule {
+	out := make([]Rule, len(r.rules))
+	copy(out, r.rules)
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Priority() < out[j].Priority()
+	})
+	return out
 }

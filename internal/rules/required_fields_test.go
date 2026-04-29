@@ -80,14 +80,14 @@ func TestRequiredFieldsRuleFix(t *testing.T) {
 `
 	ctx := buildContext(t, content, cfg)
 	rule := rules.RequiredFieldsRule{}
-	out, changed, err := rule.Fix(ctx)
+	n, err := rule.Fix(ctx)
 	if err != nil {
 		t.Fatalf("Fix error: %v", err)
 	}
-	if !changed {
+	if n == 0 {
 		t.Fatal("expected Fix to report a change")
 	}
-	if !strings.Contains(string(out), "expose = true") {
-		t.Errorf("expected expose = true in output:\n%s", string(out))
+	if !strings.Contains(string(ctx.Content), "expose = true") {
+		t.Errorf("expected expose = true in output:\n%s", string(ctx.Content))
 	}
 }

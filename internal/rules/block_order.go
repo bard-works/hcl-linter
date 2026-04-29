@@ -12,7 +12,30 @@ import (
 
 type BlockOrderRule struct{}
 
-func (r BlockOrderRule) Name() string { return "block_order" }
+func (r BlockOrderRule) Name() string  { return "block_order" }
+func (r BlockOrderRule) Priority() int { return PriorityStructure }
+
+func init() { Register(BlockOrderRule{}) }
+
+func (r BlockOrderRule) Doc() RuleDoc {
+	return RuleDoc{
+		Summary:     "Ensures top-level blocks appear in the configured order.",
+		Severity:    "error",
+		Fixable:     true,
+		ConfigBlock: "block_order",
+		ConfigFields: []ConfigField{
+			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
+			{Name: "order", Type: "[]string", Required: true, Doc: "Block types in the desired sequence"},
+			{Name: "nested_order", Type: "map[string][]string", Required: false, Default: "{}", Doc: "Per-parent nested block ordering (e.g. terraform = [\"before_hook\", \"after_hook\"])"},
+		},
+		Example: Example{
+			Violation: `terraform {}
+include "root" {}`,
+			Fixed: `include "root" {}
+terraform {}`,
+		},
+	}
+}
 
 func (r BlockOrderRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.BlockOrder != nil && cfg.BlockOrder.Enabled
@@ -24,12 +47,13 @@ func (r BlockOrderRule) Check(ctx *Context) []diag.Issue {
 	return issues
 }
 
-func (r BlockOrderRule) Fix(ctx *Context) ([]byte, bool, error) {
+func (r BlockOrderRule) Fix(ctx *Context) (int, error) {
 	newContent := FixBlockOrder(string(ctx.Content), ctx.Blocks, ctx.Config.BlockOrder)
 	if newContent == string(ctx.Content) {
-		return ctx.Content, false, nil
+		return 0, nil
 	}
-	return []byte(newContent), true, nil
+	ctx.Content = []byte(newContent)
+	return 1, nil
 }
 
 // FixBlockOrder reorders blocks according to cfg.
