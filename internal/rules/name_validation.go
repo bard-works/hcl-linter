@@ -88,7 +88,10 @@ func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameV
 	if pattern == "" {
 		pattern = `^[a-z][a-z0-9_]*$`
 	}
-	regex := regexp.MustCompile(pattern)
+	regex, err := regexp.Compile(pattern)
+	if err != nil {
+		return content, false
+	}
 
 	blockSet := make(map[string]bool, len(cfg.Blocks))
 	for _, b := range cfg.Blocks {

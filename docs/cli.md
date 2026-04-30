@@ -118,20 +118,18 @@ introducing config-based rules. Config-based `array_format` and
 
 ### `fix --dry-run` flag
 
-Runs the same Fix pipeline as `fix` but prints a unified diff to stdout per
-changed file instead of writing. Exits non-zero (`1`) if any file would be
-changed. Composes with `--format`. Intended for CI pre-commit enforcement -
-fail the build when committed files aren't byte-identical to what the fixer
-would produce.
+Runs the fix pipeline but prints a unified diff per changed file instead
+of writing. Exits `1` if any file would change. Composes with `--format`.
 
 ```bash
 hcl-linter fix ./ --dry-run
 hcl-linter fix ./ --format --dry-run   # config-free formatting check
 ```
 
-Differs from `check`: `check` reports rule violations; `--dry-run` reports
-byte-level formatting drift, including drift introduced by fix-only rules
-like `blank_lines` that have no `Check` phase.
+Not the same as `check`: `check` reports rule violations, `--dry-run`
+reports byte-level drift - including drift from fix-only rules like
+`blank_lines` that have no `Check` phase. Use `--dry-run` in CI to fail
+the build when committed files don't match the fixer's output.
 
 ## `validate-config` command
 
@@ -147,7 +145,7 @@ hcl-linter validate-config . --recursive   # validate every nested .hcl-linter/
 **`--recursive` flag:** walks the target path and validates every
 `.hcl-linter/` directory found (skipping hidden siblings). Exits non-zero if
 any directory contains config issues. Useful when per-directory overrides
-are in play — see
+are in play - see
 [configuration.md → Per-directory overrides](configuration.md#per-directory-overrides).
 
 **Checks performed:**
@@ -184,17 +182,17 @@ hcl-linter init . --force          # overwrite existing .hcl-linter/
 Walks the target directory for `.hcl` / `.tf` files (skipping hidden dirs),
 groups them by unique basename, then writes:
 
-- `.hcl-linter/default.hcl` — baseline template with `block_order`,
+- `.hcl-linter/default.hcl` - baseline template with `block_order`,
   `array_format`, and `blank_lines` enabled with safe defaults.
-- `.hcl-linter/<name>.hcl` per unique basename — a thin
+- `.hcl-linter/<name>.hcl` per unique basename - a thin
   `extends = "default"` override with an empty `rules {}` block, ready for
   per-filename customisation.
 
 **Flags:**
 
-- `--dry-run` — print the proposed layout and file contents to stdout; no
+- `--dry-run` - print the proposed layout and file contents to stdout; no
   files are written.
-- `--force` — overwrite existing `.hcl-linter/` contents. Without this flag,
+- `--force` - overwrite existing `.hcl-linter/` contents. Without this flag,
   `init` refuses when the target `.hcl-linter/` directory is non-empty and
   lists what it found.
 
@@ -212,7 +210,7 @@ hcl-linter explain block_order   # full detail: config fields, example violation
 hcl-linter explain bogus         # exits 1, prints "unknown rule ..."
 ```
 
-**No-arg output** — one row per rule, aligned with `tabwriter`:
+**No-arg output** - one row per rule, aligned with `tabwriter`:
 
 ```
 RULE                   SEVERITY  FIXABLE  SUMMARY
@@ -221,7 +219,7 @@ block_order            error     yes      Ensures top-level blocks appear in con
 ...
 ```
 
-**Single-rule output** — summary, all config fields, and example snippet:
+**Single-rule output** - summary, all config fields, and example snippet:
 
 ```
 block_order  [error, fixable]
@@ -242,39 +240,61 @@ block_order  [error, fixable]
     terraform {}
 ```
 
-Rule name matching is exact — no fuzzy search.
+Rule name matching is exact - no fuzzy search.
 
 ## `version`
 
 Prints version, build date, and git commit (all injected at build time).
 
-## Target file filtering (`--filter`)
+## Filtering Files
 
-When `--filter` is specified:
+The `--filter` flag uses **glob patterns** with `*` wildcards against filenames (not full paths):
 
-- Filters are matched as glob patterns against the filename (not the full path)
-- Multiple `--filter` flags are combined with OR logic
-- Matching files are printed before processing
-- Non-matching files are silently skipped
+```bash
+# Match all .hcl files
+hcl-linter lint ./ --filter "*.hcl"
 
+# Match multiple patterns (OR logic)
+hcl-linter lint ./ --filter "*.hcl" --filter "*.tf"
+
+# Exact filename match
+hcl-linter lint ./ --filter "terragrunt.hcl"
+
+# Prefix/suffix patterns
+hcl-linter lint ./ --filter "test*.hcl"
 ```
-$ hcl-linter lint ./infra --filter "*.hcl" --filter "*.tf"
-Matched files:
-  ./infra/terragrunt.hcl
-  ./infra/service/main.tf
-  ./infra/shared/vars.hcl
+
+**How it works:**
+- Filters match against `filepath.Base()` (filename only, not full path)
+- `*` is the only wildcard supported (simple prefix/suffix matching around `*`)
+- Multiple `--filter` flags use OR logic
+- Files without a matching config are warned and skipped
+
+### Advanced Filtering with Shell Pre-filtering
+
+For more complex filtering scenarios (recursive patterns, exclusions, etc.), combine hcl-linter with shell commands:
+
+```bash
+# Recursive search with find
+find ./infra -name "*.hcl" -o -name "*.tf" | xargs hcl-linter lint
+
+# Exclude specific files
+for f in *.hcl; do
+  case "$f" in
+    terragrunt.hcl) continue ;;
+    *) hcl-linter lint "$f" ;;
+  esac
+done
+
+# Exclude multiple patterns
+find . -type f \( -name "*.hcl" -o -name "*.tf" \) ! -name "*test*" | xargs hcl-linter lint
 ```
 
 ## Concurrency
 
-By default, the linter automatically detects the optimal concurrency
-level based on CPU count. You can override this:
-
-- CLI flag: `--concurrency <number>`
-- Environment variable: `HCL_LINTER_MAX_CONCURRENCY` (overrides the flag)
-
-Higher concurrency speeds up processing of large file sets but uses more
-memory.
+Defaults to CPU count. Override with `--concurrency <n>` or
+`HCL_LINTER_MAX_CONCURRENCY` (the env var wins over the flag). Higher
+values trade memory for throughput on large trees.
 
 ## Coloured output
 

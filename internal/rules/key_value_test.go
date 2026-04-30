@@ -113,6 +113,49 @@ func TestKeyValueDisallowedKeysRule(t *testing.T) {
 	}
 }
 
+func TestKeyValueDisallowedKeysNestedBlocks(t *testing.T) {
+	cfg := &config.Rules{
+		KeyValue: &config.KeyValueConfig{Enabled: true, Disallowed: []string{"secret"}},
+	}
+	// Nested block inside terraform {} - exercises the recursion branch in kvCheckDisallowedKeys
+	content := "terraform {\n  before_hook \"h\" {\n    secret = \"leak\"\n  }\n}\n"
+	ctx := buildContext(t, content, cfg)
+	issues := rules.KeyValueRule{}.Check(ctx)
+	found := false
+	for _, i := range issues {
+		if i.Rule == "disallowed_keys" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected disallowed_keys issue in nested block, got %v", issues)
+	}
+}
+
+func TestKeyValueValuePatternNestedBlocks(t *testing.T) {
+	cfg := &config.Rules{
+		KeyValue: &config.KeyValueConfig{
+			Enabled:      true,
+			ValuePattern: map[string]string{"region": `^us-[a-z]+-[0-9]+$`},
+		},
+	}
+	// Nested block exercises kvCheckValuePattern recursion branch
+	content := "terraform {\n  before_hook \"h\" {\n    region = \"invalid\"\n  }\n}\n"
+	ctx := buildContext(t, content, cfg)
+	issues := rules.KeyValueRule{}.Check(ctx)
+	found := false
+	for _, i := range issues {
+		if i.Rule == "value_pattern" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected value_pattern issue in nested block, got %v", issues)
+	}
+}
+
 func TestKeyValueValuePatternRule(t *testing.T) {
 	cfg := &config.Rules{
 		KeyValue: &config.KeyValueConfig{

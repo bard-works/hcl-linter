@@ -113,97 +113,116 @@ func getLoader() (*config.Loader, *config.ConfigResult) {
 }
 
 func runLint(cmd *cobra.Command, args []string) error {
-	return run(cmd, args, false, false)
+	path := args[0]
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("path error: %w", err)
+	}
+	loader, _ := loadConfig(path)
+	eng := engine.New(loader)
+	filesToLint := filterFilesByConfig(loader, nil, path)
+	if len(filesToLint) == 0 {
+		return nil
+	}
+	maxConcurrency := resolveConcurrency()
+	allResults := eng.LintFiles(filesToLint, maxConcurrency)
+	printLintResults(allResults, false)
+	return nil
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
-	err := runLintModeWithExitCode(cmd, args)
-	if err != nil {
-		return err
+	path := args[0]
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("path error: %w", err)
+	}
+	loader, _ := loadConfig(path)
+	eng := engine.New(loader)
+	filesToLint := filterFilesByConfig(loader, nil, path)
+	if len(filesToLint) == 0 {
+		return nil
+	}
+	maxConcurrency := resolveConcurrency()
+	allResults := eng.LintFiles(filesToLint, maxConcurrency)
+	hasErrors := printLintResults(allResults, true)
+	if hasErrors {
+		return errors.New("lint check failed")
 	}
 	return nil
 }
 
-func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
-	path := args[0]
-
+func loadConfig(path string) (*config.Loader, *config.ConfigResult) {
 	loader, configResult := getLoader()
-
 	if configResult.Source == config.ConfigSourceNone {
 		fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
 	} else {
-		fmt.Printf("Config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
+		fmt.Printf("Using config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
 		if configResult.WarningMsg != "" {
 			fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
 		}
 		warnConfigIssues(configResult.SourcePath)
 	}
-
 	if loader == nil {
 		loader = &config.Loader{}
 	}
+	return loader, configResult
+}
 
-	var files []string
+func resolveFiles(path string) []string {
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("path error: %w", err)
+		return nil
 	}
-
 	if info.IsDir() {
-		files = findHCLFiles(path)
-	} else {
-		files = []string{path}
+		return findHCLFiles(path)
 	}
+	return []string{path}
+}
 
+func filterFilesByConfig(loader *config.Loader, configResult *config.ConfigResult, path string) []string {
+	files := resolveFiles(path)
 	if len(flagFilter) > 0 {
 		files = filterFiles(files)
 	}
-
-	eng := engine.New(loader)
-
-	var filesToLint []string
+	var filesToProcess []string
 	for _, file := range files {
 		hasSpecificConfig := loader.HasSpecificConfigForFile(file)
-		if !hasSpecificConfig {
-			relPath, err := filepath.Rel(".", file)
-			if err != nil {
-				relPath = file
-			}
-			if !loader.HasConfigForFile(file) {
+		relPath, _ := filepath.Rel(".", file)
+		if relPath == "" {
+			relPath = file
+		}
+		if !loader.HasConfigForFile(file) {
+			if configResult != nil && configResult.Source != config.ConfigSourceNone {
 				fmt.Printf("%s No config found for %s, skipping\n", termcolor.Warning("Warning:"), relPath)
-				continue
 			}
+			continue
+		}
+		if !hasSpecificConfig {
 			fmt.Printf("%s No specific config for %s, using defaults\n", termcolor.Warning("Warning:"), relPath)
 		}
-		filesToLint = append(filesToLint, file)
+		filesToProcess = append(filesToProcess, file)
 	}
+	return filesToProcess
+}
 
-	maxConcurrency := flagConcurrency
-	if maxConcurrency <= 0 {
-		maxConcurrency = config.GetMaxConcurrency(nil)
+func resolveConcurrency() int {
+	if flagConcurrency > 0 {
+		return flagConcurrency
 	}
+	return config.GetMaxConcurrency(nil)
+}
 
-	fmt.Printf("\nChecking %d file(s)...\n", len(filesToLint))
-
-	allResults := eng.LintFiles(filesToLint, maxConcurrency)
-
-	hasErrors := false
-	errorFiles := 0
+func printLintResults(allResults []*diag.Result, checkMode bool) (hasErrors bool) {
 	for _, result := range allResults {
-		if len(result.Issues) > 0 {
-			errorFiles++
-			if flagVerbose || len(result.Issues) > 0 {
-				relPath, err := filepath.Rel(".", result.File)
-				if err != nil {
-					relPath = result.File
+		if flagVerbose || len(result.Issues) > 0 {
+			relPath, err := filepath.Rel(".", result.File)
+			if err != nil {
+				relPath = result.File
+			}
+			fmt.Printf("\n%s:\n", termcolor.Path(relPath))
+			for _, issue := range result.Issues {
+				if issue.Severity == diag.SeverityError {
+					hasErrors = true
 				}
-				fmt.Printf("\n%s:\n", termcolor.Path(relPath))
-				for _, issue := range result.Issues {
-					if issue.Severity == diag.SeverityError {
-						hasErrors = true
-					}
-					printIssue(issue)
-				}
+				printIssue(issue)
 			}
 		}
 	}
@@ -215,15 +234,27 @@ func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
 
 	fmt.Println(strings.Repeat("-", 40))
 	if totalIssues > 0 {
-		fmt.Printf("Total: %d issue(s) in %d file(s)\n", totalIssues, errorFiles)
+		fmt.Printf("Total: %d issue(s) in %d file(s)\n", totalIssues, len(allResults))
 	} else {
 		fmt.Println(termcolor.Success("All files pass!"))
 	}
+	return hasErrors
+}
 
+func runLintModeWithExitCode(_ *cobra.Command, args []string) error {
+	path := args[0]
+	loader, _ := loadConfig(path)
+	eng := engine.New(loader)
+	filesToLint := filterFilesByConfig(loader, nil, path)
+
+	maxConcurrency := resolveConcurrency()
+	fmt.Printf("\nChecking %d file(s)...\n", len(filesToLint))
+
+	allResults := eng.LintFiles(filesToLint, maxConcurrency)
+	hasErrors := printLintResults(allResults, false)
 	if hasErrors {
 		os.Exit(1)
 	}
-
 	return nil
 }
 
@@ -231,53 +262,28 @@ func runFix(cmd *cobra.Command, args []string) error {
 	if flagFormat {
 		return runFormatMode(cmd, args)
 	}
-	return run(cmd, args, false, true)
+	path := args[0]
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("path error: %w", err)
+	}
+	loader, _ := loadConfig(path)
+	eng := engine.New(loader)
+	eng.DryRun = flagDryRun
+	filesToFix := filterFilesByConfig(loader, nil, path)
+	if len(filesToFix) == 0 {
+		return nil
+	}
+	maxConcurrency := resolveConcurrency()
+	if flagVerbose && len(filesToFix) > 1 {
+		fmt.Printf("Fixing %d files with concurrency %d\n", len(filesToFix), maxConcurrency)
+	}
+	results := eng.FixFiles(filesToFix, maxConcurrency)
+	totalChanges, wouldChange := handleFixResults(results, flagDryRun)
+	return finalizeFixRun(totalChanges, wouldChange, flagDryRun)
 }
 
 func run(_ *cobra.Command, args []string, checkMode, fixMode bool) error {
-	path := args[0]
-
-	loader, configResult := getLoader()
-
-	if configResult.Source == config.ConfigSourceNone {
-		fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
-	} else {
-		fmt.Printf("Using config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
-		if configResult.WarningMsg != "" {
-			fmt.Fprintf(os.Stderr, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
-		}
-		warnConfigIssues(configResult.SourcePath)
-	}
-
-	if loader == nil {
-		loader = &config.Loader{}
-	}
-
-	var files []string
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("path error: %w", err)
-	}
-
-	if info.IsDir() {
-		files = findHCLFiles(path)
-	} else {
-		files = []string{path}
-	}
-
-	if flagVerbose {
-		fmt.Printf("Found %d files to lint\n", len(files))
-	}
-
-	if len(flagFilter) > 0 {
-		files = filterFiles(files)
-	}
-
-	if fixMode {
-		return runFixMode(loader, files)
-	}
-
-	return runLintMode(loader, files, checkMode)
+	return nil
 }
 
 func filterFiles(files []string) []string {
@@ -412,81 +418,27 @@ func runLintMode(loader *config.Loader, files []string, checkMode bool) error {
 
 func runFormatMode(_ *cobra.Command, args []string) error {
 	path := args[0]
-
-	loader, configResult := getLoader()
-	if configResult.Source != config.ConfigSourceNone {
-		fmt.Printf("Using config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
-	}
-	if loader == nil {
-		loader = &config.Loader{}
-	}
-
-	var files []string
-	info, err := os.Stat(path)
-	if err != nil {
+	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("path error: %w", err)
 	}
-	if info.IsDir() {
-		files = findHCLFiles(path)
-	} else {
-		files = []string{path}
-	}
-	if len(flagFilter) > 0 {
-		files = filterFiles(files)
-	}
-
+	loader, configResult := loadConfig(path)
 	eng := engine.New(loader)
 	eng.DryRun = flagDryRun
-
-	maxConcurrency := flagConcurrency
-	if maxConcurrency <= 0 {
-		maxConcurrency = config.GetMaxConcurrency(nil)
+	files := filterFilesByConfig(loader, configResult, path)
+	if len(files) == 0 {
+		return nil
 	}
+	maxConcurrency := resolveConcurrency()
 	if flagVerbose && len(files) > 1 {
 		fmt.Printf("Formatting %d files with concurrency %d\n", len(files), maxConcurrency)
 	}
-
 	results := eng.FormatFixFiles(files, maxConcurrency)
 	totalChanges, wouldChange := handleFixResults(results, flagDryRun)
 	return finalizeFixRun(totalChanges, wouldChange, flagDryRun)
 }
 
 func runFixMode(loader *config.Loader, files []string) error {
-	eng := engine.New(loader)
-	eng.DryRun = flagDryRun
-
-	var filesToFix []string
-	for _, file := range files {
-		hasSpecificConfig := loader.HasSpecificConfigForFile(file)
-		if !loader.HasConfigForFile(file) {
-			relPath, _ := filepath.Rel(".", file)
-			if relPath == "" {
-				relPath = file
-			}
-			fmt.Printf("%s No config found for %s, skipping\n", termcolor.Warning("Warning:"), relPath)
-			continue
-		}
-		if !hasSpecificConfig {
-			relPath, _ := filepath.Rel(".", file)
-			if relPath == "" {
-				relPath = file
-			}
-			fmt.Printf("%s No specific config for %s, using defaults\n", termcolor.Warning("Warning:"), relPath)
-		}
-		filesToFix = append(filesToFix, file)
-	}
-
-	maxConcurrency := flagConcurrency
-	if maxConcurrency <= 0 {
-		maxConcurrency = config.GetMaxConcurrency(nil)
-	}
-	if flagVerbose && len(filesToFix) > 1 {
-		fmt.Printf("Fixing %d files with concurrency %d\n", len(filesToFix), maxConcurrency)
-	}
-
-	results := eng.FixFiles(filesToFix, maxConcurrency)
-	totalChanges, wouldChange := handleFixResults(results, flagDryRun)
-	return finalizeFixRun(totalChanges, wouldChange, flagDryRun)
+	return nil
 }
 
 func runValidateConfig(_ *cobra.Command, args []string) error {

@@ -109,9 +109,21 @@ func checkTFVersionFormat(issues *[]diag.Issue, attrs map[string]hcl.Expression)
 }
 
 var (
-	tfVersionRe    = regexp.MustCompile(`^v?\d+\.\d+(\.\d+)?$`)
-	tfConstraintRe = regexp.MustCompile(`^(>=|<=|>|<|~>|!=|==)?\s*v?\d+\.\d+(\.\d+)?`)
+	tfVersionRe    *regexp.Regexp
+	tfConstraintRe *regexp.Regexp
 )
+
+func init() {
+	var err error
+	tfVersionRe, err = regexp.Compile(`^v?\d+\.\d+(\.\d+)?$`)
+	if err != nil {
+		panic("invalid regex pattern for tfVersionRe: " + err.Error())
+	}
+	tfConstraintRe, err = regexp.Compile(`^(>=|<=|>|<|~>|!=|==)?\s*v?\d+\.\d+(\.\d+)?`)
+	if err != nil {
+		panic("invalid regex pattern for tfConstraintRe: " + err.Error())
+	}
+}
 
 func tfVersionValid(version string) bool {
 	return tfVersionRe.MatchString(version)

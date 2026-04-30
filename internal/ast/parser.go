@@ -66,31 +66,26 @@ func GetBlockNestedBlocks(body hcl.Body, blockType string) []*hcl.Block {
 	seen := make(map[string]bool)
 
 	if blockType == "*" {
-		schemaWithLabel := &hcl.BodySchema{
-			Blocks: []hcl.BlockHeaderSchema{
-				{Type: "*", LabelNames: []string{"name"}},
-			},
+		syntaxBody, ok := body.(*hclsyntax.Body)
+		if !ok {
+			return blocks
 		}
-		content1, _, _ := body.PartialContent(schemaWithLabel)
-		for _, b := range content1.Blocks {
-			key := b.TypeRange.String()
-			if !seen[key] {
-				seen[key] = true
-				blocks = append(blocks, b)
+		// Collect unique block types, then delegate to the specific-type path.
+		// hcl's PartialContent does not treat Type:"*" as a wildcard; it matches
+		// only blocks literally named "*". Walking hclsyntax.Body directly is the
+		// only way to enumerate all block types.
+		typeSeen := make(map[string]bool)
+		for _, block := range syntaxBody.Blocks {
+			if typeSeen[block.Type] {
+				continue
 			}
-		}
-
-		schemaNoLabel := &hcl.BodySchema{
-			Blocks: []hcl.BlockHeaderSchema{
-				{Type: "*"},
-			},
-		}
-		content2, _, _ := body.PartialContent(schemaNoLabel)
-		for _, b := range content2.Blocks {
-			key := b.TypeRange.String()
-			if !seen[key] {
-				seen[key] = true
-				blocks = append(blocks, b)
+			typeSeen[block.Type] = true
+			for _, b := range GetBlockNestedBlocks(body, block.Type) {
+				key := b.TypeRange.String()
+				if !seen[key] {
+					seen[key] = true
+					blocks = append(blocks, b)
+				}
 			}
 		}
 		return blocks

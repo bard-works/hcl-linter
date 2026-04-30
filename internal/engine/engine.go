@@ -35,11 +35,21 @@ type FixResult struct {
 	Error   error
 }
 
-func New(loader *config.Loader) *Engine {
-	return &Engine{
+type EngineOption func(*Engine)
+
+func WithRegistry(r *rules.Registry) EngineOption {
+	return func(e *Engine) { e.registry = r }
+}
+
+func New(loader *config.Loader, opts ...EngineOption) *Engine {
+	e := &Engine{
 		configLoader: loader,
 		registry:     rules.DefaultRegistry(),
 	}
+	for _, opt := range opts {
+		opt(e)
+	}
+	return e
 }
 
 func (e *Engine) buildContext(path string) (*rules.Context, error) {

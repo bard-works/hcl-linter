@@ -1500,3 +1500,140 @@ func TestFormatFixFileDryRunDoesNotWrite(t *testing.T) {
 		t.Errorf("dry-run unexpectedly wrote to disk.\nwant:\n%s\ngot:\n%s", original, string(onDisk))
 	}
 }
+
+func TestBuildContextParseError(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	setupTestConfig(t, tmpDir, "rules {\n  block_order {\n    enabled = true\n    order   = [\"include\"]\n  }\n}\n")
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	// Unparseable HCL - buildContext should return an error
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", "{{{{invalid hcl")
+	_, err := eng.LintFile(file)
+	if err == nil {
+		t.Fatal("expected parse error from buildContext, got nil")
+	}
+}
+
+func TestFormatFixFileReadError(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	_, err := eng.FormatFixFile(filepath.Join(tmpDir, "nonexistent.hcl"))
+	if err == nil {
+		t.Fatal("expected error for nonexistent file, got nil")
+	}
+}
+
+func TestFormatFixFileParseError(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	file := createHCLFile(t, tmpDir, "bad.hcl", "{{{{invalid hcl")
+	_, err := eng.FormatFixFile(file)
+	if err == nil {
+		t.Fatal("expected parse error from FormatFixFile, got nil")
+	}
+}
+
+func TestFormatFixFileAlreadyClean(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	// Already-canonical content: single include, no array, no blank lines to strip.
+	// hclwrite.Format should produce identical bytes, and block order is already correct.
+	content := `include "root" {
+  path = find_in_parent_folders()
+}
+`
+	file := createHCLFile(t, tmpDir, "clean.hcl", content)
+	result, err := eng.FormatFixFile(file)
+	if err != nil {
+		t.Fatalf("FormatFixFile failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+func TestBuildContextConfigLoadError(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	// Write invalid HCL to the config file so LoadForFile returns an error
+	configDir := filepath.Join(tmpDir, ".linter-rules")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "terragrunt.hcl"), []byte("{{{{invalid"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", "locals {}")
+	_, err := eng.LintFile(file)
+	if err == nil {
+		t.Fatal("expected error from bad config, got nil")
+	}
+}
+
+func TestBuildContextReadFileError(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	// Create a default config so LoadForFile succeeds for any filename.
+	configDir := filepath.Join(tmpDir, ".linter-rules")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "default.hcl"), []byte("rules {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	_, err := eng.LintFile(filepath.Join(tmpDir, "does-not-exist.hcl"))
+	if err == nil {
+		t.Fatal("expected error for missing file, got nil")
+	}
+}
+
+func TestFixFileWriteError(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	setupTestConfig(t, tmpDir, `rules {
+  blank_lines { enabled = true; within_blocks = true }
+}`)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	path := createHCLFile(t, tmpDir, "terragrunt.hcl", "locals {\n\n  x = 1\n}\n")
+	// Make the file read-only so WriteFile will fail after fix.
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	_, err := eng.FixFile(path)
+	if err == nil {
+		t.Fatal("expected write error, got nil")
+	}
+}
+
+func TestFormatFixFileWriteError(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	// Unformatted content so hclwrite.Format makes a change, triggering the write.
+	path := createHCLFile(t, tmpDir, "unformatted.hcl", "locals {\n\n\n  x = 1\n}\n")
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	_, err := eng.FormatFixFile(path)
+	if err == nil {
+		t.Fatal("expected write error, got nil")
+	}
+}

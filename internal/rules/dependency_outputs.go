@@ -149,7 +149,15 @@ func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockO
 	return outputs, mockOuts
 }
 
-var depOutputBlockRe = regexp.MustCompile(`^output\s+"(\w+)"`)
+var depOutputBlockRe *regexp.Regexp
+
+func init() {
+	var err error
+	depOutputBlockRe, err = regexp.Compile(`^output\s+"(\w+)"`)
+	if err != nil {
+		panic("invalid regex pattern for depOutputBlockRe: " + err.Error())
+	}
+}
 
 func depParseOutputsFromTf(content string) map[string]depOutputDef {
 	outputs := make(map[string]depOutputDef)

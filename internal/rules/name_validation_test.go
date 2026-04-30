@@ -162,6 +162,53 @@ func TestNameValidationNoFilter(t *testing.T) {
 	}
 }
 
+func TestNameValidationDefaultPatternEdgeCases(t *testing.T) {
+	// No pattern set → uses isValidIdentifier; covers the empty/digit-start branches
+	cfg := &config.Rules{
+		NameValidation: &config.NameValidationConfig{Enabled: true},
+	}
+	tests := []struct {
+		label       string
+		expectIssue bool
+	}{
+		{"1starts_digit", true}, // !isLowerLetter(name[0])
+		{"valid_name", false},
+	}
+	for _, tt := range tests {
+		content := "include \"" + tt.label + "\" {}\n"
+		ctx := buildContext(t, content, cfg)
+		issues := rules.NameValidationRule{}.Check(ctx)
+		found := false
+		for _, i := range issues {
+			if i.Rule == "name_validation" {
+				found = true
+				break
+			}
+		}
+		if tt.expectIssue && !found {
+			t.Errorf("label %q: expected issue, got none", tt.label)
+		}
+		if !tt.expectIssue && found {
+			t.Errorf("label %q: unexpected issue", tt.label)
+		}
+	}
+}
+
+func TestNameValidationFixNoChange(t *testing.T) {
+	cfg := &config.Rules{
+		NameValidation: &config.NameValidationConfig{Enabled: true, Blocks: []string{"dependency"}},
+	}
+	// Already valid → Fix should return 0
+	ctx := buildContext(t, "dependency \"my_vpc\" {}\n", cfg)
+	n, err := rules.NameValidationRule{}.Fix(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected no changes, got %d", n)
+	}
+}
+
 func TestNameValidationRuleFix(t *testing.T) {
 	cfg := &config.Rules{
 		NameValidation: &config.NameValidationConfig{

@@ -43,9 +43,8 @@ Configs are loaded from the first source that exists, in this order:
 merging across source locations. Within a single config directory, use
 `extends` for inheritance (see below).
 
-The applied config source is printed at startup for transparency. If the
-linter falls back to project defaults (no user config found), a warning is
-displayed.
+The resolved config source is printed at startup. If no user config is
+found and the linter falls back to project defaults, a warning is printed.
 
 ## Config file matching
 
@@ -74,13 +73,13 @@ If nothing is found on the walk, the globally-resolved root config from
 [Config source precedence](#config-source-precedence) is used as the
 fallback.
 
-**Closer wins — there is no implicit cross-directory merging.** The nested
+**Closer wins - there is no implicit cross-directory merging.** The nested
 config replaces the root config wholesale for matching files. If you want
 to share rules between the root and a nested config, use `extends` inside
 the nested config (relative paths like `extends = "../default"` work),
 or duplicate the shared rule blocks.
 
-**Example — monorepo with one service that uses a stricter block order:**
+**Example - monorepo with one service that uses a stricter block order:**
 
 ```
 repo/

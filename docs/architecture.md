@@ -6,11 +6,81 @@ user-facing docs see [rules.md](rules.md), [cli.md](cli.md), and
 
 ## Contents
 
-1. [Package layout](#package-layout)
-2. [Data flow](#data-flow)
-3. [Rule and Fixer interfaces](#rule-and-fixer-interfaces)
-4. [Implementation notes](#implementation-notes)
-5. [Build & release](#build--release)
+1. [Why this tool exists](#why-this-tool-exists)
+2. [Design choices](#design-choices)
+3. [Package layout](#package-layout)
+4. [Data flow](#data-flow)
+5. [Rule and Fixer interfaces](#rule-and-fixer-interfaces)
+6. [Implementation notes](#implementation-notes)
+7. [Build & release](#build--release)
+
+## Why this tool exists
+
+HCL is permissive. Two Terragrunt files that do the same thing can look
+entirely different - different block order, different quoting, different
+casing on attribute names, inline vs multiline arrays, hooks named with
+hyphens or underscores, paths that point nowhere but parse cleanly. HCL
+itself has no opinion on any of this, and `terraform fmt` / `terragrunt
+hclfmt` only touch whitespace.
+
+In a codebase with more than one contributor this drift compounds: diffs
+get noisy, reviewers spend time on layout instead of behaviour, and a
+`config_path = "../vpc"` pointing at a moved directory can sit
+unnoticed until a plan fails. The usual fallback - "write it in the style
+guide, enforce in review" - doesn't scale past a few contributors.
+
+`hcl-linter` exists to move those rules out of human review and into a
+deterministic, fixable check. Not as a replacement for `terraform
+validate` or policy-as-code tools (OPA, Sentinel) - those check semantics
+after HCL is parsed. This tool checks the file shape: ordering, naming,
+required blocks and attributes, path references, and formatting. The
+things that should never be a review comment.
+
+### What it is not
+
+- Not a formatter in the `terraform fmt` sense. It can auto-fix a fixed
+  set of rules (block order, array layout, blank lines, naming), but
+  most rules are `Check`-only by design - auto-"fixing" a missing
+  `source` attribute or a non-existent `config_path` would hide bugs,
+  not solve them.
+- Not a policy engine. Rules are structural, not about which AWS regions
+  are allowed or whether an IAM policy is over-broad. Use OPA / Sentinel
+  / Checkov for those.
+- Not a language server. No incremental parse, no LSP protocol - it
+  expects to run on a whole file or a whole tree.
+
+## Design choices
+
+A few decisions worth calling out, because they shape how rules are
+written and how the engine behaves.
+
+- **Config is HCL, not YAML or JSON.** The files being linted are HCL;
+  asking contributors to context-switch into a second config language to
+  describe rules about the first was rejected. JSON support was
+  prototyped and removed; do not reintroduce it.
+- **Per-filename config matching, not glob patterns.** `terragrunt.hcl`
+  is configured by `.hcl-linter/terragrunt.hcl`. Files of different
+  roles in the same directory (`terragrunt.hcl`, `root.hcl`,
+  `service.hcl`) get independent rule sets without any pattern
+  language. `default.hcl` is the fallback.
+- **Per-directory overrides use closest-wins, not merging.** Merging
+  rule sets across levels produced rules no one had written and no one
+  could debug. A nested `.hcl-linter/` replaces the parent wholesale;
+  sharing happens via `extends` inside a single directory.
+- **Rules self-register.** Each rule calls `Register(...)` from an
+  `init()` in its own file. The engine holds no hand-maintained list -
+  a rule that isn't registered is dead code, full stop. Priority is an
+  integer on the `Rule` interface, so pipeline order is a property of
+  the rule, not of the engine.
+- **Check is read-only; Fix mutates in place.** Fix returns an edit
+  count; the engine re-parses the file between rules when that count is
+  non-zero, so later rules see a consistent AST. This rules out whole
+  classes of "fix A broke fix B" bugs.
+- **`fix --dry-run` is the CI enforcement mode, not `check`.** `check`
+  reports rule violations; `--dry-run` reports byte-level drift and
+  exits non-zero when it finds any. Fix-only rules like `blank_lines`
+  have no `Check` phase, so they'd silently pass a `check` run - that's
+  why `--dry-run` exists.
 
 ## Package layout
 

@@ -53,6 +53,33 @@ func TestCountForEachRule(t *testing.T) {
 		},
 	}
 
+	// Disabled paths - when individual warn flags are false no issues should be emitted
+	t.Run("count_zero disabled", func(t *testing.T) {
+		disabledCfg := &config.Rules{
+			CountForEach: &config.CountForEachConfig{
+				Enabled:            true,
+				WarnOnCountZero:    false,
+				WarnOnEmptyForEach: false,
+				WarnOnConflict:     false,
+			},
+		}
+		ctx := buildContext(t, "resource \"aws_instance\" \"x\" {\n  count = 0\n  for_each = {}\n}\n", disabledCfg)
+		if issues := (rules.CountForEachRule{}).Check(ctx); len(issues) != 0 {
+			t.Errorf("expected no issues when all warn flags disabled, got %v", issues)
+		}
+	})
+
+	// Non-resource block type should never trigger count/for_each checks
+	t.Run("non-resource block ignored", func(t *testing.T) {
+		ctx := buildContext(t, "locals {\n  count = 0\n}\n", cfg)
+		issues := (rules.CountForEachRule{}).Check(ctx)
+		for _, i := range issues {
+			if i.Rule == "count_zero" {
+				t.Error("unexpected count_zero on locals block")
+			}
+		}
+	})
+
 	r := rules.CountForEachRule{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

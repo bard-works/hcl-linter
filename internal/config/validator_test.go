@@ -295,3 +295,14 @@ func TestValidateMultipleIssuesSingleFile(t *testing.T) {
 		}
 	}
 }
+
+func TestValidationIssueString(t *testing.T) {
+	issue := ValidationIssue{File: "/some/path/default.hcl", Message: "unknown rule block"}
+	got := issue.String()
+	if !strings.Contains(got, "default.hcl") {
+		t.Errorf("String() should contain filename, got %q", got)
+	}
+	if !strings.Contains(got, "unknown rule block") {
+		t.Errorf("String() should contain message, got %q", got)
+	}
+}

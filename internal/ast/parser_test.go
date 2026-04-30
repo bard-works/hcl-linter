@@ -132,7 +132,11 @@ terraform {
 		t.Errorf("expected 2 before_hooks, got %d", len(hooks))
 	}
 
-	_ = GetBlockNestedBlocks(blockBody, "*")
+	all := GetBlockNestedBlocks(blockBody, "*")
+	// Wildcard should return all nested blocks: remote_state + 2 before_hooks = 3
+	if len(all) != 3 {
+		t.Errorf("wildcard GetBlockNestedBlocks: expected 3 blocks, got %d", len(all))
+	}
 }
 
 func TestGetTopLevelAttributes(t *testing.T) {
