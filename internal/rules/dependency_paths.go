@@ -56,7 +56,7 @@ func (r DependencyPathsRule) Check(ctx *Context) []diag.Issue {
 			continue
 		}
 		resolved := resolveRelativePath(fileDir, pathStr)
-		if _, err := os.Stat(resolved); os.IsNotExist(err) {
+		if _, err := safeStat(resolved); os.IsNotExist(err) {
 			label := ""
 			if len(block.Labels) > 0 {
 				label = block.Labels[0]

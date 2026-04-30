@@ -104,7 +104,7 @@ func depCheckOutputRefs(issues *[]diag.Issue, block ast.BlockInfo, currentFilePa
 }
 
 func depGetPath(body hcl.Body) string {
-	attrs, _ := body.JustAttributes()
+	attrs := ast.GetBodyAttributes(body)
 	if attr, ok := attrs["config_path"]; ok {
 		val, diags := attr.Expr.Value(nil)
 		if !diags.HasErrors() && val.Type() == cty.String {
@@ -118,13 +118,13 @@ func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockO
 	outputs := make(map[string]depOutputDef)
 	mockOuts := make(map[string]depMockOutput)
 
-	if _, err := os.Stat(depPath); os.IsNotExist(err) {
+	if _, err := safeStat(depPath); os.IsNotExist(err) {
 		return nil, nil
 	}
 
 	tfFiles, _ := filepath.Glob(filepath.Join(depPath, "*.tf"))
 	for _, tfFile := range tfFiles {
-		content, err := os.ReadFile(tfFile)
+		content, err := safeReadFile(tfFile)
 		if err != nil {
 			continue
 		}
@@ -134,7 +134,7 @@ func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockO
 	}
 
 	mockPath := filepath.Join(depPath, ".mock-outputs.json")
-	if mockContent, err := os.ReadFile(mockPath); err == nil {
+	if mockContent, err := safeReadFile(mockPath); err == nil {
 		parsed := depParseMockOutputs(mockContent)
 		for name, out := range parsed {
 			mockOuts[name] = out
@@ -149,15 +149,7 @@ func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockO
 	return outputs, mockOuts
 }
 
-var depOutputBlockRe *regexp.Regexp
-
-func init() {
-	var err error
-	depOutputBlockRe, err = regexp.Compile(`^output\s+"(\w+)"`)
-	if err != nil {
-		panic("invalid regex pattern for depOutputBlockRe: " + err.Error())
-	}
-}
+var depOutputBlockRe = regexp.MustCompile(`^output\s+"(\w+)"`)
 
 func depParseOutputsFromTf(content string) map[string]depOutputDef {
 	outputs := make(map[string]depOutputDef)
@@ -192,7 +184,7 @@ func depParseMockOutputs(content []byte) map[string]depMockOutput {
 }
 
 func depCheckInputsOutputRefs(_ *[]diag.Issue, body hcl.Body, outputs map[string]depOutputDef, mockOuts map[string]depMockOutput, depName, depPath string) {
-	attrs, _ := body.JustAttributes()
+	attrs := ast.GetBodyAttributes(body)
 	for _, attr := range attrs {
 		val, diags := attr.Expr.Value(nil)
 		if diags.HasErrors() {

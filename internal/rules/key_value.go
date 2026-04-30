@@ -58,13 +58,11 @@ func (r KeyValueRule) Check(ctx *Context) []diag.Issue {
 	return issues
 }
 
-var (
-	keyCasePatterns = map[string]*regexp.Regexp{
-		"camelcase":  regexp.MustCompile(`^[a-z][a-zA-Z0-9]*$`),
-		"snake_case": regexp.MustCompile(`^[a-z][a-z0-9_]*$`),
-		"kebab-case": regexp.MustCompile(`^[a-z][a-z0-9-]*$`),
-	}
-)
+var keyCasePatterns = map[string]*regexp.Regexp{
+	"camelcase":  regexp.MustCompile(`^[a-z][a-zA-Z0-9]*$`),
+	"snake_case": regexp.MustCompile(`^[a-z][a-z0-9_]*$`),
+	"kebab-case": regexp.MustCompile(`^[a-z][a-z0-9-]*$`),
+}
 
 func init() {
 	for name, re := range keyCasePatterns {
@@ -90,7 +88,7 @@ func kvCheckKeyCase(issues *[]diag.Issue, blocks []ast.BlockInfo, caseType strin
 }
 
 func kvCheckBlockKeyCase(issues *[]diag.Issue, body hcl.Body, pattern *regexp.Regexp, caseType string) {
-	attrs, _ := body.JustAttributes()
+	attrs := ast.GetBodyAttributes(body)
 	for name := range attrs {
 		if !pattern.MatchString(name) {
 			*issues = append(*issues, diag.Issue{
@@ -119,7 +117,7 @@ func kvCheckDisallowedKeys(issues *[]diag.Issue, blocks []ast.BlockInfo, disallo
 }
 
 func kvCheckBlockDisallowedKeys(issues *[]diag.Issue, body hcl.Body, disallowed map[string]bool) {
-	attrs, _ := body.JustAttributes()
+	attrs := ast.GetBodyAttributes(body)
 	for name := range attrs {
 		if disallowed[name] {
 			*issues = append(*issues, diag.Issue{
@@ -150,7 +148,7 @@ func kvCheckValuePattern(issues *[]diag.Issue, blocks []ast.BlockInfo, patterns 
 }
 
 func kvCheckBlockValuePattern(issues *[]diag.Issue, body hcl.Body, patterns map[string]*regexp.Regexp) {
-	attrs, _ := body.JustAttributes()
+	attrs := ast.GetBodyAttributes(body)
 	for key, attr := range attrs {
 		if pattern, ok := patterns[key]; ok {
 			val, diags := attr.Expr.Value(nil)

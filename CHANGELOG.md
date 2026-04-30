@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Binary size reduced by ~30% using `-s -w` ldflags.
+- `TestWriteInitFilesWriteError` skipped on Windows (Unix permissions).
+- `ParseError.Unwrap()` now returns `error` for proper interface.
+
+### Changed
+
+- Extract `GetBodyAttributes()` helper in `internal/ast` (replaces 7 occurrences).
+- Rename `isLowerLetter` → `isValidStartChar`/`isValidIdentifierChar`.
+- Extract `defaultNamePattern` constant in `name_validation`.
+
 ### Added
 
 - `fix --dry-run` prints a unified diff per file and exits non-zero if any

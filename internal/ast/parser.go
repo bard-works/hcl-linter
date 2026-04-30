@@ -61,6 +61,11 @@ func GetBlockAttributes(body hcl.Body) map[string]hcl.Expression {
 	return result
 }
 
+func GetBodyAttributes(body hcl.Body) map[string]*hcl.Attribute {
+	attrs, _ := body.JustAttributes()
+	return attrs
+}
+
 func GetBlockNestedBlocks(body hcl.Body, blockType string) []*hcl.Block {
 	var blocks []*hcl.Block
 	seen := make(map[string]bool)

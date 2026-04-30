@@ -12,6 +12,8 @@ import (
 	"github.com/bard-works/hcl-linter/internal/diag"
 )
 
+const defaultNamePattern = `^[a-z][a-z0-9_]*$`
+
 type NameValidationRule struct{}
 
 func (r NameValidationRule) Name() string  { return "name_validation" }
@@ -86,7 +88,7 @@ func (r NameValidationRule) Fix(ctx *Context) (int, error) {
 func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameValidationConfig) (string, bool) {
 	pattern := cfg.Pattern
 	if pattern == "" {
-		pattern = `^[a-z][a-z0-9_]*$`
+		pattern = defaultNamePattern
 	}
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
@@ -143,21 +145,21 @@ func nameValidationRecursive(issues *[]diag.Issue, blocks []ast.BlockInfo, allow
 }
 
 func isValidIdentifier(name string) bool {
-	if name == "" || !isLowerLetter(rune(name[0])) {
+	if name == "" || !isValidStartChar(rune(name[0])) {
 		return false
 	}
 	for _, ch := range name {
-		if !isLowerLetter(ch) && !isDigit(ch) && ch != '_' {
+		if !isValidIdentifierChar(ch) {
 			return false
 		}
 	}
 	return true
 }
 
-func isLowerLetter(ch rune) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+func isValidStartChar(ch rune) bool {
+	return ch >= 'a' && ch <= 'z'
 }
 
-func isDigit(ch rune) bool {
-	return ch >= '0' && ch <= '9'
+func isValidIdentifierChar(ch rune) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_'
 }

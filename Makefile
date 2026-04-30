@@ -20,6 +20,7 @@ GIT_TREE_STATE=$(shell if git status --porcelain 2>/dev/null | grep -q .; then e
 
 # LDFLAGS for version injection
 LDFLAGS=-ldflags "\
+  -s -w \
   -X main.Version=$(VERSION) \
   -X main.BuildDate=$(BUILD_DATE) \
   -X main.GitCommit=$(GIT_COMMIT)"

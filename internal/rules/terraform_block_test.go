@@ -1,12 +1,94 @@
-package rules_test
+package rules
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/hcl/v2/hclparse"
+
+	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
-	"github.com/bard-works/hcl-linter/internal/rules"
 )
+
+func buildContext(t *testing.T, content string, cfg *config.Rules) *Context {
+	t.Helper()
+	p := hclparse.NewParser()
+	file, diags := p.ParseHCL([]byte(content), "test.hcl")
+	if diags.HasErrors() {
+		t.Fatalf("parse error: %s", diags.Error())
+	}
+	return &Context{
+		FilePath: "test.hcl",
+		Content:  []byte(content),
+		File:     file,
+		Blocks:   ast.GetTopLevelBlocks(file),
+		Attrs:    ast.GetTopLevelAttributes(file),
+		Config:   cfg,
+	}
+}
+
+func TestTerraformVersionValid(t *testing.T) {
+	tests := []struct {
+		version string
+		valid   bool
+	}{
+		{"1.0.0", true},
+		{"v1.0.0", true},
+		{"0.12.30", true},
+		{"v0.0.0", true},
+		{"10.20.30", true},
+		{"1.0", true},
+		{"v1.0", true},
+		{"invalid", false},
+		{"", false},
+		{"latest", false},
+		{"1.x", false},
+		{"v", false},
+		{"1.0.0.0", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.version, func(t *testing.T) {
+			result := tfVersionValid(tt.version)
+			if result != tt.valid {
+				t.Errorf("tfVersionValid(%q) = %v, want %v", tt.version, result, tt.valid)
+			}
+		})
+	}
+}
+
+func TestTerraformConstraintValid(t *testing.T) {
+	tests := []struct {
+		constraint string
+		valid      bool
+	}{
+		{">=1.0.0", true},
+		{"<=2.0.0", true},
+		{">1.0.0", true},
+		{"<2.0.0", true},
+		{"~>1.0.0", true},
+		{"!=1.0.0", true},
+		{"==1.0.0", true},
+		{">= 1.0.0", true},
+		{">=1.0.0, <2.0.0", true},
+		{">=1.0.0,<2.0.0", true},
+		{"1.0.0", true},
+		{"v1.0.0", true},
+		{"1.x", false},
+		{"invalid", false},
+		{"", false},
+		{"latest", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.constraint, func(t *testing.T) {
+			result := tfConstraintValid(tt.constraint)
+			if result != tt.valid {
+				t.Errorf("tfConstraintValid(%q) = %v, want %v", tt.constraint, result, tt.valid)
+			}
+		})
+	}
+}
 
 func TestTerraformSourceRequired(t *testing.T) {
 	cfg := &config.Rules{
@@ -37,7 +119,7 @@ func TestTerraformSourceRequired(t *testing.T) {
 		},
 	}
 
-	r := rules.TerraformBlockRule{}
+	r := TerraformBlockRule{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := buildContext(t, tt.content, cfg)
@@ -79,7 +161,7 @@ func TestTerraformVersionFormat(t *testing.T) {
 		{name: "invalid required_version", content: "terraform {\n  required_version = \"1.x\"\n}\n", expectIssue: true, issueContains: "may not match expected format"},
 	}
 
-	r := rules.TerraformBlockRule{}
+	r := TerraformBlockRule{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := buildContext(t, tt.content, cfg)
@@ -138,7 +220,7 @@ func TestTerraformExtraArguments(t *testing.T) {
 		},
 	}
 
-	r := rules.TerraformBlockRule{}
+	r := TerraformBlockRule{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := buildContext(t, tt.content, cfg)
@@ -197,7 +279,7 @@ func TestTerraformDeprecatedFields(t *testing.T) {
 		},
 	}
 
-	r := rules.TerraformBlockRule{}
+	r := TerraformBlockRule{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := buildContext(t, tt.content, cfg)
