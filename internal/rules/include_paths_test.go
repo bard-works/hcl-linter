@@ -73,6 +73,25 @@ func TestIncludePathsRule(t *testing.T) {
 	}
 }
 
+func TestIncludePathsNoPathAttr(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Rules{
+		IncludePaths: &config.IncludePathsConfig{Enabled: true},
+	}
+
+	// include block with no path attr → attrs["path"] lookup returns !ok → skipped
+	content := `include "root" { expose = true }` + "\n"
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	writeFile(t, file, content)
+	ctx := buildContextFromFile(t, file, cfg)
+
+	for _, issue := range (rules.IncludePathsRule{}).Check(ctx) {
+		if issue.Rule == "include_path_exists" {
+			t.Error("unexpected include_path_exists issue for include with no path attr")
+		}
+	}
+}
+
 func TestIncludePathsWithAbsolutePath(t *testing.T) {
 	tmpDir := t.TempDir()
 

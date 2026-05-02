@@ -231,7 +231,7 @@ make install        # Install to GOPATH/bin
 Version is managed via the `VERSION` file:
 
 ```
-0.1.0
+0.0.1-alpha
 ```
 
 Version info is injected at build time via ldflags:

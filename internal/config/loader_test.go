@@ -557,6 +557,245 @@ rules {}`
 	}
 }
 
+func TestNewLoaderWithDiscoveryCwd(t *testing.T) {
+	// Change working directory to a tmpDir that contains .hcl-linter/
+	// so getCwdConfigDir discovery fires the ConfigSourceCwd branch.
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, ".hcl-linter")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(tmpDir)
+	t.Setenv("HCL_LINTER_CONFIG_DIR", "")
+
+	_, result := NewLoaderWithDiscovery("")
+	if result.Source != ConfigSourceCwd {
+		t.Errorf("expected ConfigSourceCwd, got %v", result.Source)
+	}
+}
+
+func TestNewLoaderWithDiscoveryEnv(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HCL_LINTER_CONFIG_DIR", tmpDir)
+
+	_, result := NewLoaderWithDiscovery("")
+	if result.Source != ConfigSourceEnv {
+		t.Errorf("expected ConfigSourceEnv, got %v", result.Source)
+	}
+}
+
+func TestIsWithinDir(t *testing.T) {
+	// dir == "" always false
+	if isWithinDir("/some/path", "") {
+		t.Error("expected false for empty dir")
+	}
+	// path is same as dir → rel == "."
+	if !isWithinDir("/a/b", "/a/b") {
+		t.Error("expected true when path == dir")
+	}
+	// path is inside dir
+	if !isWithinDir("/a/b/c", "/a/b") {
+		t.Error("expected true when path inside dir")
+	}
+	// path is outside dir
+	if isWithinDir("/x/y", "/a/b") {
+		t.Error("expected false when path outside dir")
+	}
+}
+
+func TestHasConfigForFileEmptyConfigDir(t *testing.T) {
+	loader := NewLoader("")
+	if loader.HasConfigForFile("test.hcl") {
+		t.Error("expected false for loader with empty configDir")
+	}
+}
+
+func TestLoadForFileNoConfigFound(t *testing.T) {
+	loader := NewLoader(t.TempDir()) // empty dir, no config files
+	_, err := loader.LoadForFile("noconfig.hcl")
+	if err == nil {
+		t.Fatal("expected error when no config file and no default exist")
+	}
+}
+
+func TestLoadForFileUnsupportedFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Create file with no extension (unsupported) + valid default.hcl fallback.
+	// loadConfigFile("terragrunt") → "unsupported config format" → skip, fallback to default.
+	if err := os.WriteFile(filepath.Join(tmpDir, "terragrunt"), []byte("rules {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "default.hcl"), []byte("rules {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(tmpDir)
+	// configBaseName("terragrunt.hcl") = "terragrunt"
+	// findConfigFiles tries "terragrunt.hcl" (missing), then "terragrunt" (exists, unsupported)
+	// → skip, then default.hcl → success
+	_, err := loader.LoadForFile("terragrunt.hcl")
+	if err != nil {
+		t.Fatalf("expected successful fallback to default.hcl, got: %v", err)
+	}
+}
+
+func TestNewLoaderWithDiscoveryNoConfig(t *testing.T) {
+	// Clear env var so env resolution fails, pass nonexistent explicit dir.
+	// Exercises cwd/home/project discovery branches before returning None.
+	t.Setenv("HCL_LINTER_CONFIG_DIR", "")
+	loader, result := NewLoaderWithDiscovery(filepath.Join(t.TempDir(), "nonexistent-config"))
+	if loader == nil {
+		t.Fatal("expected non-nil loader")
+	}
+	// In a clean CI environment (no .hcl-linter in cwd/home/project) this is None.
+	// Accept None or any source — we just confirm no panic and valid result.
+	_ = result
+}
+
+func TestResolveConfigDirForFileNilReceiver(t *testing.T) {
+	var loader *Loader
+	result := loader.resolveConfigDirForFile("test.hcl")
+	if result != "" {
+		t.Errorf("expected empty string for nil loader, got %q", result)
+	}
+}
+
+func TestWalkForConfigDirReachesRoot(t *testing.T) {
+	tmpDir := t.TempDir()
+	subDir := filepath.Join(tmpDir, "sub")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(filepath.Join(tmpDir, ".hcl-linter"))
+	// start = subDir (inside boundary=tmpDir), no .hcl-linter in subDir.
+	// Walk: subDir/.hcl-linter missing → parent tmpDir → tmpDir/.hcl-linter == rootAbs → return configDir.
+	result := loader.resolveConfigDirForFile(filepath.Join(subDir, "test.hcl"))
+	if result != loader.configDir {
+		t.Errorf("expected configDir %q, got %q", loader.configDir, result)
+	}
+}
+
+func TestHasConfigForFileWithSpecificConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "terragrunt.hcl"), []byte("rules {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loader := NewLoader(tmpDir)
+	// Specific config exists → HasConfigForFile returns true (hits the return-true branch).
+	if !loader.HasConfigForFile("terragrunt.hcl") {
+		t.Error("expected true when specific config file exists")
+	}
+}
+
+func TestLoadForFileDefaultParseError(t *testing.T) {
+	tmpDir := t.TempDir()
+	// No specific config; default.hcl has invalid HCL → loadConfigFile returns real parse error.
+	if err := os.WriteFile(filepath.Join(tmpDir, "default.hcl"), []byte("{{{{invalid"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loader := NewLoader(tmpDir)
+	_, err := loader.LoadForFile("terragrunt.hcl")
+	if err == nil {
+		t.Fatal("expected error for invalid default.hcl")
+	}
+}
+
+func TestLoadForFileDefaultUnsupportedSkip(t *testing.T) {
+	tmpDir := t.TempDir()
+	// "default" (no extension) exists with unsupported format → loadConfigFile errors with
+	// "unsupported config format" → skip and fall through to "no config found" error.
+	if err := os.WriteFile(filepath.Join(tmpDir, "default"), []byte("rules {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loader := NewLoader(tmpDir)
+	_, err := loader.LoadForFile("noconfig.hcl")
+	if err == nil {
+		t.Fatal("expected error when only unsupported-format default exists")
+	}
+}
+
+func TestResolveConfigDirForFileCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	loader := NewLoader(tmpDir)
+
+	// First call populates cache; second call hits it.
+	r1 := loader.resolveConfigDirForFile("test.hcl")
+	r2 := loader.resolveConfigDirForFile("test.hcl")
+	if r1 != r2 {
+		t.Errorf("cached result mismatch: %q != %q", r1, r2)
+	}
+}
+
+func TestWalkForConfigDirOutsideBoundary(t *testing.T) {
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+
+	loader := NewLoader(filepath.Join(dir1, ".hcl-linter"))
+
+	// File is in dir2 which is outside the boundary rooted at dir1.
+	// walkForConfigDir should return l.configDir without walking.
+	result := loader.resolveConfigDirForFile(filepath.Join(dir2, "test.hcl"))
+	if result != loader.configDir {
+		t.Errorf("expected configDir for out-of-boundary file, got %q", result)
+	}
+}
+
+func TestWalkForConfigDirFindsIntermediate(t *testing.T) {
+	// covers `return candidate` in walkForConfigDir:
+	// an intermediate .hcl-linter/ exists between start and rootAbs and has a matching config.
+	tmpDir := t.TempDir()
+
+	// configDir = tmpDir/.hcl-linter (boundary = tmpDir)
+	configDir := filepath.Join(tmpDir, ".hcl-linter")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Intermediate .hcl-linter in tmpDir/sub/ with matching terragrunt.hcl
+	subLinter := filepath.Join(tmpDir, "sub", ".hcl-linter")
+	if err := os.MkdirAll(subLinter, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subLinter, "terragrunt.hcl"), []byte("rules {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// File deep inside tmpDir/sub/ so walk finds subLinter before rootAbs.
+	targetFile := filepath.Join(tmpDir, "sub", "deep", "terragrunt.hcl")
+
+	loader := NewLoader(configDir)
+	result := loader.resolveConfigDirForFile(targetFile)
+	if result != subLinter {
+		t.Errorf("expected intermediate .hcl-linter %q, got %q", subLinter, result)
+	}
+}
+
+func TestWalkForConfigDirReachesBoundary(t *testing.T) {
+	// covers `dir == boundary` in walkForConfigDir:
+	// configDir is NOT named .hcl-linter so candidate never equals rootAbs at boundary level;
+	// walk reaches boundary with no match and returns l.configDir.
+	tmpDir := t.TempDir()
+
+	// configDir = tmpDir/configs (boundary = tmpDir)
+	configDir := filepath.Join(tmpDir, "configs")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// File inside tmpDir/sub/ — no .hcl-linter dirs anywhere.
+	subDir := filepath.Join(tmpDir, "sub")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewLoader(configDir)
+	result := loader.resolveConfigDirForFile(filepath.Join(subDir, "service.hcl"))
+	if result != configDir {
+		t.Errorf("expected configDir %q at boundary, got %q", configDir, result)
+	}
+}
+
 func TestExtendsWithDefault(t *testing.T) {
 	tmpDir := t.TempDir()
 

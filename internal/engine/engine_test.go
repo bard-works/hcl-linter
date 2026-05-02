@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/rules"
 )
 
 func createTestConfigDir(t *testing.T) string {
@@ -1559,6 +1560,69 @@ func TestFormatFixFileAlreadyClean(t *testing.T) {
 	}
 }
 
+func TestParseError(t *testing.T) {
+	pe := &ParseError{File: "test.hcl", Cause: "unexpected token"}
+	if pe.Error() == "" {
+		t.Error("expected non-empty Error() string")
+	}
+	if pe.Unwrap() == nil {
+		t.Error("expected non-nil Unwrap()")
+	}
+}
+
+func TestNewWithRegistry(t *testing.T) {
+	reg := rules.DefaultRegistry()
+	eng := New(nil, WithRegistry(reg))
+	if eng == nil {
+		t.Fatal("expected non-nil engine")
+	}
+	if eng.registry != reg {
+		t.Error("expected custom registry to be set via WithRegistry")
+	}
+}
+
+func TestLintFilesHandlesError(t *testing.T) {
+	// File with no config → LintFile returns error → goroutine wraps it as linter_error issue
+	configDir := createTestConfigDir(t)
+	loader := config.NewLoader(configDir) // empty dir, no config files
+	eng := New(loader)
+
+	srcDir := t.TempDir()
+	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
+
+	results := eng.LintFiles([]string{file}, 1)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	hasLinterError := false
+	for _, issue := range results[0].Issues {
+		if issue.Rule == "linter_error" {
+			hasLinterError = true
+		}
+	}
+	if !hasLinterError {
+		t.Error("expected linter_error issue for file without config")
+	}
+}
+
+func TestFixFilesHandlesError(t *testing.T) {
+	// File with no config → FixFile returns error → goroutine stores it in result.Error
+	configDir := createTestConfigDir(t)
+	loader := config.NewLoader(configDir)
+	eng := New(loader)
+
+	srcDir := t.TempDir()
+	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
+
+	results := eng.FixFiles([]string{file}, 1)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Error == nil {
+		t.Error("expected non-nil Error for file without config")
+	}
+}
+
 func TestBuildContextConfigLoadError(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 	// Write invalid HCL to the config file so LoadForFile returns an error
@@ -1635,5 +1699,84 @@ func TestFormatFixFileWriteError(t *testing.T) {
 	_, err := eng.FormatFixFile(path)
 	if err == nil {
 		t.Fatal("expected write error, got nil")
+	}
+}
+
+func TestFixFileSymlinkRejected(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	setupTestConfig(t, tmpDir, `rules {
+  	blank_lines { enabled = true; within_blocks = true }
+	}`)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	realFile := filepath.Join(tmpDir, "real.hcl")
+	if err := os.WriteFile(realFile, []byte("locals {\n\n  x = 1\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symlink := filepath.Join(tmpDir, "link.hcl")
+	if err := os.Symlink(realFile, symlink); err != nil {
+		t.Skip("symlinks not supported on this platform")
+	}
+
+	_, err := eng.FixFile(symlink)
+	if err == nil {
+		t.Fatal("expected error for symlink, got nil")
+	}
+}
+
+func TestFormatFixFileSymlinkRejected(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	realFile := filepath.Join(tmpDir, "real.hcl")
+	if err := os.WriteFile(realFile, []byte("locals {\n\n\n  x = 1\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symlink := filepath.Join(tmpDir, "link.hcl")
+	if err := os.Symlink(realFile, symlink); err != nil {
+		t.Skip("symlinks not supported on this platform")
+	}
+
+	_, err := eng.FormatFixFile(symlink)
+	if err == nil {
+		t.Fatal("expected error for symlink, got nil")
+	}
+}
+
+func TestBuildContextTOCTOU(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	setupTestConfig(t, tmpDir, `rules {
+  	blank_lines { enabled = true; within_blocks = true }
+	}`)
+	loader := newTestLoader(t, tmpDir)
+	eng := New(loader)
+
+	path := createHCLFile(t, tmpDir, "test.hcl", "locals {\n  x = 1\n}\n")
+
+	// Replace file mid-read by truncating and rewriting.
+	// buildContext reads file in two steps: Stat, ReadFile, Stat.
+	// We can't easily race this in-process, but we can test that
+	// a file replaced between preStat and postStat is detected.
+	// This test is exploratory; the TOCTOU guard uses SameFile which
+	// compares inodes, so replacing the file with a new one should trigger.
+	os.WriteFile(path, []byte("locals {\n  y = 2\n}\n"), 0o644)
+
+	ctx, err := eng.buildContext(path)
+	if err != nil {
+		// Expect no error here because the file is replaced but
+		// the read itself succeeded. The TOCTOU check is between
+		// preStat and postStat, which happens within the same function call.
+		// To properly test TOCTOU, we would need to modify the file
+		// between those two Stats, which is hard to do reliably.
+		// For now, just ensure context builds.
+		t.Logf("buildContext error (may be expected): %v", err)
+	}
+	if ctx != nil {
+		// If we got a context, it means the file was read successfully.
+		// The TOCTOU check passed because the file wasn't modified
+		// between the two Stats (they are consecutive in code).
+		_ = ctx
 	}
 }
