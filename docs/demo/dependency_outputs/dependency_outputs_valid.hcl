@@ -1,4 +1,4 @@
-# Demo: dependency_outputs rule — VALID
+# Demo: dependency_outputs rule - VALID
 # All dependency output references match actual outputs in target modules.
 
 dependency "vpc" {

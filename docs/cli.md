@@ -13,11 +13,11 @@
 7. [`init`](#init)
 8. [`explain`](#explain)
 9. [`version`](#version)
-9. [Target file filtering (`--filter`)](#target-file-filtering---filter)
-9. [Concurrency](#concurrency)
-10. [Coloured output](#coloured-output)
-11. [Environment variables](#environment-variables)
-12. [Exit codes](#exit-codes)
+10. [Target file filtering (`--filter`)](#target-file-filtering---filter)
+11. [Concurrency](#concurrency)
+12. [Coloured output](#coloured-output)
+13. [Environment variables](#environment-variables)
+14. [Exit codes](#exit-codes)
 
 ## Commands
 
@@ -156,12 +156,12 @@ are in play - see
   silently do nothing without this check.
 - **Enabled rules with missing required fields:**
 
-  | Rule              | Required when enabled                                                         |
-  | ----------------- | ----------------------------------------------------------------------------- |
-  | `block_order`     | `order` list must be non-empty                                                |
-  | `name_validation` | `pattern` must be set                                                         |
-  | `required_blocks` | at least one `required` entry must exist                                      |
-  | `key_value`       | at least one of `key_case`, `value_pattern`, or `disallowed` must be set      |
+  | Rule              | Required when enabled                                                    |
+  | ----------------- | ------------------------------------------------------------------------ |
+  | `block_order`     | `order` list must be non-empty                                           |
+  | `name_validation` | `pattern` must be set                                                    |
+  | `required_blocks` | at least one `required` entry must exist                                 |
+  | `key_value`       | at least one of `key_case`, `value_pattern`, or `disallowed` must be set |
 
 **Startup warnings:** `lint`, `check`, and `fix` run the same checks
 automatically and print any issues as warnings to stderr. The dedicated
@@ -265,6 +265,7 @@ hcl-linter lint ./ --filter "test*.hcl"
 ```
 
 **How it works:**
+
 - Filters match against `filepath.Base()` (filename only, not full path)
 - `*` is the only wildcard supported (simple prefix/suffix matching around `*`)
 - Multiple `--filter` flags use OR logic
@@ -349,8 +350,8 @@ non-TTY output.
 
 ## Exit codes
 
-| Code | Meaning                                              |
-| ---- | ---------------------------------------------------- |
-| `0`  | Success (no issues, or `lint` completed regardless)  |
+| Code | Meaning                                                                                                                       |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success (no issues, or `lint` completed regardless)                                                                           |
 | `1`  | Issues found (`check`), config validation failed (`validate-config`), or `fix --dry-run` detected files that would be changed |
-| `2`  | Configuration error (missing/unparseable config)     |
+| `2`  | Configuration error (missing/unparseable config)                                                                              |

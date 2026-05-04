@@ -1,4 +1,4 @@
-# Demo: array_format rule — VALID
+# Demo: array_format rule - VALID
 # Arrays are already in multiline format.
 # Single-item arrays may stay inline (threshold is 2 by default).
 

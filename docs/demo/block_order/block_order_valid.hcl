@@ -1,4 +1,4 @@
-# Demo: block_order rule — VALID
+# Demo: block_order rule - VALID
 # Blocks appear in correct order:
 #   include → locals → terraform → dependency → inputs
 

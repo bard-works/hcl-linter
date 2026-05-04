@@ -1,4 +1,4 @@
-# Demo: array_format rule — VIOLATION
+# Demo: array_format rule - VIOLATION
 # Inline array with 3 items should be multiline.
 # The rule converts inline arrays with 2+ items to multiline format.
 

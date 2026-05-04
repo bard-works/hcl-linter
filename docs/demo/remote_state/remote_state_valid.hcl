@@ -1,4 +1,4 @@
-# Demo: remote_state rule — VALID
+# Demo: remote_state rule - VALID
 # remote_state block has "backend" attribute set.
 
 terraform {

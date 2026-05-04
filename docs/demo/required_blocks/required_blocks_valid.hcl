@@ -1,4 +1,4 @@
-# Demo: required_blocks rule — VALID
+# Demo: required_blocks rule - VALID
 # terraform block is present as required.
 
 terraform {

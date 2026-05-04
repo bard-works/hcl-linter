@@ -1,4 +1,4 @@
-# Demo: duplicates rule — VALID
+# Demo: duplicates rule - VALID
 # All dependency blocks have unique labels.
 
 dependency "vpc" {

@@ -83,8 +83,8 @@ func (r NameValidationRule) Fix(ctx *Context) (int, error) {
 	return 1, nil
 }
 
-// FixNameValidation replaces hyphens with underscores in block labels that
-// violate the name pattern.
+// FixNameValidation replaces hyphens and spaces with underscores in block labels
+// and updates all references throughout the file.
 func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameValidationConfig) (string, bool) {
 	pattern := cfg.Pattern
 	if pattern == "" {
@@ -101,19 +101,55 @@ func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameV
 	}
 
 	hasChanges := false
+	labelChanges := make(map[string]string) // oldLabel -> newLabel
+
 	for _, block := range blocks {
 		if len(blockSet) > 0 && !blockSet[block.Type] {
 			continue
 		}
 		for _, label := range block.Labels {
-			if !regex.MatchString(label) && strings.Contains(label, "-") {
+			if !regex.MatchString(label) {
 				newLabel := strings.ReplaceAll(label, "-", "_")
-				content = strings.ReplaceAll(content, fmt.Sprintf("%q", label), fmt.Sprintf("%q", newLabel))
-				hasChanges = true
+				newLabel = strings.Join(strings.Fields(newLabel), "")
+				if newLabel != label {
+					labelChanges[label] = newLabel
+					hasChanges = true
+				}
 			}
 		}
 	}
-	return content, hasChanges
+
+	if !hasChanges {
+		return content, false
+	}
+
+	// Apply all label changes and update references
+	for oldLabel, newLabel := range labelChanges {
+		for _, block := range blocks {
+			if len(blockSet) > 0 && !blockSet[block.Type] {
+				continue
+			}
+			// Fix the label definition (quoted)
+			content = strings.ReplaceAll(content, fmt.Sprintf("%q", oldLabel), fmt.Sprintf("%q", newLabel))
+
+			// Fix dot notation references: dependency.old_name -> dependency.new_name
+			dotRef := block.Type + "." + oldLabel
+			dotNew := block.Type + "." + newLabel
+			content = strings.ReplaceAll(content, dotRef, dotNew)
+
+			// Fix index notation: dependency["old_name"] -> dependency["new_name"]
+			idxRef := block.Type + `["` + oldLabel + `"]`
+			idxNew := block.Type + `["` + newLabel + `"]`
+			content = strings.ReplaceAll(content, idxRef, idxNew)
+
+			// Fix interpolation references: ${dependency.old_name.outputs} -> ${dependency.new_name.outputs}
+			interpRef := `${` + block.Type + `.` + oldLabel
+			interpNew := `${` + block.Type + `.` + newLabel
+			content = strings.ReplaceAll(content, interpRef, interpNew)
+		}
+	}
+
+	return content, true
 }
 
 func nameValidationRecursive(issues *[]diag.Issue, blocks []ast.BlockInfo, allowedBlocks map[string]bool, pattern *regexp.Regexp) {

@@ -1,4 +1,4 @@
-# Demo: dependency_outputs rule — VIOLATION
+# Demo: dependency_outputs rule - VIOLATION
 # Referencing non-existent output "nonexistent" from vpc dependency.
 # Also: circular dependency (vpc references this module back).
 

@@ -1,4 +1,4 @@
-# Demo: hcl_functions rule — VALID
+# Demo: hcl_functions rule - VALID
 # get_env has default, find_in_parent_folders uses no arg or existing file.
 
 locals {

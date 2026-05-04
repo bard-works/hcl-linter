@@ -1,4 +1,4 @@
-# Demo: include_paths rule — VALID
+# Demo: include_paths rule - VALID
 # path uses find_in_parent_folders() or points to existing files.
 
 include "root" {

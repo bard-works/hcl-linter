@@ -4,10 +4,19 @@
   <img src="docs/assets/hcl-linter-banner.png" alt="HCL Linter" width="680"/>
 </p>
 
-A configurable linter and auto-fixer for HCL 2. Ships with rule sets for Terragrunt and Terraform, and works against any HCL file.
+An HCL code quality tool - lints, auto-fixes, formats, validates configs, and bootstraps projects. Ships with rule sets for Terragrunt and Terraform, and works against any HCL 2 file.
 
 [![CI](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/bard-works/hcl-linter/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/bard-works/hcl-linter)](https://github.com/bard-works/hcl-linter)
+
+## Features
+
+- **Lint** (`lint` / `check`) - catch structural issues: block order, naming, missing fields, path refs
+- **Auto-fix** (`fix`) - fixable rules rewrite files in-place; `--dry-run` prints diffs for CI
+- **Format** (`fix --format`) - opinionated defaults, no config needed
+- **Validate** (`validate-config`) - catch typos and misconfigurations in `.hcl-linter/` files
+- **Bootstrap** (`init`) - scaffold `.hcl-linter/` for a project from existing `.hcl`/`.tf` files
+- **Explain** (`explain`) - print rule docs, config fields, examples
 
 Written for teams with more than one person touching HCL. Enforces block order, naming, required fields, path references, and formatting - the things code review keeps bouncing off. Rules are per-file-pattern and inherit via `extends`. Fixable rules auto-fix; CI uses `check` or `fix --dry-run`.
 
@@ -96,6 +105,7 @@ Applies opinionated defaults without a config file: block order `include → loc
 --concurrency         Max concurrent workers (default: CPU count)
 --verbose, -v         Detailed output
 --color               auto (default) | always | never
+--include-hidden      Include files in hidden directories (dirs starting with .)
 
 # fix only
 --format              Apply defaults without config
@@ -123,6 +133,7 @@ hcl-linter validate-config . --recursive
 - [docs/configuration.md](docs/configuration.md) - config format, precedence, inheritance
 - [docs/cli.md](docs/cli.md) - commands, flags, exit codes, colour
 - [docs/architecture.md](docs/architecture.md) - package layout and data flow
+- [docs/demo/README.md](docs/demo/README.md) - demo files and run commands
 
 ## Contributing
 

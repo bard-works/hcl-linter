@@ -1,4 +1,4 @@
-# Demo: include_paths rule — VIOLATION
+# Demo: include_paths rule - VIOLATION
 # path attribute points to non-existent file.
 
 include "root" {

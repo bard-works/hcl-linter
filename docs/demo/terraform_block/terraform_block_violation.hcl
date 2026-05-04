@@ -1,4 +1,4 @@
-# Demo: terraform_block rule — VIOLATION
+# Demo: terraform_block rule - VIOLATION
 # - source is empty (source_required)
 # - Uses deprecated before_hook block
 # - Invalid version format

@@ -1,4 +1,4 @@
-# Demo: key_value rule — VIOLATION
+# Demo: key_value rule - VIOLATION
 # - Key "myKey" violates snake_case
 # - Key "password" is in disallowed list
 # - Value doesn't match required pattern

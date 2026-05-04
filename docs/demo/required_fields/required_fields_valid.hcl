@@ -1,4 +1,4 @@
-# Demo: required_fields rule — VALID
+# Demo: required_fields rule - VALID
 # All include blocks have `expose = true`.
 
 include "root" {

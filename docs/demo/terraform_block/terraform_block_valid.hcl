@@ -1,4 +1,4 @@
-# Demo: terraform_block rule — VALID
+# Demo: terraform_block rule - VALID
 # - source is set
 # - No deprecated fields
 # - Valid version format

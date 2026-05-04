@@ -4,9 +4,9 @@
 
 Only the latest minor release receives security fixes.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.0.1-alpha   | :white_check_mark: |
+| Version     | Supported          |
+| ----------- | ------------------ |
+| 0.0.1-alpha | :white_check_mark: |
 
 ## Reporting a Vulnerability
 

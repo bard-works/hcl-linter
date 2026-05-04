@@ -648,7 +648,7 @@ func TestNewLoaderWithDiscoveryNoConfig(t *testing.T) {
 		t.Fatal("expected non-nil loader")
 	}
 	// In a clean CI environment (no .hcl-linter in cwd/home/project) this is None.
-	// Accept None or any source — we just confirm no panic and valid result.
+	// Accept None or any source - we just confirm no panic and valid result.
 	_ = result
 }
 
@@ -783,7 +783,7 @@ func TestWalkForConfigDirReachesBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// File inside tmpDir/sub/ — no .hcl-linter dirs anywhere.
+	// File inside tmpDir/sub/ - no .hcl-linter dirs anywhere.
 	subDir := filepath.Join(tmpDir, "sub")
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
 		t.Fatal(err)

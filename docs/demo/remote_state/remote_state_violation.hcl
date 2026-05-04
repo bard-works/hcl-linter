@@ -1,4 +1,4 @@
-# Demo: remote_state rule — VIOLATION
+# Demo: remote_state rule - VIOLATION
 # remote_state block missing required "backend" attribute.
 
 terraform {

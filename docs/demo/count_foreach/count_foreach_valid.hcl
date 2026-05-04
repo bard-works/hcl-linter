@@ -1,4 +1,4 @@
-# Demo: count_for_each rule — VALID
+# Demo: count_for_each rule - VALID
 # Resources use either count or for_each, not both. count > 0.
 
 resource "aws_instance" "web" {

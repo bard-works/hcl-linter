@@ -1,4 +1,4 @@
-# Demo: dependency_paths rule — VALID
+# Demo: dependency_paths rule - VALID
 # config_path points to existing directories.
 # (In demo, assumes ../vpc/ and ../database/ exist.)
 

@@ -1,4 +1,4 @@
-# Demo: dependency_paths rule — VIOLATION
+# Demo: dependency_paths rule - VIOLATION
 # config_path points to non-existent directory.
 
 dependency "vpc" {

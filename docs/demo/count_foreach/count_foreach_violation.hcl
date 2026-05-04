@@ -1,4 +1,4 @@
-# Demo: count_for_each rule — VIOLATION
+# Demo: count_for_each rule - VIOLATION
 # Resource has count = 0 (will not be created) and both count + for_each set.
 
 resource "aws_instance" "web" {

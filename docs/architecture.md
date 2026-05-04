@@ -85,40 +85,40 @@ written and how the engine behaves.
 ## Package layout
 
 ```
-cmd/hcl-linter/main.go       # CLI entrypoint (cobra: lint, check, fix, version)
+cmd/hcl-linter/main.go        # CLI entrypoint (cobra: lint, check, fix, version)
 internal/
 ├── engine/
-│   └── engine.go            # Engine: single entry point for all lint and fix ops
-│                            #   LintFile / LintFiles / FixFile / FixFiles
-│                            #   FormatFixFile / FormatFixFiles
+│   └── engine.go             # Engine: single entry point for all lint and fix ops
+│                             #   LintFile / LintFiles / FixFile / FixFiles
+│                             #   FormatFixFile / FormatFixFiles
 ├── rules/
-│   ├── rule.go              # Rule, Fixer interfaces; Context struct; priority constants
-│   ├── registry.go          # Registry: Register / Enabled / All / Sorted; global DefaultRegistry
-│   ├── block_order.go       # BlockOrderRule       - Check + Fix
-│   ├── array_format.go      # ArrayFormatRule      - Check + Fix
-│   ├── blank_lines.go       # BlankLinesRule       - Fix only
-│   ├── name_validation.go   # NameValidationRule   - Check + Fix
-│   ├── required_fields.go   # RequiredFieldsRule   - Check + Fix
-│   ├── required_blocks.go   # RequiredBlocksRule   - Check
-│   ├── duplicates.go        # DuplicatesRule       - Check
-│   ├── dependency_paths.go  # DependencyPathsRule  - Check
-│   ├── include_paths.go     # IncludePathsRule     - Check
-│   ├── remote_state.go      # RemoteStateRule      - Check
-│   ├── hcl_functions.go     # HCLFunctionsRule     - Check
-│   ├── terraform_block.go   # TerraformBlockRule   - Check
-│   ├── key_value.go         # KeyValueRule         - Check
-│   ├── count_foreach.go     # CountForEachRule     - Check
-│   ├── dependency_outputs.go# DependencyOutputsRule - Check
-│   └── helpers.go           # Shared helpers
+│   ├── rule.go               # Rule, Fixer interfaces; Context struct; priority constants
+│   ├── registry.go           # Registry: Register / Enabled / All / Sorted; global DefaultRegistry
+│   ├── block_order.go        # BlockOrderRule       - Check + Fix
+│   ├── array_format.go       # ArrayFormatRule      - Check + Fix
+│   ├── blank_lines.go        # BlankLinesRule       - Fix only
+│   ├── name_validation.go    # NameValidationRule   - Check + Fix
+│   ├── required_fields.go    # RequiredFieldsRule   - Check + Fix
+│   ├── required_blocks.go    # RequiredBlocksRule   - Check
+│   ├── duplicates.go         # DuplicatesRule       - Check
+│   ├── dependency_paths.go   # DependencyPathsRule  - Check
+│   ├── include_paths.go      # IncludePathsRule     - Check
+│   ├── remote_state.go       # RemoteStateRule      - Check
+│   ├── hcl_functions.go      # HCLFunctionsRule     - Check
+│   ├── terraform_block.go    # TerraformBlockRule   - Check
+│   ├── key_value.go          # KeyValueRule         - Check
+│   ├── count_foreach.go      # CountForEachRule     - Check
+│   ├── dependency_outputs.go # DependencyOutputsRule - Check
+│   └── helpers.go            # Shared helpers
 ├── config/
-│   ├── loader.go            # Config discovery and loading
-│   ├── hcl.go               # HCL config parser + extends resolution
-│   └── types.go             # Config structs (Rules, BlockOrderConfig, …)
+│   ├── loader.go             # Config discovery and loading
+│   ├── hcl.go                # HCL config parser + extends resolution
+│   └── types.go              # Config structs (Rules, BlockOrderConfig, …)
 ├── diag/
-│   └── result.go            # Types only: Issue, Result, Severity
+│   └── result.go             # Types only: Issue, Result, Severity
 ├── ast/
-│   └── parser.go            # HCL parse helpers (blocks, attributes, expressions)
-└── termcolor/               # ANSI colour helpers
+│   └── parser.go             # HCL parse helpers (blocks, attributes, expressions)
+└── termcolor/                # ANSI colour helpers
 ```
 
 ## Data flow
@@ -182,12 +182,12 @@ type Fixer interface {
 
 Priority constants (lower = runs first):
 
-| Constant            | Value | Used by                                    |
-|---------------------|-------|--------------------------------------------|
-| `PriorityStructure` | 100   | `BlockOrderRule`                           |
+| Constant            | Value | Used by                                                          |
+| ------------------- | ----- | ---------------------------------------------------------------- |
+| `PriorityStructure` | 100   | `BlockOrderRule`                                                 |
 | `PrioritySemantic`  | 200   | all check-only rules, `NameValidationRule`, `RequiredFieldsRule` |
-| `PriorityFormat`    | 300   | `ArrayFormatRule`                          |
-| `PriorityFinal`     | 400   | `BlankLinesRule`                           |
+| `PriorityFormat`    | 300   | `ArrayFormatRule`                                                |
+| `PriorityFinal`     | 400   | `BlankLinesRule`                                                 |
 
 Rules register themselves into the global `DefaultRegistry()` via `init()`.
 The engine's `runFixPipeline` calls `registry.Sorted()` to iterate rules in

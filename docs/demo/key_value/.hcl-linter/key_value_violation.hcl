@@ -1,6 +1,6 @@
 rules {
   key_value {
-    enabled = true
+    enabled  = true
     key_case = "snake_case"
   }
 }

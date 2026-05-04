@@ -31,23 +31,23 @@ dependency outputs) ship as built-ins.
 
 ## Summary table
 
-| Config block         | Rule ID(s) emitted                                                                                                     | Default severity |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `block_order`        | `block_order`                                                                                                          | error            |
-| `array_format`       | `array_format`                                                                                                         | warning          |
-| `blank_lines`        | _(fix-only - no Check phase, emits no issues)_                                                                         | -                |
-| `name_validation`    | `name_validation`                                                                                                      | error            |
-| `duplicates`         | `duplicates`                                                                                                           | error            |
-| `required_fields`    | `required_fields`                                                                                                      | error            |
-| `required_blocks`    | `required_blocks`                                                                                                      | error            |
-| `dependency_paths`   | `dependency_path_exists`                                                                                               | error            |
-| `include_paths`      | `include_path_exists`                                                                                                  | error            |
-| `remote_state`       | `remote_state_backend_required`                                                                                        | error            |
-| `hcl_functions`      | `find_in_parent_folders_exists` (error), `get_env_has_default` (warning)                                               | mixed            |
+| Config block         | Rule ID(s) emitted                                                                                                                              | Default severity |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `block_order`        | `block_order`                                                                                                                                   | error            |
+| `array_format`       | `array_format`                                                                                                                                  | warning          |
+| `blank_lines`        | _(fix-only - no Check phase, emits no issues)_                                                                                                  | -                |
+| `name_validation`    | `name_validation`                                                                                                                               | error            |
+| `duplicates`         | `duplicates`                                                                                                                                    | error            |
+| `required_fields`    | `required_fields`                                                                                                                               | error            |
+| `required_blocks`    | `required_blocks`                                                                                                                               | error            |
+| `dependency_paths`   | `dependency_path_exists`                                                                                                                        | error            |
+| `include_paths`      | `include_path_exists`                                                                                                                           | error            |
+| `remote_state`       | `remote_state_backend_required`                                                                                                                 | error            |
+| `hcl_functions`      | `find_in_parent_folders_exists` (error), `get_env_has_default` (warning)                                                                        | mixed            |
 | `terraform_block`    | `terraform_source_required` (error), `terraform_version_format`, `terraform_extra_arguments_valid`, `terraform_deprecated_fields` (all warning) | mixed            |
-| `key_value`          | `key_case`, `disallowed_keys` (error), `value_pattern` (warning)                                                       | mixed            |
-| `count_for_each`     | `count_zero` (warning), `empty_for_each` (warning), `count_for_each_conflict` (error)                                  | mixed            |
-| `dependency_outputs` | `dependency_outputs`                                                                                                   | warning          |
+| `key_value`          | `key_case`, `disallowed_keys` (error), `value_pattern` (warning)                                                                                | mixed            |
+| `count_for_each`     | `count_zero` (warning), `empty_for_each` (warning), `count_for_each_conflict` (error)                                                           | mixed            |
+| `dependency_outputs` | `dependency_outputs`                                                                                                                            | warning          |
 
 ---
 
@@ -385,10 +385,10 @@ Currently recognises Terragrunt's `find_in_parent_folders` and `get_env`.
 
 **Rule IDs and severities:**
 
-| Rule ID                         | Severity | Emitted when                                                              |
-| ------------------------------- | -------- | ------------------------------------------------------------------------- |
-| `find_in_parent_folders_exists` | error    | The file passed to `find_in_parent_folders(...)` is not found             |
-| `get_env_has_default`           | warning  | `get_env("X")` is called without a default (`get_env("X", "fallback")`)   |
+| Rule ID                         | Severity | Emitted when                                                            |
+| ------------------------------- | -------- | ----------------------------------------------------------------------- |
+| `find_in_parent_folders_exists` | error    | The file passed to `find_in_parent_folders(...)` is not found           |
+| `get_env_has_default`           | warning  | `get_env("X")` is called without a default (`get_env("X", "fallback")`) |
 
 **Configuration:**
 
@@ -427,11 +427,11 @@ Checks on Terragrunt's `terraform { }` block.
 
 **Rule IDs and severities:**
 
-| Rule ID                           | Severity | Emitted when                                                      |
-| --------------------------------- | -------- | ----------------------------------------------------------------- |
-| `terraform_source_required`       | error    | `terraform { }` is missing a `source` attribute                   |
-| `terraform_version_format`        | warning  | `version` does not match the expected constraint format           |
-| `terraform_extra_arguments_valid` | warning  | `extra_arguments` block missing a label or has no arguments       |
+| Rule ID                           | Severity | Emitted when                                                                  |
+| --------------------------------- | -------- | ----------------------------------------------------------------------------- |
+| `terraform_source_required`       | error    | `terraform { }` is missing a `source` attribute                               |
+| `terraform_version_format`        | warning  | `version` does not match the expected constraint format                       |
+| `terraform_extra_arguments_valid` | warning  | `extra_arguments` block missing a label or has no arguments                   |
 | `terraform_deprecated_fields`     | warning  | Uses deprecated block types (`before_hook`, `after_hook`, nested `terraform`) |
 
 **Configuration:**
@@ -508,11 +508,11 @@ Attribute-level checks: naming convention, regex on values, blocklisted keys.
 
 **Rule IDs and severities:**
 
-| Rule ID           | Severity | Emitted when                                                        |
-| ----------------- | -------- | ------------------------------------------------------------------- |
-| `key_case`        | error    | An attribute name violates the configured case convention           |
-| `disallowed_keys` | error    | An attribute name appears in the `disallowed` list                  |
-| `value_pattern`   | warning  | An attribute value fails the configured regex for that attribute    |
+| Rule ID           | Severity | Emitted when                                                     |
+| ----------------- | -------- | ---------------------------------------------------------------- |
+| `key_case`        | error    | An attribute name violates the configured case convention        |
+| `disallowed_keys` | error    | An attribute name appears in the `disallowed` list               |
+| `value_pattern`   | warning  | An attribute value fails the configured regex for that attribute |
 
 **Configuration:**
 
@@ -569,10 +569,10 @@ Catches `count` / `for_each` patterns that create zero resources or contradict e
 
 **Rule IDs and severities:**
 
-| Rule ID                   | Severity | Emitted when                                      |
-| ------------------------- | -------- | ------------------------------------------------- |
-| `count_zero`              | warning  | `count = 0` (resource will not be created)        |
-| `empty_for_each`          | warning  | `for_each = {}` (resource will not be created)    |
+| Rule ID                   | Severity | Emitted when                                       |
+| ------------------------- | -------- | -------------------------------------------------- |
+| `count_zero`              | warning  | `count = 0` (resource will not be created)         |
+| `empty_for_each`          | warning  | `for_each = {}` (resource will not be created)     |
 | `count_for_each_conflict` | error    | Both `count` and `for_each` used on the same block |
 
 **Configuration:**

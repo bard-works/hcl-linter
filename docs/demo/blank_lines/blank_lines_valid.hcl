@@ -1,4 +1,4 @@
-# Demo: blank_lines rule — VALID
+# Demo: blank_lines rule - VALID
 # At most one blank line between items within blocks.
 
 locals {

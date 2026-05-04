@@ -1,4 +1,4 @@
-# Demo: required_blocks rule — VIOLATION
+# Demo: required_blocks rule - VIOLATION
 # terraform block is required (at_least_one) but missing.
 
 locals {

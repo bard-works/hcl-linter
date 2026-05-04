@@ -1,4 +1,4 @@
-# Demo: blank_lines rule — VIOLATION
+# Demo: blank_lines rule - VIOLATION
 # Too many blank lines within blocks and object attributes.
 # The fix removes excess blank lines (keeps at most one).
 

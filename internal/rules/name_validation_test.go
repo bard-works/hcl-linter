@@ -216,7 +216,16 @@ func TestNameValidationRuleFix(t *testing.T) {
 			Blocks:  []string{"dependency"},
 		},
 	}
-	content := `dependency "my-vpc" {}` + "\n"
+	// Test basic label fix + all reference types
+	content := `dependency "my-vpc" {
+  config_path = "../vpc"
+}
+
+locals {
+  vpc_id = dependency.my-vpc.outputs.id
+  vpc_cidr = dependency["my-vpc"].outputs.cidr
+}
+`
 	ctx := buildContext(t, content, cfg)
 
 	rule := rules.NameValidationRule{}
@@ -228,10 +237,49 @@ func TestNameValidationRuleFix(t *testing.T) {
 		t.Fatal("expected Fix to report a change")
 	}
 	got := string(ctx.Content)
-	if got == content {
-		t.Errorf("content unchanged after fix:\n%s", got)
+	if strings.Contains(got, "my-vpc") {
+		t.Errorf("expected 'my-vpc' replaced everywhere, got:\n%s", got)
 	}
 	if !strings.Contains(got, "my_vpc") {
-		t.Errorf("expected hyphen replaced with underscore, got:\n%s", got)
+		t.Errorf("expected 'my_vpc' in result, got:\n%s", got)
+	}
+	// Check all reference types updated
+	if strings.Contains(got, `dependency.my-vpc.`) {
+		t.Errorf("dot notation reference not updated, got:\n%s", got)
+	}
+	if strings.Contains(got, `dependency["my-vpc"]`) {
+		t.Errorf("index notation reference not updated, got:\n%s", got)
+	}
+}
+
+func TestNameValidationFixSpacesInLabel(t *testing.T) {
+	cfg := &config.Rules{
+		NameValidation: &config.NameValidationConfig{
+			Enabled: true,
+			Pattern: `^[a-z][a-z0-9_]*$`,
+			Blocks:  []string{"dependency"},
+		},
+	}
+	// Label with hyphen and space - should become "db_primary"
+	content := `dependency "db- primary" {
+  config_path = "../database"
+}
+`
+	ctx := buildContext(t, content, cfg)
+
+	rule := rules.NameValidationRule{}
+	n, err := rule.Fix(ctx)
+	if err != nil {
+		t.Fatalf("Fix error: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected Fix to report a change")
+	}
+	got := string(ctx.Content)
+	if strings.Contains(got, "db- primary") {
+		t.Errorf("expected space and hyphen removed, got:\n%s", got)
+	}
+	if !strings.Contains(got, "db_primary") {
+		t.Errorf("expected cleaned label 'db_primary', got:\n%s", got)
 	}
 }

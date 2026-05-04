@@ -1,4 +1,4 @@
-# Demo: hcl_functions rule — VIOLATION
+# Demo: hcl_functions rule - VIOLATION
 # get_env without default value, find_in_parent_folders with non-existent file arg.
 
 locals {

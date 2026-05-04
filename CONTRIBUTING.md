@@ -83,6 +83,7 @@ When adding or modifying a rule in `internal/rules/`:
 
   `Check` runs only when `Enabled` returns true, but still read config fields
   defensively.
+
 - **Severity constants.** Emit `diag.SeverityError` or `diag.SeverityWarning`
   - never raw strings.
 - **Check is read-only; Fix mutates.** `Check(ctx) []diag.Issue` must not
