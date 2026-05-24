@@ -1,175 +1,80 @@
+---
+version: '2'
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - errorlint
+    - funlen
+    - gocyclo
+    - godot
+    - gosec
+    - govet
+    - misspell
+    - nilerr
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    gosec:
+      excludes:
+        - G104
+        - G115
+        - G304
+        - G706
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*text/tabwriter.Writer).Flush
+        - (io.Writer).Flush
+    govet:
+      enable-all: true
+      disable:
+        - shadow
+        - fieldalignment
+    gocyclo:
+      min-complexity: 20
+    godot:
+      scope: declarations
+    staticcheck:
+      checks: ['all', '-ST1000', '-ST1020']
+    funlen:
+      lines: 150
+      statements: 80
+      ignore-comments: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - funlen
+      - path: _test\.go
+        text: 'G101|G104|G301|G302|G304|G306'
+        linters:
+          - gosec
+
 formatters:
   enable:
+    - gofmt
     - gofumpt
     - goimports
-
+    - golines
   settings:
-    goimports:
-      local-prefixes:
-        - github.com/bard-works/hcl-linter
+    golines:
+      max-len: 120
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 
-linters:
-  enable:
-    - errorlint
-    - gocritic
-    - gomodguard
-    - govet
-    - misspell
-    - noctx
-    - perfsprint
-    - revive
-    - staticcheck
-    - testifylint
-    - thelper
-    - tparallel
-    - unparam
-    - usestdlibvars
-    - usetesting
-    - whitespace
-
-  exclusions:
-    rules:
-      - linters:
-          - unparam
-        path: (.+)_test\.go
-
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-
-    warn-unused: true
-
-  settings:
-    gocritic:
-      enable-all: true
-      disabled-checks:
-        - appendAssign
-        - appendCombine
-        - assignOp
-        - commentedOutCode
-        - deferInLoop
-        - exitAfterDefer
-        - hugeParam
-        - importShadow
-        - paramTypeCombine
-        - rangeValCopy
-        - tooManyResultsChecker
-        - unnamedResult
-        - whyNoLint
-
-    gomodguard:
-      blocked:
-        modules:
-          - github.com/pkg/errors:
-              recommendations:
-                - errors
-
-    govet:
-      disable:
-        - fieldalignment
-        - shadow
-      enable-all: true
-
-    modernize:
-      disable:
-        - omitzero
-        - newexpr
-
-    nolintlint:
-      require-specific: true
-
-    perfsprint:
-      int-conversion: true
-      err-error: true
-      errorf: true
-      sprintf1: true
-      strconcat: true
-
-    revive:
-      enable-all-rules: false
-      enable-default-rules: true
-      max-open-files: 2048
-      rules:
-        - name: blank-imports
-          disabled: true
-        - name: bool-literal-in-expr
-        - name: context-as-argument
-          arguments:
-            - allow-types-before: "*testing.T,testing.TB"
-        - name: context-keys-type
-          disabled: true
-        - name: dot-imports
-          disabled: true
-        - name: duplicated-imports
-        - name: early-return
-          arguments:
-            - preserve-scope
-        - name: empty-block
-          disabled: true
-        - name: error-return
-        - name: error-strings
-          disabled: true
-        - name: errorf
-        - name: exported
-          disabled: true
-        - name: identical-branches
-        - name: if-return
-        - name: increment-decrement
-        - name: indent-error-flow
-          arguments:
-            - preserve-scope
-        - name: modifies-parameter
-        - name: optimize-operands-order
-        - name: range
-        - name: receiver-naming
-        - name: redefines-builtin-id
-          disabled: true
-        - name: redundant-import-alias
-        - name: superfluous-else
-          arguments:
-            - preserve-scope
-        - name: time-equal
-        - name: time-naming
-          disabled: true
-        - name: unexported-return
-          disabled: true
-        - name: unnecessary-format
-        - name: unnecessary-stmt
-        - name: unreachable-code
-        - name: unused-parameter
-        - name: use-any
-        - name: useless-break
-        - name: var-declaration
-        - name: var-naming
-          arguments:
-            - - ID
-            - - VM
-            - - skip-initialism-name-checks: true
-                upper-case-const: true
-
-    staticcheck:
-      checks:
-        - all
-        - -SA5011
-        - -ST1003
-        - -ST1016
-
-    testifylint:
-      enable-all: true
-      disable:
-        - go-require
-
-    unused:
-      field-writes-are-uses: false
-      exported-fields-are-used: false
-
-    usetesting:
-      os-mkdir-temp: false
-
-version: "2"
+run:
+  timeout: 5m
+  tests: true

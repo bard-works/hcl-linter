@@ -156,7 +156,7 @@ func printInitContents(proposed map[string]string) {
 }
 
 func writeInitFiles(configDir string, proposed map[string]string) error {
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 	for _, path := range sortedKeys(proposed) {

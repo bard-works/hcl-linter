@@ -28,10 +28,34 @@ func (r TerraformBlockRule) Doc() RuleDoc {
 		ConfigBlock: "terraform_block",
 		ConfigFields: []ConfigField{
 			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
-			{Name: "source_required", Type: "bool", Required: false, Default: "false", Doc: "Require the source attribute"},
-			{Name: "version_format", Type: "bool", Required: false, Default: "false", Doc: "Validate required_version constraint syntax"},
-			{Name: "extra_arguments_valid", Type: "bool", Required: false, Default: "false", Doc: "Validate extra_arguments block structure"},
-			{Name: "no_deprecated_fields", Type: "bool", Required: false, Default: "false", Doc: "Warn on deprecated attributes"},
+			{
+				Name:     "source_required",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Require the source attribute",
+			},
+			{
+				Name:     "version_format",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Validate required_version constraint syntax",
+			},
+			{
+				Name:     "extra_arguments_valid",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Validate extra_arguments block structure",
+			},
+			{
+				Name:     "no_deprecated_fields",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Warn on deprecated attributes",
+			},
 		},
 		Example: Example{
 			Violation: `terraform {
@@ -101,7 +125,10 @@ func checkTFVersionFormat(issues *[]diag.Issue, attrs map[string]hcl.Expression)
 			*issues = append(*issues, diag.Issue{
 				Severity: diag.SeverityWarning,
 				Rule:     "terraform_version_format",
-				Message:  fmt.Sprintf("terraform required_version %q may not match expected format (e.g., >= 1.0.0, < 2.0.0)", v),
+				Message: fmt.Sprintf(
+					"terraform required_version %q may not match expected format (e.g., >= 1.0.0, < 2.0.0)",
+					v,
+				),
 				Location: rv.Range(),
 			})
 		}

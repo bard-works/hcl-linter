@@ -27,9 +27,27 @@ func (r KeyValueRule) Doc() RuleDoc {
 		ConfigBlock: "key_value",
 		ConfigFields: []ConfigField{
 			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
-			{Name: "key_case", Type: "string", Required: false, Default: `""`, Doc: `Enforce key casing: "snake_case", "camelCase", or "kebab-case"`},
-			{Name: "value_pattern", Type: "map[string]string", Required: false, Default: "{}", Doc: "Regex patterns per attribute name that values must match"},
-			{Name: "disallowed", Type: "[]string", Required: false, Default: "[]", Doc: "Attribute names that must not appear"},
+			{
+				Name:     "key_case",
+				Type:     "string",
+				Required: false,
+				Default:  `""`,
+				Doc:      `Enforce key casing: "snake_case", "camelCase", or "kebab-case"`,
+			},
+			{
+				Name:     "value_pattern",
+				Type:     "map[string]string",
+				Required: false,
+				Default:  "{}",
+				Doc:      "Regex patterns per attribute name that values must match",
+			},
+			{
+				Name:     "disallowed",
+				Type:     "[]string",
+				Required: false,
+				Default:  "[]",
+				Doc:      "Attribute names that must not appear",
+			},
 		},
 		Example: Example{
 			Violation: `inputs = { myKey = "value" }  # violates snake_case`,
@@ -160,7 +178,12 @@ func kvCheckBlockValuePattern(issues *[]diag.Issue, body hcl.Body, patterns map[
 				*issues = append(*issues, diag.Issue{
 					Severity: diag.SeverityWarning,
 					Rule:     "value_pattern",
-					Message:  fmt.Sprintf("attribute %q value %q does not match pattern %q", key, strVal, pattern.String()),
+					Message: fmt.Sprintf(
+						"attribute %q value %q does not match pattern %q",
+						key,
+						strVal,
+						pattern.String(),
+					),
 					Location: attr.Expr.Range(),
 				})
 			}

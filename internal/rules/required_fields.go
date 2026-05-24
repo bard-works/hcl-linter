@@ -23,7 +23,13 @@ func (r RequiredFieldsRule) Doc() RuleDoc {
 		Fixable:     true,
 		ConfigBlock: "required_fields",
 		ConfigFields: []ConfigField{
-			{Name: "include.expose", Type: "bool", Required: false, Default: "false", Doc: "Require expose = true on every include block"},
+			{
+				Name:     "include.expose",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Require expose = true on every include block",
+			},
 		},
 		Example: Example{
 			Violation: `include "root" { path = find_in_parent_folders() }`,
@@ -94,6 +100,76 @@ func checkRequiredFields(issues *[]diag.Issue, blocks []ast.BlockInfo, cfg *conf
 	}
 }
 
+func blockIndent(lines []string, lineIdx int) string {
+	if lineIdx >= len(lines) {
+		return ""
+	}
+	var sb strings.Builder
+	for _, ch := range lines[lineIdx] {
+		if ch != ' ' && ch != '\t' {
+			break
+		}
+		sb.WriteRune(ch)
+	}
+	return sb.String()
+}
+
+func expandSingleLineBlock(lines []string, startLine int, attr string) (string, bool) {
+	line := lines[startLine]
+	trimmed := strings.TrimSpace(line)
+	if !strings.Contains(trimmed, "{") || !strings.Contains(trimmed, "}") {
+		return "", false
+	}
+	braceIdx := -1
+	for i, ch := range line {
+		if ch == '{' {
+			braceIdx = i
+			break
+		}
+	}
+	if braceIdx < 0 {
+		return "", false
+	}
+	indent := blockIndent(lines, startLine)
+	beforeBrace := strings.TrimRight(line[:braceIdx], " \t")
+	contentIndent := "  "
+	if indent != "" {
+		contentIndent = indent + "  "
+	}
+	lines[startLine] = strings.Join([]string{
+		beforeBrace + " {",
+		contentIndent + attr,
+		"}",
+	}, "\n")
+	return strings.Join(lines, "\n"), true
+}
+
+func findInsertIdx(lines []string, startLine, endLine int) int {
+	for i := startLine + 1; i <= endLine && i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "}" || strings.HasPrefix(trimmed, "}") {
+			return i
+		}
+	}
+	return startLine + 1
+}
+
+func contentIndentForBlock(lines []string, startLine, insertIdx int) string {
+	indent := blockIndent(lines, startLine)
+	contentIndent := indent + "  "
+	for i := startLine + 1; i < insertIdx && i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed != "" {
+			existingIndent := blockIndent(lines, i)
+			if len(existingIndent) >= 2 {
+				return indent + existingIndent[:2]
+			}
+			break
+		}
+	}
+	return contentIndent
+}
+
 // addAttributeToBlock inserts attr as a new line inside block's braces.
 func addAttributeToBlock(content string, block ast.BlockInfo, attr string) string {
 	startLine := block.StartLine
@@ -105,72 +181,14 @@ func addAttributeToBlock(content string, block ast.BlockInfo, attr string) strin
 		endLine = len(lines) - 1
 	}
 
-	indent := ""
-	if startLine < len(lines) {
-		var sb strings.Builder
-		for _, ch := range lines[startLine] {
-			if ch != ' ' && ch != '\t' {
-				break
-			}
-			sb.WriteRune(ch)
-		}
-		indent = sb.String()
-	}
-
 	if startLine == endLine {
-		line := lines[startLine]
-		trimmed := strings.TrimSpace(line)
-		if strings.Contains(trimmed, "{") && strings.Contains(trimmed, "}") {
-			braceIdx := -1
-			for i, ch := range line {
-				if ch == '{' {
-					braceIdx = i
-					break
-				}
-			}
-			if braceIdx >= 0 {
-				beforeBrace := strings.TrimRight(line[:braceIdx], " \t")
-				contentIndent := "  "
-				if indent != "" {
-					contentIndent = indent + "  "
-				}
-				lines[startLine] = strings.Join([]string{
-					beforeBrace + " {",
-					contentIndent + attr,
-					"}",
-				}, "\n")
-				return strings.Join(lines, "\n")
-			}
+		if result, ok := expandSingleLineBlock(lines, startLine, attr); ok {
+			return result
 		}
 	}
 
-	insertIdx := startLine + 1
-	for i := startLine + 1; i <= endLine && i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "}" || strings.HasPrefix(trimmed, "}") {
-			insertIdx = i
-			break
-		}
-	}
-
-	contentIndent := indent + "  "
-	for i := startLine + 1; i < insertIdx && i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed != "" {
-			var sb strings.Builder
-			for _, ch := range lines[i] {
-				if ch != ' ' && ch != '\t' {
-					break
-				}
-				sb.WriteRune(ch)
-			}
-			existingIndent := sb.String()
-			if len(existingIndent) >= 2 {
-				contentIndent = indent + existingIndent[:2]
-			}
-			break
-		}
-	}
+	insertIdx := findInsertIdx(lines, startLine, endLine)
+	contentIndent := contentIndentForBlock(lines, startLine, insertIdx)
 
 	var newLines []string
 	newLines = append(newLines, lines[:insertIdx]...)

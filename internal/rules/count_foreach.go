@@ -25,9 +25,27 @@ func (r CountForEachRule) Doc() RuleDoc {
 		ConfigBlock: "count_for_each",
 		ConfigFields: []ConfigField{
 			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
-			{Name: "warn_on_count_zero", Type: "bool", Required: false, Default: "false", Doc: "Warn when count is set to the literal value 0"},
-			{Name: "warn_on_empty_for_each", Type: "bool", Required: false, Default: "false", Doc: "Warn when for_each is set to an empty map or set"},
-			{Name: "warn_on_conflict", Type: "bool", Required: false, Default: "false", Doc: "Warn when both count and for_each are set on the same resource"},
+			{
+				Name:     "warn_on_count_zero",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Warn when count is set to the literal value 0",
+			},
+			{
+				Name:     "warn_on_empty_for_each",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Warn when for_each is set to an empty map or set",
+			},
+			{
+				Name:     "warn_on_conflict",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Warn when both count and for_each are set on the same resource",
+			},
 		},
 		Example: Example{
 			Violation: `resource "aws_instance" "web" { count = 0 }`,

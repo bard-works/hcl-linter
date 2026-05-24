@@ -747,7 +747,10 @@ inputs = {
 		t.Fatalf("FixFile failed: %v", err)
 	}
 
-	if !strings.Contains(result.Content, "service_details = { for k, v in local.service : k => v if !contains([\"sd_helper\", \"common_tags\"], k) }") {
+	if !strings.Contains(
+		result.Content,
+		"service_details = { for k, v in local.service : k => v if !contains([\"sd_helper\", \"common_tags\"], k) }",
+	) {
 		t.Error("complex expression was corrupted")
 	}
 

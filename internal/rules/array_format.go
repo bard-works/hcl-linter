@@ -27,7 +27,13 @@ func (r ArrayFormatRule) Doc() RuleDoc {
 		ConfigBlock: "array_format",
 		ConfigFields: []ConfigField{
 			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
-			{Name: "sort", Type: "bool", Required: false, Default: "false", Doc: "Sort array items alphabetically when reformatting"},
+			{
+				Name:     "sort",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Sort array items alphabetically when reformatting",
+			},
 		},
 		Example: Example{
 			Violation: `deps = ["a", "b", "c"]`,

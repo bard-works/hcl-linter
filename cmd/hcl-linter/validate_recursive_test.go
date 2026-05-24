@@ -7,12 +7,12 @@ import (
 	"testing"
 )
 
-func writeHCL(t *testing.T, dir, name, content string) {
+func writeHCL(t *testing.T, dir, content string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "default.hcl"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -28,8 +28,8 @@ func TestValidateConfigRecursive_AllOK(t *testing.T) {
     order   = ["include"]
   }
 }`
-	writeHCL(t, filepath.Join(root, ".hcl-linter"), "default.hcl", goodCfg)
-	writeHCL(t, filepath.Join(root, "svc", ".hcl-linter"), "default.hcl", goodCfg)
+	writeHCL(t, filepath.Join(root, ".hcl-linter"), goodCfg)
+	writeHCL(t, filepath.Join(root, "svc", ".hcl-linter"), goodCfg)
 
 	flagValidateRecursive = true
 	if err := runValidateConfig(nil, []string{root}); err != nil {
@@ -47,8 +47,8 @@ func TestValidateConfigRecursive_ReportsAllBadDirs(t *testing.T) {
     enabled = true
   }
 }`
-	writeHCL(t, filepath.Join(root, ".hcl-linter"), "default.hcl", badCfg)
-	writeHCL(t, filepath.Join(root, "a", ".hcl-linter"), "default.hcl", badCfg)
+	writeHCL(t, filepath.Join(root, ".hcl-linter"), badCfg)
+	writeHCL(t, filepath.Join(root, "a", ".hcl-linter"), badCfg)
 
 	flagValidateRecursive = true
 	err := runValidateConfig(nil, []string{root})

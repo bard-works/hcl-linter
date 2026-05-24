@@ -29,8 +29,20 @@ func (r NameValidationRule) Doc() RuleDoc {
 		ConfigBlock: "name_validation",
 		ConfigFields: []ConfigField{
 			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
-			{Name: "pattern", Type: "string", Required: false, Default: `"^[a-z][a-z0-9_]*$"`, Doc: "Regex that block labels must match"},
-			{Name: "blocks", Type: "[]string", Required: false, Default: "[]", Doc: "Block types to validate; empty = all block types"},
+			{
+				Name:     "pattern",
+				Type:     "string",
+				Required: false,
+				Default:  `"^[a-z][a-z0-9_]*$"`,
+				Doc:      "Regex that block labels must match",
+			},
+			{
+				Name:     "blocks",
+				Type:     "[]string",
+				Required: false,
+				Default:  "[]",
+				Doc:      "Block types to validate; empty = all block types",
+			},
 		},
 		Example: Example{
 			Violation: `dependency "my-vpc" { config_path = "../vpc" }`,
@@ -152,7 +164,12 @@ func FixNameValidation(content string, blocks []ast.BlockInfo, cfg *config.NameV
 	return content, true
 }
 
-func nameValidationRecursive(issues *[]diag.Issue, blocks []ast.BlockInfo, allowedBlocks map[string]bool, pattern *regexp.Regexp) {
+func nameValidationRecursive(
+	issues *[]diag.Issue,
+	blocks []ast.BlockInfo,
+	allowedBlocks map[string]bool,
+	pattern *regexp.Regexp,
+) {
 	for _, block := range blocks {
 		if len(block.Labels) > 0 && (allowedBlocks == nil || allowedBlocks[block.Type]) {
 			name := block.Labels[0]
@@ -163,7 +180,10 @@ func nameValidationRecursive(issues *[]diag.Issue, blocks []ast.BlockInfo, allow
 				msg = fmt.Sprintf("invalid name %q: does not match required pattern %q", name, pattern.String())
 			} else {
 				valid = isValidIdentifier(name)
-				msg = fmt.Sprintf("invalid name %q: must contain only lowercase letters, numbers, and underscores, and must start with a letter", name)
+				msg = fmt.Sprintf(
+					"invalid name %q: must contain only lowercase letters, numbers, and underscores, and must start with a letter",
+					name,
+				)
 			}
 			if !valid {
 				*issues = append(*issues, diag.Issue{

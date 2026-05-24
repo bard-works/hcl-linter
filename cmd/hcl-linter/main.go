@@ -51,11 +51,15 @@ func newRootCmd() *cobra.Command {
 	}
 
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Show detailed output")
-	rootCmd.PersistentFlags().StringVarP(&flagConfigSrc, "config-source", "c", "", "Config source: explicit path, or auto-detect from cwd/home/project")
-	rootCmd.PersistentFlags().StringArrayVar(&flagFilter, "filter", nil, "Filter files by name pattern (glob supported, can be specified multiple times)")
-	rootCmd.PersistentFlags().IntVar(&flagConcurrency, "concurrency", 0, "Max number of concurrent workers (0 = auto-detect based on CPU count, or use HCL_LINTER_MAX_CONCURRENCY env var)")
+	rootCmd.PersistentFlags().
+		StringVarP(&flagConfigSrc, "config-source", "c", "", "Config source: explicit path, or auto-detect from cwd/home/project")
+	rootCmd.PersistentFlags().
+		StringArrayVar(&flagFilter, "filter", nil, "Filter files by name pattern (glob supported, can be specified multiple times)")
+	rootCmd.PersistentFlags().
+		IntVar(&flagConcurrency, "concurrency", 0, "Max number of concurrent workers (0 = auto-detect based on CPU count, or use HCL_LINTER_MAX_CONCURRENCY env var)")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", termcolor.ModeAuto, "Colour output: auto, always, never")
-	rootCmd.PersistentFlags().BoolVar(&flagIncludeHidden, "include-hidden", false, "Include files in hidden directories (directories starting with .)")
+	rootCmd.PersistentFlags().
+		BoolVar(&flagIncludeHidden, "include-hidden", false, "Include files in hidden directories (directories starting with .)")
 
 	lintCmd := &cobra.Command{
 		Use:   "lint [path]",
@@ -77,15 +81,18 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	fixCmd.Flags().BoolVar(&flagFormat, "format", false, "Apply default formatting (block ordering, array formatting, blank line normalization) without requiring config rules")
-	fixCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "Show what fix would change (unified diff) without writing; exit non-zero if any changes needed")
+	fixCmd.Flags().
+		BoolVar(&flagFormat, "format", false, "Apply default formatting (block ordering, array formatting, blank line normalization) without requiring config rules")
+	fixCmd.Flags().
+		BoolVar(&flagDryRun, "dry-run", false, "Show what fix would change (unified diff) without writing; exit non-zero if any changes needed")
 	validateConfigCmd := &cobra.Command{
 		Use:   "validate-config [path]",
 		Short: "Validate .hcl-linter config files for unknown rules and misconfigurations",
 		Args:  cobra.MaximumNArgs(1),
 		RunE:  runValidateConfig,
 	}
-	validateConfigCmd.Flags().BoolVar(&flagValidateRecursive, "recursive", false, "Validate every .hcl-linter/ directory found under the target path")
+	validateConfigCmd.Flags().
+		BoolVar(&flagValidateRecursive, "recursive", false, "Validate every .hcl-linter/ directory found under the target path")
 	initCmd := &cobra.Command{
 		Use:           "init [path]",
 		Short:         "Bootstrap a .hcl-linter/ config directory for the project",
@@ -441,7 +448,7 @@ func findHCLLinterDirs(root string) []string {
 	var dirs []string
 	walkFn := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // skip unreadable paths, don't abort walk
 		}
 		if !info.IsDir() {
 			return nil
@@ -564,7 +571,7 @@ func findHCLFiles(root string) []string {
 
 	walkFn := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // skip unreadable paths, don't abort walk
 		}
 
 		if info.IsDir() {

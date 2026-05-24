@@ -120,7 +120,8 @@ func detectMisconfiguredRules(path string, rules *Rules) []ValidationIssue {
 	}
 
 	if rules.KeyValue != nil && rules.KeyValue.Enabled {
-		if rules.KeyValue.KeyCase == "" && len(rules.KeyValue.ValuePattern) == 0 && len(rules.KeyValue.Disallowed) == 0 {
+		if rules.KeyValue.KeyCase == "" && len(rules.KeyValue.ValuePattern) == 0 &&
+			len(rules.KeyValue.Disallowed) == 0 {
 			issues = append(issues, ValidationIssue{
 				File:    path,
 				Message: "key_value: enabled but none of 'key_case', 'value_pattern', or 'disallowed' are set",
