@@ -23,7 +23,12 @@ func (r BlankLinesRule) Doc() RuleDoc {
 		ConfigBlock: "blank_lines",
 		ConfigFields: []ConfigField{
 			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
-			{Name: "within_blocks", Type: "bool", Required: true, Doc: "Remove blank lines inside block bodies and object attributes"},
+			{
+				Name:     "within_blocks",
+				Type:     "bool",
+				Required: true,
+				Doc:      "Remove blank lines inside block bodies and object attributes",
+			},
 		},
 		Example: Example{
 			Violation: `inputs = {
@@ -52,108 +57,110 @@ func (r BlankLinesRule) Fix(ctx *Context) (int, error) {
 	return changes, nil
 }
 
-// FixBlankLines removes unnecessary blank lines within blocks and object attributes.
-func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.AttributeInfo) (string, int) {
-	lines := strings.Split(content, "\n")
-	changes := 0
-	usedLines := make(map[int]bool)
+type objectAttr struct {
+	attr      ast.AttributeInfo
+	firstLine int
+}
+
+func buildUsedLines(blocks []ast.BlockInfo, attrs []ast.AttributeInfo) (map[int]bool, []objectAttr) {
+	used := make(map[int]bool)
 	for _, block := range blocks {
 		for l := block.StartLine; l <= block.EndLine; l++ {
-			usedLines[l] = true
+			used[l] = true
 		}
 	}
-	type objectAttr struct {
-		attr      ast.AttributeInfo
-		firstLine int
-	}
-	var objectAttrs []objectAttr
+	var objAttrs []objectAttr
 	for _, attr := range attrs {
 		if ast.IsObjectAttribute(attr.Expr) {
 			startLine, endLine := ast.GetAttributeRange(attr.Expr)
 			for l := startLine; l <= endLine; l++ {
-				usedLines[l] = true
+				used[l] = true
 			}
-			objectAttrs = append(objectAttrs, objectAttr{attr, startLine})
+			objAttrs = append(objAttrs, objectAttr{attr, startLine})
 		}
 	}
+	return used, objAttrs
+}
+
+func processObjectAttrBlock(lines []string, lineIdx int, contentEnd int) ([]string, int) {
+	blockLines := append([]string{lines[lineIdx]}, lines[lineIdx+1:contentEnd+1]...)
+	fixed := removeBlankLinesWithinBlock(blockLines)
+	changes := 0
+	if len(fixed) != len(blockLines) {
+		changes++
+	}
+	return fixed, changes
+}
+
+func hasNestedBlockAt(blocks []ast.BlockInfo, start, end int) bool {
+	for k := start; k < end; k++ {
+		for _, b := range blocks {
+			if b.StartLine == k {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func processBlockContent(lines []string, lineIdx int, block ast.BlockInfo) ([]string, int, int) {
+	contentStart := blankLinesBlockContentStart(lines, lineIdx)
+	contentEnd := block.EndLine
+	blockLines := append([]string{lines[lineIdx]}, lines[contentStart:contentEnd+1]...)
+	fixed := removeBlankLinesWithinBlock(blockLines)
+	changes := 0
+	if len(fixed) != len(blockLines) {
+		changes++
+	}
+	return fixed, changes, contentEnd
+}
+
+// FixBlankLines removes unnecessary blank lines within blocks and object attributes.
+func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.AttributeInfo) (string, int) {
+	lines := strings.Split(content, "\n")
+	usedLines, objectAttrs := buildUsedLines(blocks, attrs)
+
 	var result []string
 	processedLines := make(map[int]bool)
+	changes := 0
 	i := 0
 	for i < len(lines) {
-		lineIdx := i
-		if usedLines[lineIdx] && !processedLines[lineIdx] {
-			var contentStart, contentEnd int
-			var prefixLines []string
-			isObjAttr := false
+		if usedLines[i] && !processedLines[i] {
 			for _, oa := range objectAttrs {
-				if oa.firstLine != lineIdx {
+				if oa.firstLine != i {
 					continue
 				}
-				_, contentEnd = ast.GetAttributeRange(oa.attr.Expr)
-				prefixLines = []string{lines[lineIdx]}
-				contentStart = lineIdx + 1
-				isObjAttr = true
-			}
-			if isObjAttr {
-				for j := lineIdx; j <= contentEnd; j++ {
+				_, endLine := ast.GetAttributeRange(oa.attr.Expr)
+				for j := i; j <= endLine; j++ {
 					processedLines[j] = true
 				}
-				var blockLines []string
-				blockLines = append(blockLines, prefixLines...)
-				for j := contentStart; j <= contentEnd; j++ {
-					blockLines = append(blockLines, lines[j])
-				}
-				fixedBlockLines := removeBlankLinesWithinBlock(blockLines)
-				if len(fixedBlockLines) != len(blockLines) {
-					changes++
-				}
-				result = append(result, fixedBlockLines...)
-				i = contentEnd + 1
-				continue
+				fixed, c := processObjectAttrBlock(lines, i, endLine)
+				changes += c
+				result = append(result, fixed...)
+				i = endLine + 1
+				goto nextLine
 			}
-			hasNestedBlock := false
 			for _, block := range blocks {
-				if block.StartLine != lineIdx {
+				if block.StartLine != i {
 					continue
 				}
-				prefixLines = []string{lines[lineIdx]}
-				contentStart = blankLinesBlockContentStart(lines, lineIdx)
-				contentEnd = block.EndLine
-				for j := lineIdx; j <= contentEnd; j++ {
+				for j := i; j <= block.EndLine; j++ {
 					processedLines[j] = true
 				}
-				if contentStart < contentEnd {
-					for k := contentStart; k < contentEnd; k++ {
-						for _, b := range blocks {
-							if b.StartLine == k {
-								hasNestedBlock = true
-								break
-							}
-						}
-						if hasNestedBlock {
-							break
-						}
-					}
+				cs := blankLinesBlockContentStart(lines, i)
+				if cs < block.EndLine && !hasNestedBlockAt(blocks, cs, block.EndLine) {
+					fixed, c, _ := processBlockContent(lines, i, block)
+					changes += c
+					result = append(result, fixed...)
+					i = block.EndLine + 1
+					goto nextLine
 				}
-			}
-			if len(prefixLines) > 0 && contentEnd > contentStart && !hasNestedBlock {
-				var blockLines []string
-				blockLines = append(blockLines, prefixLines...)
-				for j := contentStart; j <= contentEnd; j++ {
-					blockLines = append(blockLines, lines[j])
-				}
-				fixedBlockLines := removeBlankLinesWithinBlock(blockLines)
-				if len(fixedBlockLines) != len(blockLines) {
-					changes++
-				}
-				result = append(result, fixedBlockLines...)
-				i = contentEnd + 1
-				continue
 			}
 		}
 		result = append(result, lines[i])
 		processedLines[i] = true
 		i++
+	nextLine:
 	}
 	return strings.Join(result, "\n") + "\n", changes
 }

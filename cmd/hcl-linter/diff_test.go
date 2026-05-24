@@ -89,13 +89,21 @@ func TestColourDiffLinePrefixOrder(t *testing.T) {
 	plus := colourDiffLine("+added")
 
 	if header == plus {
-		t.Errorf("'+++' header got the same styling as a '+' content line; prefix ordering is wrong:\nheader=%q\nplus=%q", header, plus)
+		t.Errorf(
+			"'+++' header got the same styling as a '+' content line; prefix ordering is wrong:\nheader=%q\nplus=%q",
+			header,
+			plus,
+		)
 	}
 
 	// Similarly for "---" headers vs "-" content lines.
 	removedHeader := colourDiffLine("--- a/file")
 	minus := colourDiffLine("-removed")
 	if removedHeader == minus {
-		t.Errorf("'---' header got the same styling as a '-' content line; prefix ordering is wrong:\nheader=%q\nminus=%q", removedHeader, minus)
+		t.Errorf(
+			"'---' header got the same styling as a '-' content line; prefix ordering is wrong:\nheader=%q\nminus=%q",
+			removedHeader,
+			minus,
+		)
 	}
 }

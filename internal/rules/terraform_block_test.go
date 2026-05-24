@@ -155,10 +155,28 @@ func TestTerraformVersionFormat(t *testing.T) {
 	}{
 		{name: "valid version", content: "terraform {\n  version = \"1.0.0\"\n}\n", expectIssue: false},
 		{name: "valid version with v prefix", content: "terraform {\n  version = \"v1.5.2\"\n}\n", expectIssue: false},
-		{name: "invalid version format", content: "terraform {\n  version = \"latest\"\n}\n", expectIssue: true, issueContains: "may not match expected format"},
-		{name: "valid required_version", content: "terraform {\n  required_version = \">= 1.0.0\"\n}\n", expectIssue: false},
-		{name: "valid required_version with range", content: "terraform {\n  required_version = \">= 1.0.0, < 2.0.0\"\n}\n", expectIssue: false},
-		{name: "invalid required_version", content: "terraform {\n  required_version = \"1.x\"\n}\n", expectIssue: true, issueContains: "may not match expected format"},
+		{
+			name:          "invalid version format",
+			content:       "terraform {\n  version = \"latest\"\n}\n",
+			expectIssue:   true,
+			issueContains: "may not match expected format",
+		},
+		{
+			name:        "valid required_version",
+			content:     "terraform {\n  required_version = \">= 1.0.0\"\n}\n",
+			expectIssue: false,
+		},
+		{
+			name:        "valid required_version with range",
+			content:     "terraform {\n  required_version = \">= 1.0.0, < 2.0.0\"\n}\n",
+			expectIssue: false,
+		},
+		{
+			name:          "invalid required_version",
+			content:       "terraform {\n  required_version = \"1.x\"\n}\n",
+			expectIssue:   true,
+			issueContains: "may not match expected format",
+		},
 	}
 
 	r := TerraformBlockRule{}
@@ -234,7 +252,11 @@ func TestTerraformExtraArguments(t *testing.T) {
 				}
 			}
 			if tt.expectIssue && !hasIssue {
-				t.Errorf("expected terraform_extra_arguments_valid issue containing %q, got %v", tt.issueContains, issues)
+				t.Errorf(
+					"expected terraform_extra_arguments_valid issue containing %q, got %v",
+					tt.issueContains,
+					issues,
+				)
 			}
 			if !tt.expectIssue && hasIssue {
 				t.Errorf("unexpected terraform_extra_arguments_valid issue: %v", issues)

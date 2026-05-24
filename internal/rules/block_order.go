@@ -26,7 +26,13 @@ func (r BlockOrderRule) Doc() RuleDoc {
 		ConfigFields: []ConfigField{
 			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
 			{Name: "order", Type: "[]string", Required: true, Doc: "Block types in the desired sequence"},
-			{Name: "nested_order", Type: "map[string][]string", Required: false, Default: "{}", Doc: "Per-parent nested block ordering (e.g. terraform = [\"before_hook\", \"after_hook\"])"},
+			{
+				Name:     "nested_order",
+				Type:     "map[string][]string",
+				Required: false,
+				Default:  "{}",
+				Doc:      "Per-parent nested block ordering (e.g. terraform = [\"before_hook\", \"after_hook\"])",
+			},
 		},
 		Example: Example{
 			Violation: `terraform {}
@@ -196,7 +202,12 @@ func checkNestedBlockOrderIssues(issues *[]diag.Issue, blocks []ast.BlockInfo, n
 						*issues = append(*issues, diag.Issue{
 							Severity: diag.SeverityError,
 							Rule:     "block_order",
-							Message:  fmt.Sprintf("nested block %q should come before %q inside %q block", currType, prevType, block.Type),
+							Message: fmt.Sprintf(
+								"nested block %q should come before %q inside %q block",
+								currType,
+								prevType,
+								block.Type,
+							),
 							Location: nestedBlocks[i].TypeRange,
 						})
 						reportedPairs[pairKey] = true

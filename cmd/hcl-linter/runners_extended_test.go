@@ -175,7 +175,11 @@ func TestRunFix_FileWithParseError(t *testing.T) {
 
 	// Valid file to ensure fix processing runs, plus one with a parse error
 	// to hit runFixMode's error branch.
-	if err := os.WriteFile(filepath.Join(root, "terragrunt.hcl"), []byte("locals {\n\n  x = 1\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(root, "terragrunt.hcl"),
+		[]byte("locals {\n\n  x = 1\n}\n"),
+		0o644,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "broken.hcl"), []byte("locals { = invalid"), 0o644); err != nil {

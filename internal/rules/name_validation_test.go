@@ -62,8 +62,16 @@ func TestNameValidationBlocksFilter(t *testing.T) {
 		content     string
 		expectIssue bool
 	}{
-		{name: "invalid dependency - in filter - should flag", content: `dependency "my-vpc" {}` + "\n", expectIssue: true},
-		{name: "invalid include - NOT in filter - should not flag", content: `include "my-root" {}` + "\n", expectIssue: false},
+		{
+			name:        "invalid dependency - in filter - should flag",
+			content:     `dependency "my-vpc" {}` + "\n",
+			expectIssue: true,
+		},
+		{
+			name:        "invalid include - NOT in filter - should not flag",
+			content:     `include "my-root" {}` + "\n",
+			expectIssue: false,
+		},
 	}
 
 	rule := rules.NameValidationRule{}

@@ -26,7 +26,13 @@ func (r RemoteStateRule) Doc() RuleDoc {
 		ConfigBlock: "remote_state",
 		ConfigFields: []ConfigField{
 			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
-			{Name: "require_backend", Type: "bool", Required: false, Default: "false", Doc: "Require the backend attribute to be set"},
+			{
+				Name:     "require_backend",
+				Type:     "bool",
+				Required: false,
+				Default:  "false",
+				Doc:      "Require the backend attribute to be set",
+			},
 		},
 		Example: Example{
 			Violation: `terraform {

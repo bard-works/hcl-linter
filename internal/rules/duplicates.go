@@ -23,7 +23,13 @@ func (r DuplicatesRule) Doc() RuleDoc {
 		ConfigBlock: "duplicates",
 		ConfigFields: []ConfigField{
 			{Name: "enabled", Type: "bool", Required: true, Doc: "Activate the rule"},
-			{Name: "blocks", Type: "[]string", Required: false, Default: "[]", Doc: "Block types to check; empty = all block types"},
+			{
+				Name:     "blocks",
+				Type:     "[]string",
+				Required: false,
+				Default:  "[]",
+				Doc:      "Block types to check; empty = all block types",
+			},
 		},
 		Example: Example{
 			Violation: `dependency "vpc" { config_path = "../vpc" }

@@ -22,8 +22,18 @@ func (r RequiredBlocksRule) Doc() RuleDoc {
 		ConfigBlock: "required_blocks",
 		ConfigFields: []ConfigField{
 			{Name: "required[].type", Type: "string", Required: true, Doc: "Block type that must be present"},
-			{Name: "required[].count", Type: "string", Required: true, Doc: `"once" = exactly one; "at_least_one" = one or more`},
-			{Name: "required[].error", Type: "string", Required: true, Doc: "Message emitted when the block is missing"},
+			{
+				Name:     "required[].count",
+				Type:     "string",
+				Required: true,
+				Doc:      `"once" = exactly one; "at_least_one" = one or more`,
+			},
+			{
+				Name:     "required[].error",
+				Type:     "string",
+				Required: true,
+				Doc:      "Message emitted when the block is missing",
+			},
 		},
 		Example: Example{
 			Violation: `# file contains no terraform block`,

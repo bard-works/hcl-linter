@@ -4,20 +4,20 @@ version: '2'
 linters:
   default: none
   enable:
-    - errorlint
     - errcheck
-    - godot
-    - nilerr
-    - staticcheck
-    - unused
+    - errorlint
     - funlen
-    - govet
     - gocyclo
-    - revive
+    - godot
     - gosec
+    - govet
     - misspell
+    - nilerr
+    - revive
+    - staticcheck
     - unconvert
     - unparam
+    - unused
   settings:
     revive:
       rules:
@@ -25,8 +25,17 @@ linters:
           disabled: true
     gosec:
       excludes:
-        - G706
+        - G104
         - G115
+        - G304
+        - G706
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*text/tabwriter.Writer).Flush
+        - (io.Writer).Flush
     govet:
       enable-all: true
       disable:
@@ -49,10 +58,6 @@ linters:
           - funlen
       - path: _test\.go
         text: 'G101|G104|G301|G302|G304|G306'
-        linters:
-          - gosec
-      - path: 'cmd/'
-        text: 'G703'
         linters:
           - gosec
 

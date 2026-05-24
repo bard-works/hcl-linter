@@ -86,7 +86,10 @@ func TestFindConfigDir_None(t *testing.T) {
 
 	result := findConfigDir(&Loader{})
 	if result.Source != ConfigSourceNone && result.Source != ConfigSourceProject {
-		t.Errorf("got source %v, want ConfigSourceNone or ConfigSourceProject (project binary dir may have .hcl-linter)", result.Source)
+		t.Errorf(
+			"got source %v, want ConfigSourceNone or ConfigSourceProject (project binary dir may have .hcl-linter)",
+			result.Source,
+		)
 	}
 }
 
