@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Wired the filesystem circuit breaker into the dependency-resolving rules
+  (`dependency_paths`, `dependency_outputs`). The breaker is now shared across a
+  run and trips on repeated infrastructure failures (timeouts, permission/IO
+  errors), failing fast instead of hammering a slow or broken mount. A missing
+  path no longer counts as a failure, so the breaker never trips on the absent
+  directories these rules are designed to detect.
+- Reworked the file-operation timeout helper to use a buffered result channel,
+  removing a goroutine leak and a data race that occurred when an operation
+  outlived its timeout.
+
 ## [0.0.1-alpha]
 
 ### Added
