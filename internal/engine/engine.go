@@ -23,6 +23,11 @@ type Engine struct {
 	configLoader *config.Loader
 	registry     *rules.Registry
 
+	// breaker is shared across every file processed by this engine instance, so
+	// repeated filesystem failures in the dependency-resolving rules trip the
+	// breaker once and fail fast for the remainder of the run.
+	breaker *rules.CircuitBreaker
+
 	// DryRun, when true, skips writing fix results to disk. FixResult.Content
 	// still carries the proposed bytes so callers can diff them against the
 	// original file.
@@ -60,6 +65,7 @@ func New(loader *config.Loader, opts ...EngineOption) *Engine {
 	e := &Engine{
 		configLoader: loader,
 		registry:     rules.DefaultRegistry(),
+		breaker:      rules.NewCircuitBreaker(),
 	}
 	for _, opt := range opts {
 		opt(e)
@@ -101,6 +107,7 @@ func (e *Engine) buildContext(path string) (*rules.Context, error) {
 		Blocks:   ast.GetTopLevelBlocks(file),
 		Attrs:    ast.GetTopLevelAttributes(file),
 		Config:   cfg,
+		Breaker:  e.breaker,
 	}, nil
 }
 
@@ -312,6 +319,7 @@ func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 		Blocks:   ast.GetTopLevelBlocks(file),
 		Attrs:    ast.GetTopLevelAttributes(file),
 		Config:   defaultFormatConfig(),
+		Breaker:  e.breaker,
 	}
 
 	changes, err := e.runFixPipeline(ctx)

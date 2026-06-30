@@ -49,7 +49,7 @@ func (r DependencyOutputsRule) Check(ctx *Context) []diag.Issue {
 
 	for _, block := range ctx.Blocks {
 		if block.Type == "dependency" {
-			depCheckOutputRefs(&issues, block, ctx.FilePath, visited)
+			depCheckOutputRefs(&issues, block, ctx.FilePath, visited, ctx.Breaker)
 		}
 	}
 
@@ -67,7 +67,7 @@ type depMockOutput struct {
 	Type  string `json:"type"`
 }
 
-func depCheckOutputRefs(issues *[]diag.Issue, block ast.BlockInfo, currentFilePath string, visited map[string]bool) {
+func depCheckOutputRefs(issues *[]diag.Issue, block ast.BlockInfo, currentFilePath string, visited map[string]bool, cb *CircuitBreaker) {
 	depName := block.Labels[0]
 	depPath := depGetPath(block.Block.Body)
 	if depPath == "" {
@@ -89,7 +89,7 @@ func depCheckOutputRefs(issues *[]diag.Issue, block ast.BlockInfo, currentFilePa
 	}
 	visited[absDep] = true
 
-	outputs, mockOuts := depGetOutputs(depFullPath)
+	outputs, mockOuts := depGetOutputs(cb, depFullPath)
 	if outputs == nil && len(mockOuts) == 0 {
 		*issues = append(*issues, diag.Issue{
 			Severity: diag.SeverityWarning,
@@ -114,17 +114,23 @@ func depGetPath(body hcl.Body) string {
 	return ""
 }
 
-func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockOutput) {
+func depGetOutputs(cb *CircuitBreaker, depPath string) (map[string]depOutputDef, map[string]depMockOutput) {
 	outputs := make(map[string]depOutputDef)
 	mockOuts := make(map[string]depMockOutput)
 
-	if _, err := safeStat(depPath); os.IsNotExist(err) {
+	// Short-circuit before touching the filesystem (including the Glob below)
+	// when the breaker is open.
+	if !cb.Allow() {
+		return nil, nil
+	}
+
+	if _, err := cb.Stat(depPath); os.IsNotExist(err) {
 		return nil, nil
 	}
 
 	tfFiles, _ := filepath.Glob(filepath.Join(depPath, "*.tf"))
 	for _, tfFile := range tfFiles {
-		content, err := safeReadFile(tfFile)
+		content, err := cb.ReadFile(tfFile)
 		if err != nil {
 			continue
 		}
@@ -134,7 +140,7 @@ func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockO
 	}
 
 	mockPath := filepath.Join(depPath, ".mock-outputs.json")
-	if mockContent, err := safeReadFile(mockPath); err == nil {
+	if mockContent, err := cb.ReadFile(mockPath); err == nil {
 		parsed := depParseMockOutputs(mockContent)
 		for name, out := range parsed {
 			mockOuts[name] = out

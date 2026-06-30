@@ -16,6 +16,13 @@ type Context struct {
 	Blocks   []ast.BlockInfo
 	Attrs    []ast.AttributeInfo
 	Config   *config.Rules
+
+	// Breaker guards filesystem access for rules that read paths outside the
+	// file under lint (dependency_paths, dependency_outputs). It is shared
+	// across all files in a run so a broken mount trips once and suspends those
+	// checks for the rest of the run. May be nil, which behaves as a no-op
+	// always-closed breaker.
+	Breaker *CircuitBreaker
 }
 
 // Priority levels for deterministic fix pipeline ordering.
