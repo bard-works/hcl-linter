@@ -333,3 +333,37 @@ func TestGetLoader(t *testing.T) {
 		t.Fatal("expected result, got nil")
 	}
 }
+
+// TestFindHCLFiles_DotRoot is a regression test: walking "." must not trip
+// the hidden-directory skip on the root entry itself (whose name is "."),
+// which previously made `lint .` silently process zero files.
+func TestFindHCLFiles_DotRoot(t *testing.T) {
+	a := newTestApp()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.hcl"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+
+	if files := a.findHCLFiles("."); len(files) != 1 {
+		t.Errorf(`findHCLFiles(".") = %v, want exactly 1 file`, files)
+	}
+}
+
+// TestFindHCLFiles_ExplicitHiddenRoot: a hidden directory named as the walk
+// target must be walked even without --include-hidden.
+func TestFindHCLFiles_ExplicitHiddenRoot(t *testing.T) {
+	a := newTestApp()
+	parent := t.TempDir()
+	hidden := filepath.Join(parent, ".proj")
+	if err := os.MkdirAll(hidden, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hidden, "a.hcl"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if files := a.findHCLFiles(hidden); len(files) != 1 {
+		t.Errorf("findHCLFiles(hidden root) = %v, want exactly 1 file", files)
+	}
+}

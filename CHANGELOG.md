@@ -32,6 +32,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `dependency_outputs` now performs its documented validation:
+  `dependency.<name>.outputs.<attr>` references anywhere in a file are checked
+  against the target module's `output` blocks (and `.mock-outputs.json`), and
+  references to undeclared outputs are reported as errors at the reference's
+  exact location. Previously the reference check was an inert stub.
+- `dependency_outputs` recognises real Terraform output blocks: outputs were
+  previously only collected when the block contained a `type` attribute,
+  which `output` blocks do not have — so validation always reported
+  "outputs not found" against real modules.
+- `lint`/`fix` on `.` (or any explicitly targeted hidden directory) no longer
+  silently processes zero files: the walker's hidden-directory skip no longer
+  applies to the walk root itself.
 - Files are parsed from the bytes already read instead of being read from
   disk a second time by the HCL parser.
 - Directory walks use `filepath.WalkDir`, avoiding a stat call per entry.

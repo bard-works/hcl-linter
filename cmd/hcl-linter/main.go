@@ -676,7 +676,9 @@ func (a *app) findHCLFiles(root string) []string {
 		}
 
 		if d.IsDir() {
-			if !a.includeHidden && strings.HasPrefix(d.Name(), ".") {
+			// Never skip the walk root itself: `lint .` (whose entry is named
+			// ".") and explicitly targeted hidden directories must be walked.
+			if path != root && !a.includeHidden && strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil
