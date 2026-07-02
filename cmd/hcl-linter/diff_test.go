@@ -1,27 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
 
-// captureDiff redirects diffOut to a buffer for the duration of the test.
-func captureDiff(t *testing.T) *bytes.Buffer {
-	t.Helper()
-	prev := diffOut
-	buf := &bytes.Buffer{}
-	diffOut = buf
-	t.Cleanup(func() { diffOut = prev })
-	return buf
-}
-
 func TestPrintDiffIdentical(t *testing.T) {
-	buf := captureDiff(t)
+	a, buf := newCaptureApp()
 
-	changed := printDiff("foo.hcl", "a\nb\n", "a\nb\n")
+	changed := a.printDiff("foo.hcl", "a\nb\n", "a\nb\n")
 	if changed {
 		t.Error("expected printDiff to return false for identical input")
 	}
@@ -36,12 +25,12 @@ func TestPrintDiffDetectsChange(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
-	buf := captureDiff(t)
+	a, buf := newCaptureApp()
 
 	before := "line1\nold\nline3\n"
 	after := "line1\nnew\nline3\n"
 
-	changed := printDiff("foo.hcl", before, after)
+	changed := a.printDiff("foo.hcl", before, after)
 	if !changed {
 		t.Fatal("expected printDiff to return true for differing input")
 	}
@@ -67,9 +56,9 @@ func TestPrintDiffColouring(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
-	buf := captureDiff(t)
+	a, buf := newCaptureApp()
 
-	printDiff("foo.hcl", "line1\nold\nline3\n", "line1\nnew\nline3\n")
+	a.printDiff("foo.hcl", "line1\nold\nline3\n", "line1\nnew\nline3\n")
 
 	out := buf.String()
 	if !strings.Contains(out, "\x1b[") {

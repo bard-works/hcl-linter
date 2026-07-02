@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,15 +9,6 @@ import (
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
-
-func captureInitOut(t *testing.T) *bytes.Buffer {
-	t.Helper()
-	buf := &bytes.Buffer{}
-	prev := initOut
-	initOut = buf
-	t.Cleanup(func() { initOut = prev })
-	return buf
-}
 
 func initTestProject(t *testing.T, files ...string) string {
 	t.Helper()
@@ -36,7 +26,8 @@ func initTestProject(t *testing.T, files ...string) string {
 }
 
 func TestInit_WritesDefaultAndPerFilename(t *testing.T) {
-	resetFlags(t)
+	a, initBuf := newCaptureApp()
+	_ = initBuf
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
@@ -47,9 +38,8 @@ func TestInit_WritesDefaultAndPerFilename(t *testing.T) {
 		"svc/terragrunt.hcl",
 		"svc/root.hcl",
 	)
-	captureInitOut(t)
 
-	if err := runInit(nil, []string{root}); err != nil {
+	if err := a.runInit(nil, []string{root}); err != nil {
 		t.Fatalf("runInit: %v", err)
 	}
 
@@ -78,17 +68,18 @@ func TestInit_WritesDefaultAndPerFilename(t *testing.T) {
 }
 
 func TestInit_DryRunDoesNotWrite(t *testing.T) {
-	resetFlags(t)
+	a, initBuf := newCaptureApp()
+	_ = initBuf
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
 	root := initTestProject(t, "terragrunt.hcl")
-	flagDryRun = true
-	buf := captureInitOut(t)
+	a.dryRun = true
+	buf := initBuf
 
-	if err := runInit(nil, []string{root}); err != nil {
+	if err := a.runInit(nil, []string{root}); err != nil {
 		t.Fatalf("runInit --dry-run: %v", err)
 	}
 
@@ -106,7 +97,8 @@ func TestInit_DryRunDoesNotWrite(t *testing.T) {
 }
 
 func TestInit_RefusesNonEmptyDir(t *testing.T) {
-	resetFlags(t)
+	a, initBuf := newCaptureApp()
+	_ = initBuf
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
@@ -121,9 +113,9 @@ func TestInit_RefusesNonEmptyDir(t *testing.T) {
 	if err := os.WriteFile(existing, []byte("# kept\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	buf := captureInitOut(t)
+	buf := initBuf
 
-	err := runInit(nil, []string{root})
+	err := a.runInit(nil, []string{root})
 	if err == nil {
 		t.Fatal("expected error for non-empty .hcl-linter/")
 	}
@@ -146,7 +138,8 @@ func TestInit_RefusesNonEmptyDir(t *testing.T) {
 }
 
 func TestInit_ForceOverwrites(t *testing.T) {
-	resetFlags(t)
+	a, initBuf := newCaptureApp()
+	_ = initBuf
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
@@ -161,10 +154,9 @@ func TestInit_ForceOverwrites(t *testing.T) {
 	if err := os.WriteFile(stale, []byte("# stale\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flagInitForce = true
-	captureInitOut(t)
+	a.initForce = true
 
-	if err := runInit(nil, []string{root}); err != nil {
+	if err := a.runInit(nil, []string{root}); err != nil {
 		t.Fatalf("runInit --force: %v", err)
 	}
 
@@ -178,16 +170,16 @@ func TestInit_ForceOverwrites(t *testing.T) {
 }
 
 func TestInit_NoHCLFiles(t *testing.T) {
-	resetFlags(t)
+	a, initBuf := newCaptureApp()
+	_ = initBuf
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
 	root := t.TempDir()
-	captureInitOut(t)
 
-	if err := runInit(nil, []string{root}); err != nil {
+	if err := a.runInit(nil, []string{root}); err != nil {
 		t.Fatalf("runInit: %v", err)
 	}
 
@@ -201,16 +193,16 @@ func TestInit_NoHCLFiles(t *testing.T) {
 }
 
 func TestInit_OutputPassesValidateConfig(t *testing.T) {
-	resetFlags(t)
+	a, initBuf := newCaptureApp()
+	_ = initBuf
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
 	root := initTestProject(t, "terragrunt.hcl", "root.hcl", "svc/service.hcl")
-	captureInitOut(t)
 
-	if err := runInit(nil, []string{root}); err != nil {
+	if err := a.runInit(nil, []string{root}); err != nil {
 		t.Fatalf("runInit: %v", err)
 	}
 
@@ -224,16 +216,16 @@ func TestInit_OutputPassesValidateConfig(t *testing.T) {
 }
 
 func TestInit_SkipsDefaultHCLSource(t *testing.T) {
-	resetFlags(t)
+	a, initBuf := newCaptureApp()
+	_ = initBuf
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
 	root := initTestProject(t, "default.hcl", "terragrunt.hcl")
-	captureInitOut(t)
 
-	if err := runInit(nil, []string{root}); err != nil {
+	if err := a.runInit(nil, []string{root}); err != nil {
 		t.Fatalf("runInit: %v", err)
 	}
 

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -94,8 +95,9 @@ func (e *Engine) buildContext(path string) (*rules.Context, error) {
 		return nil, fmt.Errorf("file modified during read: %s", path)
 	}
 
+	// Parse the bytes already read; ParseFile would re-read from disk.
 	parser := ast.NewParser()
-	file, diags := parser.ParseFile(path)
+	file, diags := parser.ParseContent(content, path)
 	if diags.HasErrors() {
 		return nil, &ParseError{File: path, Cause: diags.Error()}
 	}
@@ -128,34 +130,32 @@ func (e *Engine) LintFile(path string) (*diag.Result, error) {
 	return result, nil
 }
 
-func (e *Engine) LintFiles(paths []string, maxConcurrency int) []*diag.Result {
+// runConcurrent applies fn to every path with at most maxConcurrency workers.
+// When ctx is cancelled no new work is dispatched; results for paths never
+// processed are omitted. In-flight files always run to completion so a fix is
+// never abandoned halfway.
+func runConcurrent[R any](ctx context.Context, paths []string, maxConcurrency int, fn func(string) R) []R {
 	if maxConcurrency <= 0 {
 		maxConcurrency = runtime.NumCPU()
 	}
 
 	sem := make(chan struct{}, maxConcurrency)
 	var wg sync.WaitGroup
-	ch := make(chan *diag.Result, len(paths))
+	ch := make(chan R, len(paths))
 
 	for _, path := range paths {
+		if ctx.Err() != nil {
+			break
+		}
 		wg.Add(1)
 		go func(p string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-
-			result, err := e.LintFile(p)
-			if err != nil {
-				result = &diag.Result{
-					File: p,
-					Issues: []diag.Issue{{
-						Severity: diag.SeverityError,
-						Rule:     "linter_error",
-						Message:  err.Error(),
-					}},
-				}
+			if ctx.Err() != nil {
+				return
 			}
-			ch <- result
+			ch <- fn(p)
 		}(path)
 	}
 
@@ -164,10 +164,28 @@ func (e *Engine) LintFiles(paths []string, maxConcurrency int) []*diag.Result {
 		close(ch)
 	}()
 
-	var allResults []*diag.Result
+	var out []R
 	for r := range ch {
-		allResults = append(allResults, r)
+		out = append(out, r)
 	}
+	return out
+}
+
+func (e *Engine) LintFiles(ctx context.Context, paths []string, maxConcurrency int) []*diag.Result {
+	allResults := runConcurrent(ctx, paths, maxConcurrency, func(p string) *diag.Result {
+		result, err := e.LintFile(p)
+		if err != nil {
+			result = &diag.Result{
+				File: p,
+				Issues: []diag.Issue{{
+					Severity: diag.SeverityError,
+					Rule:     "linter_error",
+					Message:  err.Error(),
+				}},
+			}
+		}
+		return result
+	})
 	sort.Slice(allResults, func(i, j int) bool {
 		return allResults[i].File < allResults[j].File
 	})
@@ -236,39 +254,25 @@ func (e *Engine) FixFile(path string) (*FixResult, error) {
 	return result, nil
 }
 
-func (e *Engine) FixFiles(paths []string, maxConcurrency int) []*FixResult {
-	if maxConcurrency <= 0 {
-		maxConcurrency = runtime.NumCPU()
-	}
+func (e *Engine) FixFiles(ctx context.Context, paths []string, maxConcurrency int) []*FixResult {
+	return e.fixConcurrent(ctx, paths, maxConcurrency, e.FixFile)
+}
 
-	sem := make(chan struct{}, maxConcurrency)
-	var wg sync.WaitGroup
-	results := make(chan *FixResult, len(paths))
-
-	for _, path := range paths {
-		wg.Add(1)
-		go func(p string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			result, err := e.FixFile(p)
-			if err != nil {
-				result = &FixResult{File: p, Error: err}
-			}
-			results <- result
-		}(path)
-	}
-
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	var allResults []*FixResult
-	for r := range results {
-		allResults = append(allResults, r)
-	}
+// fixConcurrent runs one of the per-file fix functions over paths and returns
+// the results sorted by file path.
+func (e *Engine) fixConcurrent(
+	ctx context.Context,
+	paths []string,
+	maxConcurrency int,
+	fixFn func(string) (*FixResult, error),
+) []*FixResult {
+	allResults := runConcurrent(ctx, paths, maxConcurrency, func(p string) *FixResult {
+		result, err := fixFn(p)
+		if err != nil {
+			result = &FixResult{File: p, Error: err}
+		}
+		return result
+	})
 	sort.Slice(allResults, func(i, j int) bool {
 		return allResults[i].File < allResults[j].File
 	})
@@ -307,9 +311,9 @@ func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 	}
 
 	parser := ast.NewParser()
-	file, diags := parser.ParseFile(path)
+	file, diags := parser.ParseContent(content, path)
 	if diags.HasErrors() {
-		return nil, fmt.Errorf("parse error: %s", diags.Error())
+		return nil, &ParseError{File: path, Cause: diags.Error()}
 	}
 
 	ctx := &rules.Context{
@@ -345,41 +349,6 @@ func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 	return result, nil
 }
 
-func (e *Engine) FormatFixFiles(paths []string, maxConcurrency int) []*FixResult {
-	if maxConcurrency <= 0 {
-		maxConcurrency = runtime.NumCPU()
-	}
-
-	sem := make(chan struct{}, maxConcurrency)
-	var wg sync.WaitGroup
-	results := make(chan *FixResult, len(paths))
-
-	for _, path := range paths {
-		wg.Add(1)
-		go func(p string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			result, err := e.FormatFixFile(p)
-			if err != nil {
-				result = &FixResult{File: p, Error: err}
-			}
-			results <- result
-		}(path)
-	}
-
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	var allResults []*FixResult
-	for r := range results {
-		allResults = append(allResults, r)
-	}
-	sort.Slice(allResults, func(i, j int) bool {
-		return allResults[i].File < allResults[j].File
-	})
-	return allResults
+func (e *Engine) FormatFixFiles(ctx context.Context, paths []string, maxConcurrency int) []*FixResult {
+	return e.fixConcurrent(ctx, paths, maxConcurrency, e.FormatFixFile)
 }

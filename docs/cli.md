@@ -302,7 +302,7 @@ values trade memory for throughput on large trees.
 Output is colourised when stdout is an interactive terminal. Control with
 the global `--color` flag:
 
-- `--color=auto` (default) - on when stdout is a TTY, `NO_COLOR` is unset, and `TERM` is not `dumb`
+- `--color=auto` (default) - on when both stdout and stderr are TTYs, `NO_COLOR` is unset, and `TERM` is not `dumb`
 - `--color=always` - force colour on (use when piping into a colour-aware pager, e.g. `less -R`)
 - `--color=never` - disable colour entirely
 
@@ -350,8 +350,13 @@ non-TTY output.
 
 ## Exit codes
 
-| Code | Meaning                                                                                                                       |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Success (no issues, or `lint` completed regardless)                                                                           |
-| `1`  | Issues found (`check`), config validation failed (`validate-config`), or `fix --dry-run` detected files that would be changed |
-| `2`  | Configuration error (missing/unparseable config)                                                                              |
+| Code | Meaning                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `0`  | Success (no findings; `lint` also exits 0 when it finds issues - it is report-only)                                            |
+| `1`  | Findings: issues found (`check`), config validation failed (`validate-config`), or `fix --dry-run` detected files that would change |
+| `2`  | Usage or configuration error (bad flag, missing path, no config directory)                                                     |
+| `3`  | Execution failure: the tool itself could not process input (unparseable file, IO error, interrupted)                           |
+
+Results (issues, diffs, summaries) go to stdout; diagnostics (config banner,
+warnings, progress) go to stderr, so piping stdout yields machine-readable
+output only.

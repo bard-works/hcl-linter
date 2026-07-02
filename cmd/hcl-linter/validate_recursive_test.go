@@ -18,8 +18,7 @@ func writeHCL(t *testing.T, dir, content string) {
 }
 
 func TestValidateConfigRecursive_AllOK(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
 	goodCfg := `rules {
@@ -31,15 +30,14 @@ func TestValidateConfigRecursive_AllOK(t *testing.T) {
 	writeHCL(t, filepath.Join(root, ".hcl-linter"), goodCfg)
 	writeHCL(t, filepath.Join(root, "svc", ".hcl-linter"), goodCfg)
 
-	flagValidateRecursive = true
-	if err := runValidateConfig(nil, []string{root}); err != nil {
+	a.validateRecursive = true
+	if err := a.runValidateConfig(nil, []string{root}); err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
 
 func TestValidateConfigRecursive_ReportsAllBadDirs(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
 	badCfg := `rules {
@@ -50,8 +48,8 @@ func TestValidateConfigRecursive_ReportsAllBadDirs(t *testing.T) {
 	writeHCL(t, filepath.Join(root, ".hcl-linter"), badCfg)
 	writeHCL(t, filepath.Join(root, "a", ".hcl-linter"), badCfg)
 
-	flagValidateRecursive = true
-	err := runValidateConfig(nil, []string{root})
+	a.validateRecursive = true
+	err := a.runValidateConfig(nil, []string{root})
 	if err == nil {
 		t.Fatal("expected error for bad configs")
 	}
@@ -61,12 +59,11 @@ func TestValidateConfigRecursive_ReportsAllBadDirs(t *testing.T) {
 }
 
 func TestValidateConfigRecursive_NoDirsFound(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
-	flagValidateRecursive = true
-	err := runValidateConfig(nil, []string{root})
+	a.validateRecursive = true
+	err := a.runValidateConfig(nil, []string{root})
 	if err == nil {
 		t.Fatal("expected error when no .hcl-linter/ dirs exist")
 	}

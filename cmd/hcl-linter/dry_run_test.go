@@ -2,67 +2,21 @@ package main
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
 
-// captureOutput redirects both os.Stdout and diffOut into a single buffer.
-// Returns the buffer and a flush function the test must call before reading
-// the buffer (it closes the stdout pipe so the drain goroutine finishes).
-// The flush is also registered via t.Cleanup as a safety net.
-func captureOutput(t *testing.T) (*bytes.Buffer, func()) {
-	t.Helper()
-
+// newCaptureApp returns an app whose result stream is captured in the returned
+// buffer. Diagnostics are discarded.
+func newCaptureApp() (*app, *bytes.Buffer) {
+	a := newTestApp()
 	buf := &bytes.Buffer{}
-	mu := &sync.Mutex{}
-
-	prevDiffOut := diffOut
-	diffOut = &syncWriter{w: buf, mu: mu}
-
-	prevStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		data, _ := io.ReadAll(r)
-		mu.Lock()
-		buf.Write(data)
-		mu.Unlock()
-	}()
-
-	var once sync.Once
-	flush := func() {
-		once.Do(func() {
-			_ = w.Close()
-			<-done
-			os.Stdout = prevStdout
-			diffOut = prevDiffOut
-		})
-	}
-	t.Cleanup(flush)
-	return buf, flush
-}
-
-type syncWriter struct {
-	w  *bytes.Buffer
-	mu *sync.Mutex
-}
-
-func (sw *syncWriter) Write(p []byte) (int, error) {
-	sw.mu.Lock()
-	defer sw.mu.Unlock()
-	return sw.w.Write(p)
+	a.out = buf
+	return a, buf
 }
 
 // writeFile is a convenience wrapper for tests.
@@ -88,15 +42,15 @@ const misformattedContent = "locals {\n\n\n  foo = \"bar\"\n}\n"
 const cleanContent = "locals {\n  foo = \"bar\"\n}\n"
 
 func TestFixDryRunPrintsDiffForMisformattedFile(t *testing.T) {
-	resetFlags(t)
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
 	root := setupProject(t, misformattedContent, blankLinesConfig)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
-	flagDryRun = true
+	a, buf := newCaptureApp()
+	a.configSrc = filepath.Join(root, ".hcl-linter")
+	a.dryRun = true
 
 	target := filepath.Join(root, "terragrunt.hcl")
 	originalBytes, err := os.ReadFile(target)
@@ -104,9 +58,7 @@ func TestFixDryRunPrintsDiffForMisformattedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	buf, flush := captureOutput(t)
-	runErr := runFix(nil, []string{root})
-	flush()
+	runErr := a.runFix(nil, []string{root})
 	out := buf.String()
 
 	if runErr == nil {
@@ -139,15 +91,15 @@ func TestFixDryRunPrintsDiffForMisformattedFile(t *testing.T) {
 }
 
 func TestFixDryRunCleanFile(t *testing.T) {
-	resetFlags(t)
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
 	root := setupProject(t, cleanContent, blankLinesConfig)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
-	flagDryRun = true
+	a, buf := newCaptureApp()
+	a.configSrc = filepath.Join(root, ".hcl-linter")
+	a.dryRun = true
 
 	target := filepath.Join(root, "terragrunt.hcl")
 	originalBytes, err := os.ReadFile(target)
@@ -155,9 +107,7 @@ func TestFixDryRunCleanFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	buf, flush := captureOutput(t)
-	runErr := runFix(nil, []string{root})
-	flush()
+	runErr := a.runFix(nil, []string{root})
 	out := buf.String()
 
 	if runErr != nil {
@@ -177,7 +127,6 @@ func TestFixDryRunCleanFile(t *testing.T) {
 }
 
 func TestFixDryRunMultipleFiles(t *testing.T) {
-	resetFlags(t)
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
@@ -194,12 +143,11 @@ func TestFixDryRunMultipleFiles(t *testing.T) {
 	writeFile(t, filepath.Join(root, "b.hcl"), misformattedContent)
 	writeFile(t, filepath.Join(root, "c.hcl"), cleanContent)
 
-	flagConfigSrc = configDir
-	flagDryRun = true
+	a, buf := newCaptureApp()
+	a.configSrc = configDir
+	a.dryRun = true
 
-	buf, flush := captureOutput(t)
-	runErr := runFix(nil, []string{root})
-	flush()
+	runErr := a.runFix(nil, []string{root})
 	out := buf.String()
 
 	if runErr == nil {
@@ -234,7 +182,6 @@ func TestFixDryRunMultipleFiles(t *testing.T) {
 }
 
 func TestFixDryRunWithFormat(t *testing.T) {
-	resetFlags(t)
 	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
@@ -244,18 +191,17 @@ func TestFixDryRunWithFormat(t *testing.T) {
 	target := filepath.Join(root, "terragrunt.hcl")
 	writeFile(t, target, misformattedContent)
 
-	flagConfigSrc = root
-	flagFormat = true
-	flagDryRun = true
+	a, buf := newCaptureApp()
+	a.configSrc = root
+	a.format = true
+	a.dryRun = true
 
 	originalBytes, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	buf, flush := captureOutput(t)
-	runErr := runFix(nil, []string{root})
-	flush()
+	runErr := a.runFix(nil, []string{root})
 	out := buf.String()
 
 	if runErr == nil {

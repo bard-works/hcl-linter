@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- POSIX-style exit-code contract: `0` no findings, `1` findings (check
+  failures, config issues, dry-run drift), `2` usage/config errors, `3`
+  execution failures (unparseable files, IO errors, interruption). `lint` and
+  `check` now exit `3` when a file cannot be linted instead of silently
+  exiting `0`/`1`.
+- SIGINT/SIGTERM handling: an interrupted run stops dispatching new files,
+  lets in-flight fixes finish, and exits `3`.
+- Lint issues are printed as `path:line:col: [severity] rule: message` (grep-
+  and editor-friendly); locations are no longer hidden behind `--verbose`.
+
+### Changed
+
+- Strict stream separation: results (issues, diffs, summaries, explain output)
+  go to stdout; diagnostics (config banner, warnings, verbose listings) go to
+  stderr. Previously warnings were split across both streams.
+- `--color=auto` enables colour only when both stdout and stderr are TTYs,
+  since both streams carry coloured text.
+- Fixed files are written atomically (temp file + fsync + rename), so an
+  interrupted `fix` can no longer truncate a file. Existing permission bits
+  are preserved and read-only targets are still refused.
+
 ### Fixed
+
+- Files are parsed from the bytes already read instead of being read from
+  disk a second time by the HCL parser.
+- Directory walks use `filepath.WalkDir`, avoiding a stat call per entry.
 
 - Wired the filesystem circuit breaker into the dependency-resolving rules
   (`dependency_paths`, `dependency_outputs`). The breaker is now shared across a
