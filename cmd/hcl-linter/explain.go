@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -13,31 +12,29 @@ import (
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
 
-func newExplainCmd() *cobra.Command {
+func (a *app) newExplainCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:           "explain [rule-name]",
-		Short:         "Describe a lint rule and its config options",
-		Args:          cobra.MaximumNArgs(1),
-		RunE:          runExplain,
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Use:   "explain [rule-name]",
+		Short: "Describe a lint rule and its config options",
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  a.runExplain,
 	}
 }
 
-func runExplain(_ *cobra.Command, args []string) error {
+func (a *app) runExplain(_ *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		printExplainTable()
+		a.printExplainTable()
 		return nil
 	}
-	return printExplainDetail(args[0])
+	return a.printExplainDetail(args[0])
 }
 
 // printExplainTable prints a compact aligned table of all registered rules.
-func printExplainTable() {
+func (a *app) printExplainTable() {
 	all := rules.DefaultRegistry().All()
 	sort.Slice(all, func(i, j int) bool { return all[i].Name() < all[j].Name() })
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "RULE\tSEVERITY\tFIXABLE\tSUMMARY")
 	for _, r := range all {
 		doc := r.Doc()
@@ -60,10 +57,9 @@ func printExplainTable() {
 }
 
 // printExplainDetail prints the full documentation for one rule.
-func printExplainDetail(name string) error {
+func (a *app) printExplainDetail(name string) error {
 	r, ok := ruleByName(name)
 	if !ok {
-		fmt.Fprintf(os.Stderr, "unknown rule %q\n", name)
 		return fmt.Errorf("unknown rule %q", name)
 	}
 
@@ -74,23 +70,23 @@ func printExplainDetail(name string) error {
 	if doc.Fixable {
 		tags += ", fixable"
 	}
-	fmt.Printf("%s  [%s]\n", termcolor.Rule(r.Name()), tags)
+	fmt.Fprintf(a.out, "%s  [%s]\n", termcolor.Rule(r.Name()), tags)
 
 	// Summary / description
-	fmt.Println()
-	fmt.Printf("  %s\n", doc.Summary)
+	fmt.Fprintln(a.out)
+	fmt.Fprintf(a.out, "  %s\n", doc.Summary)
 	if doc.Description != "" {
-		fmt.Println()
+		fmt.Fprintln(a.out)
 		for _, line := range strings.Split(doc.Description, "\n") {
-			fmt.Printf("  %s\n", line)
+			fmt.Fprintf(a.out, "  %s\n", line)
 		}
 	}
 
 	// Config fields
 	if len(doc.ConfigFields) > 0 {
-		fmt.Println()
-		fmt.Printf("  Config (rules { %s { ... } }):\n", doc.ConfigBlock)
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(a.out)
+		fmt.Fprintf(a.out, "  Config (rules { %s { ... } }):\n", doc.ConfigBlock)
+		w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 		for _, f := range doc.ConfigFields {
 			req := "optional"
 			if f.Required {
@@ -107,21 +103,21 @@ func printExplainDetail(name string) error {
 
 	// Example
 	if doc.Example.Violation != "" {
-		fmt.Println()
-		fmt.Println("  Example violation:")
+		fmt.Fprintln(a.out)
+		fmt.Fprintln(a.out, "  Example violation:")
 		for _, line := range strings.Split(doc.Example.Violation, "\n") {
-			fmt.Printf("    %s\n", line)
+			fmt.Fprintf(a.out, "    %s\n", line)
 		}
 	}
 	if doc.Example.Fixed != "" {
-		fmt.Println()
-		fmt.Println("  After fix:")
+		fmt.Fprintln(a.out)
+		fmt.Fprintln(a.out, "  After fix:")
 		for _, line := range strings.Split(doc.Example.Fixed, "\n") {
-			fmt.Printf("    %s\n", line)
+			fmt.Fprintf(a.out, "    %s\n", line)
 		}
 	}
 
-	fmt.Println()
+	fmt.Fprintln(a.out)
 	return nil
 }
 

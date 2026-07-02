@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -600,7 +601,7 @@ func TestFixFilesConcurrent(t *testing.T) {
 		createHCLFile(t, tmpDir, "file3.hcl", "inputs = {\n\n  e = \"f\"\n\n}\n"),
 	}
 
-	results := eng.FixFiles(files, 2)
+	results := eng.FixFiles(context.Background(), files, 2)
 
 	if len(results) != 3 {
 		t.Errorf("expected 3 results, got %d", len(results))
@@ -629,7 +630,7 @@ func TestFixFilesNoConcurrency(t *testing.T) {
 
 	file := createHCLFile(t, tmpDir, "test.hcl", "inputs = {\n\n  a = \"b\"\n\n}\n")
 
-	results := eng.FixFiles([]string{file}, 0)
+	results := eng.FixFiles(context.Background(), []string{file}, 0)
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}
@@ -1300,7 +1301,7 @@ func TestFormatFixFilesConcurrent(t *testing.T) {
 		createHCLFile(t, tmpDir, "c.hcl", `arr = ["f", "e", "d"]`+"\n"),
 	}
 
-	results := eng.FormatFixFiles(files, 2)
+	results := eng.FormatFixFiles(context.Background(), files, 2)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -1396,7 +1397,7 @@ func TestLintFilesReturnsSortedResults(t *testing.T) {
 	}
 
 	// Pass in non-sorted order; results must come back sorted.
-	results := eng.LintFiles(files, 0)
+	results := eng.LintFiles(context.Background(), files, 0)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -1427,7 +1428,7 @@ func TestFixFilesReturnsSortedResults(t *testing.T) {
 		createHCLFile(t, tmpDir, "b.hcl", "inputs = {\n\n  c = \"3\"\n\n}\n"),
 	}
 
-	results := eng.FixFiles(files, 0)
+	results := eng.FixFiles(context.Background(), files, 0)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -1593,7 +1594,7 @@ func TestLintFilesHandlesError(t *testing.T) {
 	srcDir := t.TempDir()
 	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
 
-	results := eng.LintFiles([]string{file}, 1)
+	results := eng.LintFiles(context.Background(), []string{file}, 1)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -1617,7 +1618,7 @@ func TestFixFilesHandlesError(t *testing.T) {
 	srcDir := t.TempDir()
 	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
 
-	results := eng.FixFiles([]string{file}, 1)
+	results := eng.FixFiles(context.Background(), []string{file}, 1)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -1667,6 +1668,9 @@ func TestBuildContextReadFileError(t *testing.T) {
 }
 
 func TestFixFileWriteError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("file permissions do not block writes when running as root")
+	}
 	tmpDir := createTestConfigDir(t)
 	setupTestConfig(t, tmpDir, `rules {
   blank_lines { enabled = true; within_blocks = true }
@@ -1688,6 +1692,9 @@ func TestFixFileWriteError(t *testing.T) {
 }
 
 func TestFormatFixFileWriteError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("file permissions do not block writes when running as root")
+	}
 	tmpDir := createTestConfigDir(t)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)

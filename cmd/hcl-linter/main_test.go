@@ -115,49 +115,47 @@ func TestMatchGlob(t *testing.T) {
 }
 
 func TestMatchesFilter(t *testing.T) {
-	flagFilter = nil
-	defer func() { flagFilter = nil }()
+	a := newTestApp()
 
 	// Test with no filters
 	t.Run("no filters matches all", func(t *testing.T) {
-		if !matchesFilter("anyfile.hcl") {
+		if !a.matchesFilter("anyfile.hcl") {
 			t.Error("expected matchesFilter to return true with no filters")
 		}
 	})
 
 	// Test with single filter
-	flagFilter = []string{"*.hcl"}
-	defer func() { flagFilter = nil }()
+	a.filter = []string{"*.hcl"}
 
 	t.Run("single filter match", func(t *testing.T) {
-		if !matchesFilter("file.hcl") {
+		if !a.matchesFilter("file.hcl") {
 			t.Error("expected matchesFilter to return true for *.hcl matching file.hcl")
 		}
 	})
 
 	t.Run("single filter no match", func(t *testing.T) {
-		if matchesFilter("file.tf") {
+		if a.matchesFilter("file.tf") {
 			t.Error("expected matchesFilter to return false for *.hcl not matching file.tf")
 		}
 	})
 
 	// Test with multiple filters (OR logic)
-	flagFilter = []string{"*.hcl", "*.tf"}
+	a.filter = []string{"*.hcl", "*.tf"}
 
 	t.Run("multiple filters first matches", func(t *testing.T) {
-		if !matchesFilter("file.hcl") {
+		if !a.matchesFilter("file.hcl") {
 			t.Error("expected matchesFilter to return true")
 		}
 	})
 
 	t.Run("multiple filters second matches", func(t *testing.T) {
-		if !matchesFilter("file.tf") {
+		if !a.matchesFilter("file.tf") {
 			t.Error("expected matchesFilter to return true")
 		}
 	})
 
 	t.Run("multiple filters neither matches", func(t *testing.T) {
-		if matchesFilter("file.json") {
+		if a.matchesFilter("file.json") {
 			t.Error("expected matchesFilter to return false")
 		}
 	})
@@ -167,7 +165,7 @@ func TestFindHCLFiles(t *testing.T) {
 	// This test would require creating temp directories with HCL files
 	// For now, just test the function exists and can be called
 	t.Run("function exists", func(_ *testing.T) {
-		result := findHCLFiles("/tmp")
+		result := newTestApp().findHCLFiles("/tmp")
 		// Result might be empty or contain files, just verify it doesn't panic
 		_ = result
 	})
@@ -183,17 +181,17 @@ func TestFilterFiles(t *testing.T) {
 	}
 
 	// Test with *.hcl filter
-	flagFilter = []string{"*.hcl"}
-	defer func() { flagFilter = nil }()
+	a := newTestApp()
+	a.filter = []string{"*.hcl"}
 
-	result := filterFiles(testFiles)
+	result := a.filterFiles(testFiles)
 	if len(result) != 2 {
 		t.Errorf("expected 2 files, got %d", len(result))
 	}
 
 	// Test with multiple filters
-	flagFilter = []string{"terragrunt.hcl", "*.tf"}
-	result = filterFiles(testFiles)
+	a.filter = []string{"terragrunt.hcl", "*.tf"}
+	result = a.filterFiles(testFiles)
 	if len(result) != 2 {
 		t.Errorf("expected 2 files, got %d", len(result))
 	}

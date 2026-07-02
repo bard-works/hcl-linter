@@ -6,8 +6,6 @@ import (
 )
 
 func TestNewRootCmd_ListsSubcommands(t *testing.T) {
-	resetFlags(t)
-
 	cmd := newRootCmd()
 	if cmd == nil {
 		t.Fatal("newRootCmd returned nil")
@@ -26,8 +24,6 @@ func TestNewRootCmd_ListsSubcommands(t *testing.T) {
 }
 
 func TestNewRootCmd_VersionSubcommand(t *testing.T) {
-	resetFlags(t)
-
 	cmd := newRootCmd()
 	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)
@@ -40,8 +36,6 @@ func TestNewRootCmd_VersionSubcommand(t *testing.T) {
 }
 
 func TestNewRootCmd_HelpDefault(t *testing.T) {
-	resetFlags(t)
-
 	cmd := newRootCmd()
 	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)

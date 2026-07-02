@@ -12,8 +12,7 @@ import (
 )
 
 func TestRunLint_Verbose(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		`include "BadName" { path = "./x" }`+"\n",
@@ -25,17 +24,16 @@ func TestRunLint_Verbose(t *testing.T) {
   }
 }`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
-	flagVerbose = true
+	a.configSrc = filepath.Join(root, ".hcl-linter")
+	a.verbose = true
 
-	if err := runLint(nil, []string{root}); err != nil {
+	if err := a.runLint(nil, []string{root}); err != nil {
 		t.Errorf("runLint --verbose returned error: %v", err)
 	}
 }
 
 func TestRunFix_WithChanges(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		"locals {\n\n\n  x = 1\n}\n",
@@ -46,17 +44,16 @@ func TestRunFix_WithChanges(t *testing.T) {
   }
 }`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
-	flagVerbose = true
+	a.configSrc = filepath.Join(root, ".hcl-linter")
+	a.verbose = true
 
-	if err := runFix(nil, []string{root}); err != nil {
+	if err := a.runFix(nil, []string{root}); err != nil {
 		t.Errorf("runFix returned error: %v", err)
 	}
 }
 
 func TestRunFix_FormatModeVerbose(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
 	file1 := filepath.Join(root, "a.hcl")
@@ -66,17 +63,16 @@ func TestRunFix_FormatModeVerbose(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	flagFormat = true
-	flagVerbose = true
+	a.format = true
+	a.verbose = true
 
-	if err := runFix(nil, []string{root}); err != nil {
+	if err := a.runFix(nil, []string{root}); err != nil {
 		t.Errorf("runFix --format --verbose returned error: %v", err)
 	}
 }
 
 func TestRunCheck_WithIssuesButOnlyWarnings(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		`locals { x = get_env("ENV") }`+"\n",
@@ -87,20 +83,19 @@ func TestRunCheck_WithIssuesButOnlyWarnings(t *testing.T) {
   }
 }`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
+	a.configSrc = filepath.Join(root, ".hcl-linter")
 
 	// Warning-only should not exit.
-	if err := runCheck(nil, []string{root}); err != nil {
+	if err := a.runCheck(nil, []string{root}); err != nil {
 		t.Errorf("runCheck should not error on warnings-only: %v", err)
 	}
 }
 
 func TestFilterFiles_NoMatch(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
-	flagFilter = []string{"other.hcl"}
-	got := filterFiles([]string{"/tmp/terragrunt.hcl", "/tmp/root.hcl"})
+	a.filter = []string{"other.hcl"}
+	got := a.filterFiles([]string{"/tmp/terragrunt.hcl", "/tmp/root.hcl"})
 	if len(got) != 0 {
 		t.Errorf("expected no matches, got %v", got)
 	}
@@ -138,13 +133,13 @@ func TestMatchGlob_Combinations(t *testing.T) {
 }
 
 func TestWarnConfigIssues_EmptyDir(t *testing.T) {
-	silenceStdout(t)
+	a := newTestApp()
 	// Empty configDir string returns early without stat errors.
-	warnConfigIssues("")
+	a.warnConfigIssues("")
 }
 
 func TestWarnConfigIssues_RealIssues(t *testing.T) {
-	silenceStdout(t)
+	a := newTestApp()
 
 	tmp := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmp, "default.hcl"), []byte(`rules {
@@ -153,13 +148,12 @@ func TestWarnConfigIssues_RealIssues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Should not panic or error; prints warnings to stderr.
-	warnConfigIssues(tmp)
+	// Should not panic or error; prints warnings to the diagnostic stream.
+	a.warnConfigIssues(tmp)
 }
 
 func TestRunFix_FileWithParseError(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
 	configDir := filepath.Join(root, ".hcl-linter")
@@ -174,7 +168,7 @@ func TestRunFix_FileWithParseError(t *testing.T) {
 	}
 
 	// Valid file to ensure fix processing runs, plus one with a parse error
-	// to hit runFixMode's error branch.
+	// to hit runFix's error branch.
 	if err := os.WriteFile(
 		filepath.Join(root, "terragrunt.hcl"),
 		[]byte("locals {\n\n  x = 1\n}\n"),
@@ -186,87 +180,80 @@ func TestRunFix_FileWithParseError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flagConfigSrc = configDir
+	a.configSrc = configDir
 
 	// Even with a broken file, runFix should return nil (errors are printed
 	// per-file, not returned).
-	if err := runFix(nil, []string{root}); err != nil {
+	if err := a.runFix(nil, []string{root}); err != nil {
 		t.Errorf("runFix returned error: %v", err)
 	}
 }
 
 func TestRunFormatMode_FileWithParseError(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "broken.hcl"), []byte("locals { = invalid"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flagFormat = true
+	a.format = true
 
-	if err := runFix(nil, []string{root}); err != nil {
+	if err := a.runFix(nil, []string{root}); err != nil {
 		t.Errorf("runFix --format returned error: %v", err)
 	}
 }
 
 func TestRun_FilterWithNoMatches(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		`locals { x = 1 }`+"\n",
 		`rules {}`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
-	flagFilter = []string{"definitely-not-matched.hcl"}
+	a.configSrc = filepath.Join(root, ".hcl-linter")
+	a.filter = []string{"definitely-not-matched.hcl"}
 
 	// Filter eliminates all files → no files to lint but still returns nil.
-	if err := runLint(nil, []string{root}); err != nil {
+	if err := a.runLint(nil, []string{root}); err != nil {
 		t.Errorf("runLint with non-matching filter returned error: %v", err)
 	}
 }
 
 func TestRunLint_PathError(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
-	if err := runLint(nil, []string{"/nonexistent/path/does/not/exist"}); err == nil {
+	if err := a.runLint(nil, []string{"/nonexistent/path/does/not/exist"}); err == nil {
 		t.Error("expected error for nonexistent path, got nil")
 	}
 }
 
 func TestRunCheck_PathError(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
-	if err := runCheck(nil, []string{"/nonexistent/path/does/not/exist"}); err == nil {
+	if err := a.runCheck(nil, []string{"/nonexistent/path/does/not/exist"}); err == nil {
 		t.Error("expected error for nonexistent path, got nil")
 	}
 }
 
 func TestRunFix_PathError(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
-	if err := runFix(nil, []string{"/nonexistent/path/does/not/exist"}); err == nil {
+	if err := a.runFix(nil, []string{"/nonexistent/path/does/not/exist"}); err == nil {
 		t.Error("expected error for nonexistent path, got nil")
 	}
 }
 
 func TestRunFormatMode_PathError(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
-	flagFormat = true
+	a := newTestApp()
+	a.format = true
 
-	if err := runFix(nil, []string{"/nonexistent/path/does/not/exist"}); err == nil {
+	if err := a.runFix(nil, []string{"/nonexistent/path/does/not/exist"}); err == nil {
 		t.Error("expected error for nonexistent path in format mode, got nil")
 	}
 }
 
 func TestRunLintMode_CheckModeWithErrors(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		`include "BadName" { path = "./x" }`+"\n",
@@ -278,17 +265,22 @@ func TestRunLintMode_CheckModeWithErrors(t *testing.T) {
   }
 }`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
+	a.configSrc = filepath.Join(root, ".hcl-linter")
 
-	// runCheck returns an error when lint errors are found (check mode)
-	if err := runCheck(nil, []string{root}); err == nil {
-		t.Error("expected error from runCheck with lint errors, got nil")
+	// runCheck returns an error when lint errors are found (check mode),
+	// and that error must map to the findings exit code (1), not exec (3).
+	err := a.runCheck(nil, []string{root})
+	if err == nil {
+		t.Fatal("expected error from runCheck with lint errors, got nil")
+	}
+	var fe *findingsError
+	if !errors.As(err, &fe) {
+		t.Errorf("expected findingsError, got %T: %v", err, err)
 	}
 }
 
 func TestRunLintMode_VerboseMultipleFiles(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
 	configDir := filepath.Join(root, ".hcl-linter")
@@ -303,50 +295,53 @@ func TestRunLintMode_VerboseMultipleFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	flagConfigSrc = configDir
-	flagVerbose = true
+	a.configSrc = configDir
+	a.verbose = true
 
-	if err := runLint(nil, []string{root}); err != nil {
+	if err := a.runLint(nil, []string{root}); err != nil {
 		t.Errorf("verbose runLint returned error: %v", err)
 	}
 }
 
 func TestPrintFixResultWithError(t *testing.T) {
-	silenceStdout(t)
+	a := newTestApp()
 
 	result := &engine.FixResult{
 		File:  "/tmp/test.hcl",
 		Error: errors.New("write failed"),
 	}
-	n := printFixResult(result)
+	n := a.printFixResult(result)
 	if n != 0 {
 		t.Errorf("expected 0 changes for error result, got %d", n)
 	}
 }
 
 func TestHandleFixResults_DryRunReadError(t *testing.T) {
-	silenceStdout(t)
+	a := newTestApp()
 
 	// A result pointing to a nonexistent file - ReadFile will fail in dry-run.
 	results := []*engine.FixResult{
 		{File: "/nonexistent/path.hcl", Changes: 1, Content: "modified", Success: true},
 	}
-	_, _ = handleFixResults(results, true)
+	_, _ = a.handleFixResults(results, true)
 }
 
 func TestPrintExplainTable_ColorEnabled(t *testing.T) {
-	silenceStdout(t)
+	a := newTestApp()
 	if err := termcolor.SetMode(termcolor.ModeAlways); err != nil {
 		t.Fatalf("SetMode: %v", err)
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
-	printExplainTable()
+	a.printExplainTable()
 }
 
 func TestWriteInitFilesWriteError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission-based tests are not supported on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("directory permissions do not block writes when running as root")
 	}
 	tmp := t.TempDir()
 	configDir := filepath.Join(tmp, "cfg")
@@ -370,7 +365,7 @@ func TestFindHCLLinterDirs_WithFiles(t *testing.T) {
 	if err := os.MkdirAll(hclDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// Regular file in root (exercises the !info.IsDir() walkFn path)
+	// Regular file in root (exercises the !d.IsDir() walkFn path)
 	if err := os.WriteFile(filepath.Join(tmp, "file.hcl"), []byte(""), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -378,5 +373,31 @@ func TestFindHCLLinterDirs_WithFiles(t *testing.T) {
 	dirs := findHCLLinterDirs(tmp)
 	if len(dirs) != 1 {
 		t.Errorf("expected 1 .hcl-linter dir, got %d: %v", len(dirs), dirs)
+	}
+}
+
+// TestFindHCLFiles_SymlinkLoopTerminates locks in the invariant that the
+// walker does not follow directory symlinks: a self-referencing symlink cycle
+// must neither hang the walk nor duplicate results. If symlink-following is
+// ever added, this test forces the author to handle loops explicitly.
+func TestFindHCLFiles_SymlinkLoopTerminates(t *testing.T) {
+	a := newTestApp()
+	root := t.TempDir()
+
+	sub := filepath.Join(root, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "a.hcl"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// sub/loop -> root creates a cycle if the walker follows symlinks.
+	if err := os.Symlink(root, filepath.Join(sub, "loop")); err != nil {
+		t.Skip("symlinks not supported on this platform")
+	}
+
+	files := a.findHCLFiles(root)
+	if len(files) != 1 {
+		t.Errorf("expected exactly 1 file despite symlink loop, got %d: %v", len(files), files)
 	}
 }

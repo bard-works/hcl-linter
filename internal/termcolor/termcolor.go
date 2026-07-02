@@ -36,8 +36,9 @@ var (
 )
 
 // SetMode configures colour output. Valid modes: "auto", "always", "never".
-// In auto mode colour is enabled only when stdout is a TTY, TERM is not
-// "dumb", and NO_COLOR is unset (per https://no-color.org).
+// In auto mode colour is enabled only when both stdout and stderr are TTYs
+// (helpers colour text destined for either stream), TERM is not "dumb", and
+// NO_COLOR is unset (per https://no-color.org).
 func SetMode(mode string) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -74,7 +75,7 @@ func autoDetect() bool {
 	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
 		return false
 	}
-	return isatty.IsTerminal(os.Stdout.Fd())
+	return isatty.IsTerminal(os.Stdout.Fd()) && isatty.IsTerminal(os.Stderr.Fd())
 }
 
 func wrap(c *color.Color, s string) string {
