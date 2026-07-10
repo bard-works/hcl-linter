@@ -37,14 +37,14 @@ func WriteFileSafe(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("create temp file for %s: %w", path, err)
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op once the rename has succeeded
+	defer func() { _ = os.Remove(tmpName) }() // no-op once the rename has succeeded
 
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("write %s: %w", tmpName, err)
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("sync %s: %w", tmpName, err)
 	}
 	if err := tmp.Close(); err != nil {
