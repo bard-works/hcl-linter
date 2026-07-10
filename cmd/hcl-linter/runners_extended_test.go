@@ -132,7 +132,7 @@ func TestMatchGlob_Combinations(t *testing.T) {
 	}
 }
 
-func TestWarnConfigIssues_EmptyDir(t *testing.T) {
+func TestWarnConfigIssues_EmptyDir(_ *testing.T) {
 	a := newTestApp()
 	// Empty configDir string returns early without stat errors.
 	a.warnConfigIssues("")
@@ -316,7 +316,7 @@ func TestPrintFixResultWithError(t *testing.T) {
 	}
 }
 
-func TestHandleFixResults_DryRunReadError(t *testing.T) {
+func TestHandleFixResults_DryRunReadError(_ *testing.T) {
 	a := newTestApp()
 
 	// A result pointing to a nonexistent file - ReadFile will fail in dry-run.
