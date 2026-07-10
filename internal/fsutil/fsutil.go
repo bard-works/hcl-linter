@@ -27,7 +27,9 @@ func WriteFileSafe(path string, data []byte, perm os.FileMode) error {
 		if probeErr != nil {
 			return fmt.Errorf("open %s for writing: %w", path, probeErr)
 		}
-		probe.Close()
+		if err := probe.Close(); err != nil {
+			return fmt.Errorf("close %s probe handle: %w", path, err)
+		}
 	}
 
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
