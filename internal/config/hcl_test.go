@@ -224,6 +224,121 @@ rules {
 	}
 }
 
+func TestParseHCLWrongTypedValues_DoesNotPanic(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		check   func(t *testing.T, rules *Rules)
+	}{
+		{
+			name: "block_order enabled string",
+			content: `rules {
+  block_order {
+    enabled = "yes"
+  }
+}`,
+			check: func(t *testing.T, rules *Rules) {
+				if rules.BlockOrder == nil || rules.BlockOrder.Enabled {
+					t.Errorf("BlockOrder.Enabled: got %+v, want unset/false", rules.BlockOrder)
+				}
+			},
+		},
+		{
+			name: "block_order order not a list",
+			content: `rules {
+  block_order {
+    order = "not-a-list"
+  }
+}`,
+			check: func(t *testing.T, rules *Rules) {
+				if rules.BlockOrder == nil || rules.BlockOrder.Order != nil {
+					t.Errorf("BlockOrder.Order: got %+v, want nil", rules.BlockOrder)
+				}
+			},
+		},
+		{
+			name: "name_validation pattern not a string",
+			content: `rules {
+  name_validation {
+    pattern = 42
+  }
+}`,
+			check: func(t *testing.T, rules *Rules) {
+				if rules.NameValidation == nil || rules.NameValidation.Pattern != "" {
+					t.Errorf("NameValidation.Pattern: got %+v, want empty", rules.NameValidation)
+				}
+			},
+		},
+		{
+			name: "max_concurrency not a number",
+			content: `rules {
+  max_concurrency = true
+}`,
+			check: func(t *testing.T, rules *Rules) {
+				if rules.MaxConcurrency != 0 {
+					t.Errorf("MaxConcurrency: got %d, want 0", rules.MaxConcurrency)
+				}
+			},
+		},
+		{
+			name: "nested_order not a map",
+			content: `rules {
+  block_order {
+    nested_order = ["not", "a", "map"]
+  }
+}`,
+			check: func(t *testing.T, rules *Rules) {
+				if rules.BlockOrder == nil || len(rules.BlockOrder.NestedOrder) != 0 {
+					t.Errorf("BlockOrder.NestedOrder: got %+v, want empty", rules.BlockOrder)
+				}
+			},
+		},
+		{
+			name: "value_pattern non-string entry skipped",
+			content: `rules {
+  key_value {
+    value_pattern = {
+      a = 1
+      b = "kept"
+    }
+  }
+}`,
+			check: func(t *testing.T, rules *Rules) {
+				if rules.KeyValue == nil {
+					t.Fatal("KeyValue should not be nil")
+				}
+				if _, ok := rules.KeyValue.ValuePattern["a"]; ok {
+					t.Errorf("ValuePattern[a] should have been skipped, got %+v", rules.KeyValue.ValuePattern)
+				}
+				if got := rules.KeyValue.ValuePattern["b"]; got != "kept" {
+					t.Errorf("ValuePattern[b]: got %q, want kept", got)
+				}
+			},
+		},
+		{
+			name: "extends not a string, local rules still parsed",
+			content: `extends = 5
+rules {
+  duplicates {
+    enabled = true
+  }
+}`,
+			check: func(t *testing.T, rules *Rules) {
+				if rules.Duplicates == nil || !rules.Duplicates.Enabled {
+					t.Errorf("Duplicates: got %+v, want enabled", rules.Duplicates)
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rules := loadTestRules(t, tc.content)
+			tc.check(t, rules)
+		})
+	}
+}
+
 func TestExtendsCircular(t *testing.T) {
 	tmpDir := t.TempDir()
 
