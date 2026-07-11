@@ -1,8 +1,8 @@
 package rules
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/hashicorp/hcl/v2"
@@ -72,6 +72,7 @@ func (r HCLFunctionsRule) Check(ctx *Context) []diag.Issue {
 		issues:  &issues,
 		fileDir: fileDir,
 		cfg:     cfg,
+		breaker: ctx.Breaker,
 	})
 
 	return issues
@@ -81,6 +82,7 @@ type functionCallWalker struct {
 	issues  *[]diag.Issue
 	fileDir string
 	cfg     *config.HCLFunctionsConfig
+	breaker *CircuitBreaker
 }
 
 func (w *functionCallWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
@@ -92,7 +94,7 @@ func (w *functionCallWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
 	switch funcCall.Name {
 	case "find_in_parent_folders":
 		if w.cfg.FindInParentFoldersExists {
-			checkFindInParentFolders(w.issues, w.fileDir, funcCall)
+			checkFindInParentFolders(w.issues, w.breaker, w.fileDir, funcCall)
 		}
 	case "get_env":
 		if w.cfg.GetEnvHasDefault {
@@ -105,7 +107,12 @@ func (w *functionCallWalker) Enter(node hclsyntax.Node) hcl.Diagnostics {
 
 func (w *functionCallWalker) Exit(_ hclsyntax.Node) hcl.Diagnostics { return nil }
 
-func checkFindInParentFolders(issues *[]diag.Issue, fileDir string, funcCall *hclsyntax.FunctionCallExpr) {
+func checkFindInParentFolders(
+	issues *[]diag.Issue,
+	breaker *CircuitBreaker,
+	fileDir string,
+	funcCall *hclsyntax.FunctionCallExpr,
+) {
 	defaultFile := "terragrunt.hcl"
 	var filename string
 
@@ -118,7 +125,12 @@ func checkFindInParentFolders(issues *[]diag.Issue, fileDir string, funcCall *hc
 		}
 	}
 
-	if findFileInAncestors(fileDir, filename) == "" {
+	found, err := findFileInAncestors(breaker, fileDir, filename)
+	if errors.Is(err, ErrCircuitOpen) {
+		// A suspended check must not manufacture a false "not found" result.
+		return
+	}
+	if found == "" {
 		msg := fmt.Sprintf("find_in_parent_folders(%q) could not find file in parent directories", filename)
 		if len(funcCall.Args) == 0 {
 			msg = "find_in_parent_folders() could not find terragrunt.hcl in parent directories"
@@ -141,20 +153,4 @@ func checkGetEnvHasDefault(issues *[]diag.Issue, funcCall *hclsyntax.FunctionCal
 			Location: funcCall.Range(),
 		})
 	}
-}
-
-func findFileInAncestors(dir, filename string) string {
-	current := dir
-	for {
-		testPath := filepath.Join(current, filename)
-		if _, err := os.Stat(testPath); err == nil {
-			return testPath
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			break
-		}
-		current = parent
-	}
-	return ""
 }
