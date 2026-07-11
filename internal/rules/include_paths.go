@@ -42,6 +42,10 @@ func (r IncludePathsRule) Check(ctx *Context) []diag.Issue {
 	var issues []diag.Issue
 	fileDir := filepath.Dir(ctx.FilePath)
 
+	if !ctx.Breaker.Allow() {
+		return issues
+	}
+
 	for _, block := range ctx.Blocks {
 		if block.Type != "include" {
 			continue
@@ -56,7 +60,7 @@ func (r IncludePathsRule) Check(ctx *Context) []diag.Issue {
 			continue
 		}
 		resolved := resolveRelativePath(fileDir, pathStr)
-		if _, err := os.Stat(resolved); os.IsNotExist(err) {
+		if _, err := ctx.Breaker.Stat(resolved); os.IsNotExist(err) {
 			issues = append(issues, diag.Issue{
 				Severity: diag.SeverityError,
 				Rule:     "include_path_exists",

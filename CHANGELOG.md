@@ -5,6 +5,69 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Breaking
+
+- Removed the executable-directory config source (`.hcl-linter/` next to the
+  binary). A binary in a shared or group-writable directory let anyone with
+  write access there silently control lint policy for every user of that
+  binary. Discovery order is now `--config-source` → `HCL_LINTER_CONFIG_DIR`
+  → cwd → home. Installations relying on binary-adjacent config should place
+  config in the working directory, `~/.hcl-linter`, or set
+  `HCL_LINTER_CONFIG_DIR`.
+
+### Added
+
+- POSIX-style exit-code contract: `0` no findings, `1` findings (check
+  failures, config issues, dry-run drift), `2` usage/config errors, `3`
+  execution failures (unparseable files, IO errors, interruption). `lint` and
+  `check` now exit `3` when a file cannot be linted instead of silently
+  exiting `0`/`1`.
+- SIGINT/SIGTERM handling: an interrupted run stops dispatching new files,
+  lets in-flight fixes finish, and exits `3`.
+- Lint issues are printed as `path:line:col: [severity] rule: message` (grep-
+  and editor-friendly); locations are no longer hidden behind `--verbose`.
+
+### Changed
+
+- Strict stream separation: results (issues, diffs, summaries, explain output)
+  go to stdout; diagnostics (config banner, warnings, verbose listings) go to
+  stderr. Previously warnings were split across both streams.
+- `--color=auto` enables colour only when both stdout and stderr are TTYs,
+  since both streams carry coloured text.
+- Fixed files are written atomically (temp file + fsync + rename), so an
+  interrupted `fix` can no longer truncate a file. Existing permission bits
+  are preserved and read-only targets are still refused.
+
+### Fixed
+
+- `dependency_outputs` now performs its documented validation:
+  `dependency.<name>.outputs.<attr>` references anywhere in a file are checked
+  against the target module's `output` blocks (and `.mock-outputs.json`), and
+  references to undeclared outputs are reported as errors at the reference's
+  exact location. Previously the reference check was an inert stub.
+- `dependency_outputs` recognises real Terraform output blocks: outputs were
+  previously only collected when the block contained a `type` attribute,
+  which `output` blocks do not have — so validation always reported
+  "outputs not found" against real modules.
+- `lint`/`fix` on `.` (or any explicitly targeted hidden directory) no longer
+  silently processes zero files: the walker's hidden-directory skip no longer
+  applies to the walk root itself.
+- Files are parsed from the bytes already read instead of being read from
+  disk a second time by the HCL parser.
+- Directory walks use `filepath.WalkDir`, avoiding a stat call per entry.
+
+- Wired the filesystem circuit breaker into the dependency-resolving rules
+  (`dependency_paths`, `dependency_outputs`). The breaker is now shared across a
+  run and trips on repeated infrastructure failures (timeouts, permission/IO
+  errors), failing fast instead of hammering a slow or broken mount. A missing
+  path no longer counts as a failure, so the breaker never trips on the absent
+  directories these rules are designed to detect.
+- Reworked the file-operation timeout helper to use a buffered result channel,
+  removing a goroutine leak and a data race that occurred when an operation
+  outlived its timeout.
+
 ## [0.0.1-alpha]
 
 ### Added

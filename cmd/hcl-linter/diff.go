@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"os"
 	"strings"
 
 	"github.com/hexops/gotextdiff"
@@ -13,13 +11,9 @@ import (
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
 
-// diffOut is the sink for printDiff output. Tests replace this to capture
-// output without touching os.Stdout.
-var diffOut io.Writer = os.Stdout
-
-// printDiff writes a colourised unified diff for one file to diffOut.
-// Returns true iff before != after (i.e. something would change).
-func printDiff(relPath, before, after string) bool {
+// printDiff writes a colourised unified diff for one file to the result
+// stream. Returns true iff before != after (i.e. something would change).
+func (a *app) printDiff(relPath, before, after string) bool {
 	if before == after {
 		return false
 	}
@@ -29,7 +23,7 @@ func printDiff(relPath, before, after string) bool {
 		return false
 	}
 	for _, line := range strings.SplitAfter(unified, "\n") {
-		fmt.Fprint(diffOut, colourDiffLine(line))
+		fmt.Fprint(a.out, colourDiffLine(line))
 	}
 	return true
 }

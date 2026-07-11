@@ -6,28 +6,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
 
-// silenceStdout redirects os.Stdout for the duration of the test so CLI
-// runners don't pollute `go test -v` output.
-func silenceStdout(t *testing.T) {
-	t.Helper()
-	orig := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
-	done := make(chan struct{})
-	go func() {
-		_, _ = io.Copy(io.Discard, r)
-		close(done)
-	}()
-	t.Cleanup(func() {
-		_ = w.Close()
-		<-done
-		os.Stdout = orig
-	})
+// newTestApp returns an app whose output streams are discarded. Tests that
+// assert on output swap in buffers for out/errOut. Each test gets its own
+// instance, so there is no global flag state to reset between tests.
+func newTestApp() *app {
+	return &app{out: io.Discard, errOut: io.Discard, color: termcolor.ModeAuto}
 }
 
 // setupProject builds a tmp project with a `.hcl-linter/terragrunt.hcl` config
@@ -49,62 +36,36 @@ func setupProject(t *testing.T, target, ruleConfig string) string {
 	return root
 }
 
-// resetFlags restores global CLI flags after a test.
-func resetFlags(t *testing.T) {
-	t.Helper()
-	flagVerbose = false
-	flagConfigSrc = ""
-	flagFilter = nil
-	flagConcurrency = 0
-	flagFormat = false
-	flagDryRun = false
-	flagInitForce = false
-	flagValidateRecursive = false
-	flagIncludeHidden = false
-	t.Cleanup(func() {
-		flagVerbose = false
-		flagConfigSrc = ""
-		flagFilter = nil
-		flagConcurrency = 0
-		flagFormat = false
-		flagDryRun = false
-		flagIncludeHidden = false
-	})
-}
-
 func TestRunLint_CleanFile(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		`locals { foo = "bar" }`+"\n",
 		`rules {}`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
+	a.configSrc = filepath.Join(root, ".hcl-linter")
 
-	if err := runLint(nil, []string{root}); err != nil {
+	if err := a.runLint(nil, []string{root}); err != nil {
 		t.Errorf("runLint returned error on clean file: %v", err)
 	}
 }
 
 func TestRunCheck_CleanFile(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		`locals { foo = "bar" }`+"\n",
 		`rules {}`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
+	a.configSrc = filepath.Join(root, ".hcl-linter")
 
-	if err := runCheck(nil, []string{root}); err != nil {
+	if err := a.runCheck(nil, []string{root}); err != nil {
 		t.Errorf("runCheck returned error: %v", err)
 	}
 }
 
 func TestRunFix_CleanFile(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		`locals { foo = "bar" }`+"\n",
@@ -115,78 +76,73 @@ func TestRunFix_CleanFile(t *testing.T) {
   }
 }`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
+	a.configSrc = filepath.Join(root, ".hcl-linter")
 
-	if err := runFix(nil, []string{root}); err != nil {
+	if err := a.runFix(nil, []string{root}); err != nil {
 		t.Errorf("runFix returned error: %v", err)
 	}
 }
 
 func TestRunFix_FormatMode(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		"locals {\n\n\n  foo = \"bar\"\n}\n",
 		`rules {}`,
 	)
-	flagFormat = true
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
+	a.format = true
+	a.configSrc = filepath.Join(root, ".hcl-linter")
 
-	if err := runFix(nil, []string{root}); err != nil {
+	if err := a.runFix(nil, []string{root}); err != nil {
 		t.Errorf("runFix --format returned error: %v", err)
 	}
 }
 
 func TestRun_PathError(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
-	flagConfigSrc = root
+	a.configSrc = root
 
 	missing := filepath.Join(root, "does-not-exist")
-	err := runLint(nil, []string{missing})
+	err := a.runLint(nil, []string{missing})
 	if err == nil {
 		t.Error("expected error for missing path")
 	}
 }
 
 func TestRun_SingleFile(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		`locals { foo = "bar" }`+"\n",
 		`rules {}`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
+	a.configSrc = filepath.Join(root, ".hcl-linter")
 
 	target := filepath.Join(root, "terragrunt.hcl")
-	if err := runLint(nil, []string{target}); err != nil {
+	if err := a.runLint(nil, []string{target}); err != nil {
 		t.Errorf("runLint on single file: %v", err)
 	}
 }
 
 func TestRun_WithFilter(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := setupProject(t,
 		`locals { foo = "bar" }`+"\n",
 		`rules {}`,
 	)
-	flagConfigSrc = filepath.Join(root, ".hcl-linter")
-	flagFilter = []string{"terragrunt.hcl"}
+	a.configSrc = filepath.Join(root, ".hcl-linter")
+	a.filter = []string{"terragrunt.hcl"}
 
-	if err := runLint(nil, []string{root}); err != nil {
+	if err := a.runLint(nil, []string{root}); err != nil {
 		t.Errorf("runLint with filter: %v", err)
 	}
 }
 
 func TestRunValidateConfig_OK(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
 	configDir := filepath.Join(root, ".hcl-linter")
@@ -202,14 +158,13 @@ func TestRunValidateConfig_OK(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := runValidateConfig(nil, []string{root}); err != nil {
+	if err := a.runValidateConfig(nil, []string{root}); err != nil {
 		t.Errorf("runValidateConfig: %v", err)
 	}
 }
 
 func TestRunValidateConfig_BadConfig(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
 	configDir := filepath.Join(root, ".hcl-linter")
@@ -224,7 +179,7 @@ func TestRunValidateConfig_BadConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := runValidateConfig(nil, []string{root})
+	err := a.runValidateConfig(nil, []string{root})
 	if err == nil {
 		t.Error("expected error for unknown rule block")
 	}
@@ -234,20 +189,20 @@ func TestRunValidateConfig_BadConfig(t *testing.T) {
 }
 
 func TestRunValidateConfig_NoConfig(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
+	a := newTestApp()
 
 	t.Setenv("HCL_LINTER_CONFIG_DIR", "")
 	t.Chdir(t.TempDir())
 	t.Setenv("HOME", t.TempDir())
 
-	err := runValidateConfig(nil, nil)
+	err := a.runValidateConfig(nil, nil)
 	if err == nil {
 		t.Skip("a .hcl-linter dir exists next to the go test binary; skipping")
 	}
 }
 
 func TestFindHCLFiles_Walks(t *testing.T) {
+	a := newTestApp()
 	root := t.TempDir()
 
 	for _, name := range []string{"a.hcl", "b.tf", "c.json"} {
@@ -263,7 +218,7 @@ func TestFindHCLFiles_Walks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	files := findHCLFiles(root)
+	files := a.findHCLFiles(root)
 	if len(files) != 2 {
 		t.Errorf("expected 2 HCL/TF files, got %d: %v", len(files), files)
 	}
@@ -275,6 +230,7 @@ func TestFindHCLFiles_Walks(t *testing.T) {
 }
 
 func TestFindHCLFiles_IncludeHidden(t *testing.T) {
+	a := newTestApp()
 	root := t.TempDir()
 
 	if err := os.WriteFile(filepath.Join(root, "a.hcl"), []byte("x"), 0o644); err != nil {
@@ -288,15 +244,14 @@ func TestFindHCLFiles_IncludeHidden(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flagIncludeHidden = false
-	files := findHCLFiles(root)
+	a.includeHidden = false
+	files := a.findHCLFiles(root)
 	if len(files) != 1 {
 		t.Errorf("expected 1 file without --include-hidden, got %d: %v", len(files), files)
 	}
 
-	flagIncludeHidden = true
-	t.Cleanup(func() { flagIncludeHidden = false })
-	files = findHCLFiles(root)
+	a.includeHidden = true
+	files = a.findHCLFiles(root)
 	if len(files) != 2 {
 		t.Errorf("expected 2 files with --include-hidden, got %d: %v", len(files), files)
 	}
@@ -312,9 +267,7 @@ func TestFindHCLFiles_IncludeHidden(t *testing.T) {
 }
 
 func TestRunLint_IncludeHidden(t *testing.T) {
-	silenceStdout(t)
-	resetFlags(t)
-
+	a := newTestApp()
 	root := t.TempDir()
 
 	configDir := filepath.Join(root, ".hcl-linter")
@@ -337,16 +290,16 @@ func TestRunLint_IncludeHidden(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flagConfigSrc = configDir
+	a.configSrc = configDir
 
-	flagIncludeHidden = false
-	files := resolveFiles(root)
+	a.includeHidden = false
+	files := a.resolveFiles(root)
 	if len(files) != 0 {
 		t.Errorf("expected 0 files without --include-hidden, got %d", len(files))
 	}
 
-	flagIncludeHidden = true
-	files = resolveFiles(root)
+	a.includeHidden = true
+	files = a.resolveFiles(root)
 	// .hcl-linter/terragrunt.hcl and .hidden/terragrunt.hcl both discovered
 	if len(files) != 2 {
 		t.Errorf("expected 2 files with --include-hidden, got %d: %v", len(files), files)
@@ -363,20 +316,80 @@ func TestRunLint_IncludeHidden(t *testing.T) {
 }
 
 func TestGetLoader(t *testing.T) {
-	resetFlags(t)
+	a := newTestApp()
 
 	root := t.TempDir()
 	configDir := filepath.Join(root, ".hcl-linter")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	flagConfigSrc = configDir
+	a.configSrc = configDir
 
-	loader, result := getLoader()
+	loader, result := a.getLoader()
 	if loader == nil {
 		t.Fatal("expected loader, got nil")
 	}
 	if result == nil {
 		t.Fatal("expected result, got nil")
+	}
+}
+
+// TestFindHCLFiles_DotRoot is a regression test: walking "." must not trip
+// the hidden-directory skip on the root entry itself (whose name is "."),
+// which previously made `lint .` silently process zero files.
+func TestFindHCLFiles_DotRoot(t *testing.T) {
+	a := newTestApp()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.hcl"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+
+	if files := a.findHCLFiles("."); len(files) != 1 {
+		t.Errorf(`findHCLFiles(".") = %v, want exactly 1 file`, files)
+	}
+}
+
+// TestFindHCLFiles_ExplicitHiddenRoot: a hidden directory named as the walk
+// target must be walked even without --include-hidden.
+func TestFindHCLFiles_ExplicitHiddenRoot(t *testing.T) {
+	a := newTestApp()
+	parent := t.TempDir()
+	hidden := filepath.Join(parent, ".proj")
+	if err := os.MkdirAll(hidden, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hidden, "a.hcl"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if files := a.findHCLFiles(hidden); len(files) != 1 {
+		t.Errorf("findHCLFiles(hidden root) = %v, want exactly 1 file", files)
+	}
+}
+
+// TestRunLint_MalformedConfigPathDoesNotCrash reproduces the phase-02 audit
+// finding: a non-string config_path must not panic the worker pool. The
+// type-guarded hclStringValue now skips the attribute silently, so this is a
+// normal clean lint run (exit 0), not a recovered-panic exec failure.
+func TestRunLint_MalformedConfigPathDoesNotCrash(t *testing.T) {
+	a := newTestApp()
+
+	root := setupProject(t,
+		`dependency "x" {
+  config_path = 123
+}
+`,
+		`rules {
+  dependency_paths {
+    enabled = true
+  }
+}`,
+	)
+	a.configSrc = filepath.Join(root, ".hcl-linter")
+
+	err := a.runLint(nil, []string{root})
+	if err != nil {
+		t.Errorf("expected clean run for malformed config_path, got error: %v", err)
 	}
 }

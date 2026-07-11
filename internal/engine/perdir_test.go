@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,7 +71,7 @@ terraform {
 	loader := config.NewLoader(rootConfig)
 	eng := New(loader)
 
-	results := eng.LintFiles([]string{rootFile, svcFile}, 2)
+	results := eng.LintFiles(context.Background(), []string{rootFile, svcFile}, 2)
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}

@@ -8,7 +8,7 @@ import (
 )
 
 func TestExplainUnknownRule(t *testing.T) {
-	err := printExplainDetail("does_not_exist")
+	err := newTestApp().printExplainDetail("does_not_exist")
 	if err == nil {
 		t.Fatal("expected error for unknown rule, got nil")
 	}
@@ -18,7 +18,7 @@ func TestExplainUnknownRule(t *testing.T) {
 }
 
 func TestExplainKnownRule(t *testing.T) {
-	err := printExplainDetail("block_order")
+	err := newTestApp().printExplainDetail("block_order")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -26,23 +26,23 @@ func TestExplainKnownRule(t *testing.T) {
 
 func TestExplainNoArgs(_ *testing.T) {
 	// printExplainTable should not panic and returns no error
-	printExplainTable()
+	newTestApp().printExplainTable()
 }
 
 func TestRunExplainNoArgs(t *testing.T) {
-	if err := runExplain(nil, []string{}); err != nil {
+	if err := newTestApp().runExplain(nil, []string{}); err != nil {
 		t.Fatalf("runExplain with no args: %v", err)
 	}
 }
 
 func TestRunExplainKnownRule(t *testing.T) {
-	if err := runExplain(nil, []string{"block_order"}); err != nil {
+	if err := newTestApp().runExplain(nil, []string{"block_order"}); err != nil {
 		t.Fatalf("runExplain block_order: %v", err)
 	}
 }
 
 func TestRunExplainUnknownRule(t *testing.T) {
-	if err := runExplain(nil, []string{"no_such_rule"}); err == nil {
+	if err := newTestApp().runExplain(nil, []string{"no_such_rule"}); err == nil {
 		t.Fatal("expected error for unknown rule")
 	}
 }

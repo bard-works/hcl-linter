@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
@@ -45,15 +45,52 @@ func (r DependencyOutputsRule) Enabled(cfg *config.Rules) bool {
 
 func (r DependencyOutputsRule) Check(ctx *Context) []diag.Issue {
 	var issues []diag.Issue
-	visited := make(map[string]bool)
 
+	// Pass 1: resolve every dependency block's target module and collect its
+	// declared (or mocked) outputs. Emits the circular-dependency and
+	// "cannot validate" warnings.
+	targets := make(map[string]*depTarget)
+	visited := make(map[string]bool)
 	for _, block := range ctx.Blocks {
-		if block.Type == "dependency" {
-			depCheckOutputRefs(&issues, block, ctx.FilePath, visited)
+		if block.Type != "dependency" || len(block.Labels) == 0 {
+			continue
 		}
+		depResolveTarget(&issues, targets, block, ctx.FilePath, visited, ctx.Breaker)
+	}
+
+	// Pass 2: walk every expression for dependency.<name>.outputs.<attr>
+	// traversals and flag refs to outputs the target doesn't declare.
+	// Unresolvable/incomplete targets were already warned about above.
+	for _, ref := range depCollectOutputRefs(ctx.File) {
+		target, ok := targets[ref.depName]
+		if !ok || !target.resolvable || target.incomplete {
+			continue
+		}
+		if _, ok := target.outputs[ref.attr]; ok {
+			continue
+		}
+		if _, ok := target.mockOuts[ref.attr]; ok {
+			continue
+		}
+		depIssue(&issues, diag.SeverityError, fmt.Sprintf(
+			"dependency %q: reference to undeclared output %q (not found in %s)",
+			ref.depName, ref.attr, target.path), ref.rng)
 	}
 
 	return issues
+}
+
+func depIssue(issues *[]diag.Issue, severity diag.Severity, msg string, rng hcl.Range) {
+	*issues = append(*issues, diag.Issue{Severity: severity, Rule: "dependency_outputs", Message: msg, Location: rng})
+}
+
+// depTarget is one dependency block's resolved module.
+type depTarget struct {
+	path       string // config_path as written
+	outputs    map[string]depOutputDef
+	mockOuts   map[string]depMockOutput
+	resolvable bool // true when at least one output (real or mock) was found
+	incomplete bool // true when some module file couldn't be read/parsed
 }
 
 type depOutputDef struct{}
@@ -67,7 +104,16 @@ type depMockOutput struct {
 	Type  string `json:"type"`
 }
 
-func depCheckOutputRefs(issues *[]diag.Issue, block ast.BlockInfo, currentFilePath string, visited map[string]bool) {
+// depResolveTarget resolves one dependency block into targets, warning about
+// circular references and targets whose outputs cannot be found.
+func depResolveTarget(
+	issues *[]diag.Issue,
+	targets map[string]*depTarget,
+	block ast.BlockInfo,
+	currentFilePath string,
+	visited map[string]bool,
+	cb *CircuitBreaker,
+) {
 	depName := block.Labels[0]
 	depPath := depGetPath(block.Block.Body)
 	if depPath == "" {
@@ -79,28 +125,30 @@ func depCheckOutputRefs(issues *[]diag.Issue, block ast.BlockInfo, currentFilePa
 	absDep, _ := filepath.Abs(depFullPath)
 
 	if visited[absDep] {
-		*issues = append(*issues, diag.Issue{
-			Severity: diag.SeverityWarning,
-			Rule:     "dependency_outputs",
-			Message:  fmt.Sprintf("circular dependency detected for %q", depName),
-			Location: block.Block.TypeRange,
-		})
+		depIssue(issues, diag.SeverityWarning,
+			fmt.Sprintf("circular dependency detected for %q", depName), block.Block.TypeRange)
 		return
 	}
 	visited[absDep] = true
 
-	outputs, mockOuts := depGetOutputs(depFullPath)
+	outputs, mockOuts, incomplete := depGetOutputs(cb, depFullPath)
 	if outputs == nil && len(mockOuts) == 0 {
-		*issues = append(*issues, diag.Issue{
-			Severity: diag.SeverityWarning,
-			Rule:     "dependency_outputs",
-			Message:  fmt.Sprintf("cannot validate dependency %q: outputs not found in %s", depName, depPath),
-			Location: block.Block.TypeRange,
-		})
+		msg := fmt.Sprintf("cannot validate dependency %q: outputs not found in %s", depName, depPath)
+		depIssue(issues, diag.SeverityWarning, msg, block.Block.TypeRange)
+		targets[depName] = &depTarget{path: depPath}
 		return
 	}
-
-	depCheckInputsOutputRefs(issues, block.Block.Body, outputs, mockOuts, depName, depPath)
+	if incomplete {
+		msg := fmt.Sprintf("cannot fully validate dependency %q: some module files could not be parsed", depName)
+		depIssue(issues, diag.SeverityWarning, msg, block.Block.TypeRange)
+	}
+	targets[depName] = &depTarget{
+		path:       depPath,
+		outputs:    outputs,
+		mockOuts:   mockOuts,
+		resolvable: true,
+		incomplete: incomplete,
+	}
 }
 
 func depGetPath(body hcl.Body) string {
@@ -114,93 +162,135 @@ func depGetPath(body hcl.Body) string {
 	return ""
 }
 
-func depGetOutputs(depPath string) (map[string]depOutputDef, map[string]depMockOutput) {
+// depGetOutputs collects the module's declared and mocked outputs. incomplete
+// means some file existed but couldn't be read/parsed, so a missing name is
+// not proof the output doesn't exist.
+func depGetOutputs(cb *CircuitBreaker, depPath string) (map[string]depOutputDef, map[string]depMockOutput, bool) {
 	outputs := make(map[string]depOutputDef)
 	mockOuts := make(map[string]depMockOutput)
-
-	if _, err := safeStat(depPath); os.IsNotExist(err) {
-		return nil, nil
+	incomplete := false
+	if !cb.Allow() { // before the Glob below, too
+		return nil, nil, false
 	}
-
+	if _, err := cb.Stat(depPath); os.IsNotExist(err) {
+		return nil, nil, false
+	}
 	tfFiles, _ := filepath.Glob(filepath.Join(depPath, "*.tf"))
 	for _, tfFile := range tfFiles {
-		content, err := safeReadFile(tfFile)
+		content, err := cb.ReadFile(tfFile)
 		if err != nil {
+			incomplete = true
 			continue
 		}
-		for name, out := range depParseOutputsFromTf(string(content)) {
+		parsed, ok := depParseOutputsFromTf(content, tfFile)
+		if !ok {
+			incomplete = true
+			continue
+		}
+		for name, out := range parsed {
 			outputs[name] = out
 		}
 	}
-
 	mockPath := filepath.Join(depPath, ".mock-outputs.json")
-	if mockContent, err := safeReadFile(mockPath); err == nil {
-		parsed := depParseMockOutputs(mockContent)
+	if mockContent, err := cb.ReadFile(mockPath); err == nil {
+		parsed, ok := depParseMockOutputs(mockContent)
+		if !ok {
+			incomplete = true
+		}
 		for name, out := range parsed {
 			mockOuts[name] = out
 			outputs[name] = depOutputDef{}
 		}
 	}
-
 	if len(outputs) == 0 && len(mockOuts) == 0 {
-		return nil, nil
+		return nil, nil, incomplete
 	}
-
-	return outputs, mockOuts
+	return outputs, mockOuts, incomplete
 }
 
-var depOutputBlockRe = regexp.MustCompile(`^output\s+"(\w+)"`)
-
-func depParseOutputsFromTf(content string) map[string]depOutputDef {
-	outputs := make(map[string]depOutputDef)
-	lines := strings.Split(content, "\n")
-	var inOutput bool
-	var currentName string
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if match := depOutputBlockRe.FindStringSubmatch(trimmed); match != nil {
-			currentName = match[1]
-			inOutput = true
-		} else if inOutput && strings.HasPrefix(trimmed, "type =") {
-			if currentName != "" {
-				outputs[currentName] = depOutputDef{}
-			}
-		} else if trimmed == "}" {
-			inOutput = false
-			currentName = ""
+// depParseOutputsFromTf returns the top-level output block names in one .tf
+// file. ok=false means the caller must treat the module's outputs as incomplete.
+func depParseOutputsFromTf(content []byte, filename string) (map[string]depOutputDef, bool) {
+	file, diags := hclparse.NewParser().ParseHCL(content, filename)
+	if diags.HasErrors() || file == nil {
+		return nil, false
+	}
+	schema := &hcl.BodySchema{Blocks: []hcl.BlockHeaderSchema{{Type: "output", LabelNames: []string{"name"}}}}
+	body, _, _ := file.Body.PartialContent(schema)
+	outputs := make(map[string]depOutputDef, len(body.Blocks))
+	for _, b := range body.Blocks {
+		if len(b.Labels) == 1 {
+			outputs[b.Labels[0]] = depOutputDef{}
 		}
 	}
-
-	return outputs
+	return outputs, true
 }
 
-func depParseMockOutputs(content []byte) map[string]depMockOutput {
+func depParseMockOutputs(content []byte) (map[string]depMockOutput, bool) {
 	var mock depMockOutputs
 	if err := json.Unmarshal(content, &mock); err != nil {
-		return nil
+		return nil, false
 	}
-	return mock.Outputs
+	return mock.Outputs, true
 }
 
-func depCheckInputsOutputRefs(
-	_ *[]diag.Issue,
-	body hcl.Body,
-	outputs map[string]depOutputDef,
-	mockOuts map[string]depMockOutput,
-	depName, depPath string,
-) {
-	attrs := ast.GetBodyAttributes(body)
-	for _, attr := range attrs {
-		val, diags := attr.Expr.Value(nil)
-		if diags.HasErrors() {
-			continue
-		}
-		_ = val
-		_ = outputs
-		_ = mockOuts
-		_ = depName
-		_ = depPath
-		_ = attr
+// depOutputRef is one dependency.<name>.outputs.<attr> reference found in the
+// linted file.
+type depOutputRef struct {
+	depName string
+	attr    string
+	rng     hcl.Range
+}
+
+// depCollectOutputRefs walks every expression in the file (top-level
+// attributes, nested blocks, function arguments) and returns all
+// dependency.<name>.outputs.<attr> traversals.
+func depCollectOutputRefs(file *hcl.File) []depOutputRef {
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return nil
 	}
+	var refs []depOutputRef
+	_ = hclsyntax.VisitAll(body, func(node hclsyntax.Node) hcl.Diagnostics {
+		expr, ok := node.(*hclsyntax.ScopeTraversalExpr)
+		if !ok {
+			return nil
+		}
+		if ref, ok := depParseOutputTraversal(expr.Traversal); ok {
+			refs = append(refs, ref)
+		}
+		return nil
+	})
+	return refs
+}
+
+// depParseOutputTraversal matches traversals of the shape
+// dependency.<name>.outputs.<attr>[...]. Other shapes (index steps in the
+// first four positions, shorter traversals) are skipped rather than guessed
+// at, so unusual expressions never produce false positives.
+func depParseOutputTraversal(tr hcl.Traversal) (depOutputRef, bool) {
+	if len(tr) < 4 {
+		return depOutputRef{}, false
+	}
+	root, ok := tr[0].(hcl.TraverseRoot)
+	if !ok || root.Name != "dependency" {
+		return depOutputRef{}, false
+	}
+	nameStep, ok := tr[1].(hcl.TraverseAttr)
+	if !ok {
+		return depOutputRef{}, false
+	}
+	outputsStep, ok := tr[2].(hcl.TraverseAttr)
+	if !ok || outputsStep.Name != "outputs" {
+		return depOutputRef{}, false
+	}
+	attrStep, ok := tr[3].(hcl.TraverseAttr)
+	if !ok {
+		return depOutputRef{}, false
+	}
+	return depOutputRef{
+		depName: nameStep.Name,
+		attr:    attrStep.Name,
+		rng:     hcl.RangeBetween(root.SourceRange(), attrStep.SourceRange()),
+	}, true
 }

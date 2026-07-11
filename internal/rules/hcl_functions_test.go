@@ -94,6 +94,33 @@ func TestFindInParentFoldersRule(t *testing.T) {
 	}
 }
 
+func TestFindInParentFoldersOpenBreakerSuspendsCheck(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Rules{
+		HCLFunctions: &config.HCLFunctionsConfig{
+			Enabled:                   true,
+			FindInParentFoldersExists: true,
+		},
+	}
+
+	content := `include "root" { path = find_in_parent_folders("missing.hcl") }` + "\n"
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	writeFile(t, file, content)
+	ctx := buildContextFromFile(t, file, cfg)
+
+	cb := rules.NewCircuitBreaker()
+	cb.RecordFailure()
+	cb.RecordFailure()
+	cb.RecordFailure()
+	ctx.Breaker = cb
+
+	for _, issue := range (rules.HCLFunctionsRule{}).Check(ctx) {
+		if issue.Rule == "find_in_parent_folders_exists" {
+			t.Errorf("expected no find_in_parent_folders_exists issue while breaker open, got: %v", issue.Message)
+		}
+	}
+}
+
 func TestGetEnvHasDefaultRule(t *testing.T) {
 	tmpDir := t.TempDir()
 

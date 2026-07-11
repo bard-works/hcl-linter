@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/zclconf/go-cty/cty"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
@@ -82,14 +83,6 @@ var keyCasePatterns = map[string]*regexp.Regexp{
 	"kebab-case": regexp.MustCompile(`^[a-z][a-z0-9-]*$`),
 }
 
-func init() {
-	for name, re := range keyCasePatterns {
-		if re == nil {
-			panic(fmt.Sprintf("invalid regex pattern for key_case %q", name))
-		}
-	}
-}
-
 func kvCheckKeyCase(issues *[]diag.Issue, blocks []ast.BlockInfo, caseType string) {
 	pattern, ok := keyCasePatterns[strings.ToLower(caseType)]
 	if !ok {
@@ -155,12 +148,15 @@ func kvCheckValuePattern(issues *[]diag.Issue, blocks []ast.BlockInfo, patterns 
 			compiled[key] = p
 		}
 	}
+	kvCheckValuePatternCompiled(issues, blocks, compiled)
+}
 
+func kvCheckValuePatternCompiled(issues *[]diag.Issue, blocks []ast.BlockInfo, compiled map[string]*regexp.Regexp) {
 	for _, block := range blocks {
 		kvCheckBlockValuePattern(issues, block.Block.Body, compiled)
 		if len(block.Block.Body.Blocks) > 0 {
 			nestedBlocks := ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks)
-			kvCheckValuePattern(issues, nestedBlocks, patterns)
+			kvCheckValuePatternCompiled(issues, nestedBlocks, compiled)
 		}
 	}
 }
@@ -172,6 +168,9 @@ func kvCheckBlockValuePattern(issues *[]diag.Issue, body hcl.Body, patterns map[
 			val, diags := attr.Expr.Value(nil)
 			if diags.HasErrors() {
 				continue
+			}
+			if val.IsNull() || !val.IsKnown() || val.Type() != cty.String {
+				continue // pattern checks apply to string literals only
 			}
 			strVal := val.AsString()
 			if !pattern.MatchString(strVal) {

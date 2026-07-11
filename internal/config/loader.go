@@ -1,12 +1,16 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 )
+
+// ErrUnsupportedFormat marks a config file whose extension has no parser.
+var ErrUnsupportedFormat = errors.New("unsupported config format")
 
 type Loader struct {
 	configDir string
@@ -19,15 +23,6 @@ func NewLoader(configDir string) *Loader {
 	return &Loader{
 		configDir: configDir,
 	}
-}
-
-func getProjectConfigDir() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	exeDir := filepath.Dir(exe)
-	return filepath.Join(exeDir, ".hcl-linter"), nil
 }
 
 func getHomeConfigDir() (string, error) {
@@ -70,15 +65,6 @@ func findConfigDir(loader *Loader) *ConfigResult {
 	if home, _ := getHomeConfigDir(); home != "" {
 		if _, err := os.Stat(home); err == nil {
 			return &ConfigResult{Source: ConfigSourceHome, SourcePath: home}
-		}
-	}
-	if proj, _ := getProjectConfigDir(); proj != "" {
-		if _, err := os.Stat(proj); err == nil {
-			return &ConfigResult{
-				Source:     ConfigSourceProject,
-				SourcePath: proj,
-				WarningMsg: "No user config found, using project defaults",
-			}
 		}
 	}
 
@@ -208,7 +194,7 @@ func (l *Loader) LoadForFile(filename string) (*Rules, error) {
 		if err == nil {
 			return rules, nil
 		}
-		if !strings.Contains(err.Error(), "unsupported config format") {
+		if !errors.Is(err, ErrUnsupportedFormat) {
 			return nil, err
 		}
 	}
@@ -219,7 +205,7 @@ func (l *Loader) LoadForFile(filename string) (*Rules, error) {
 		if err == nil {
 			return rules, nil
 		}
-		if !strings.Contains(err.Error(), "unsupported config format") {
+		if !errors.Is(err, ErrUnsupportedFormat) {
 			return nil, err
 		}
 	}
@@ -232,7 +218,7 @@ func (l *Loader) loadConfigFile(path string) (*Rules, error) {
 		return loadHCLConfig(path)
 	}
 
-	return nil, fmt.Errorf("unsupported config format: %s", path)
+	return nil, fmt.Errorf("%w: %s", ErrUnsupportedFormat, path)
 }
 
 func (l *Loader) HasConfigForFile(filename string) bool {

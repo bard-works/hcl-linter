@@ -11,7 +11,6 @@ type ConfigSource int
 
 const (
 	ConfigSourceNone ConfigSource = iota
-	ConfigSourceProject
 	ConfigSourceHome
 	ConfigSourceCwd
 	ConfigSourceEnv
@@ -20,8 +19,6 @@ const (
 
 func (s ConfigSource) String() string {
 	switch s {
-	case ConfigSourceProject:
-		return "project"
 	case ConfigSourceHome:
 		return "~/.hcl-linter"
 	case ConfigSourceCwd:

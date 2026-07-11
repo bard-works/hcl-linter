@@ -2,12 +2,15 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/diag"
 	"github.com/bard-works/hcl-linter/internal/rules"
 )
 
@@ -600,7 +603,7 @@ func TestFixFilesConcurrent(t *testing.T) {
 		createHCLFile(t, tmpDir, "file3.hcl", "inputs = {\n\n  e = \"f\"\n\n}\n"),
 	}
 
-	results := eng.FixFiles(files, 2)
+	results := eng.FixFiles(context.Background(), files, 2)
 
 	if len(results) != 3 {
 		t.Errorf("expected 3 results, got %d", len(results))
@@ -629,7 +632,7 @@ func TestFixFilesNoConcurrency(t *testing.T) {
 
 	file := createHCLFile(t, tmpDir, "test.hcl", "inputs = {\n\n  a = \"b\"\n\n}\n")
 
-	results := eng.FixFiles([]string{file}, 0)
+	results := eng.FixFiles(context.Background(), []string{file}, 0)
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}
@@ -1300,7 +1303,7 @@ func TestFormatFixFilesConcurrent(t *testing.T) {
 		createHCLFile(t, tmpDir, "c.hcl", `arr = ["f", "e", "d"]`+"\n"),
 	}
 
-	results := eng.FormatFixFiles(files, 2)
+	results := eng.FormatFixFiles(context.Background(), files, 2)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -1396,7 +1399,7 @@ func TestLintFilesReturnsSortedResults(t *testing.T) {
 	}
 
 	// Pass in non-sorted order; results must come back sorted.
-	results := eng.LintFiles(files, 0)
+	results := eng.LintFiles(context.Background(), files, 0)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -1427,7 +1430,7 @@ func TestFixFilesReturnsSortedResults(t *testing.T) {
 		createHCLFile(t, tmpDir, "b.hcl", "inputs = {\n\n  c = \"3\"\n\n}\n"),
 	}
 
-	results := eng.FixFiles(files, 0)
+	results := eng.FixFiles(context.Background(), files, 0)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -1568,9 +1571,6 @@ func TestParseError(t *testing.T) {
 	if pe.Error() == "" {
 		t.Error("expected non-empty Error() string")
 	}
-	if pe.Unwrap() == nil {
-		t.Error("expected non-nil Unwrap()")
-	}
 }
 
 func TestNewWithRegistry(t *testing.T) {
@@ -1593,13 +1593,13 @@ func TestLintFilesHandlesError(t *testing.T) {
 	srcDir := t.TempDir()
 	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
 
-	results := eng.LintFiles([]string{file}, 1)
+	results := eng.LintFiles(context.Background(), []string{file}, 1)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
 	hasLinterError := false
 	for _, issue := range results[0].Issues {
-		if issue.Rule == "linter_error" {
+		if issue.Rule == diag.RuleLinterError {
 			hasLinterError = true
 		}
 	}
@@ -1617,7 +1617,7 @@ func TestFixFilesHandlesError(t *testing.T) {
 	srcDir := t.TempDir()
 	file := createHCLFile(t, srcDir, "noconfig.hcl", "locals {}")
 
-	results := eng.FixFiles([]string{file}, 1)
+	results := eng.FixFiles(context.Background(), []string{file}, 1)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -1667,6 +1667,9 @@ func TestBuildContextReadFileError(t *testing.T) {
 }
 
 func TestFixFileWriteError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("file permissions do not block writes when running as root")
+	}
 	tmpDir := createTestConfigDir(t)
 	setupTestConfig(t, tmpDir, `rules {
   blank_lines { enabled = true; within_blocks = true }
@@ -1688,6 +1691,9 @@ func TestFixFileWriteError(t *testing.T) {
 }
 
 func TestFormatFixFileWriteError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("file permissions do not block writes when running as root")
+	}
 	tmpDir := createTestConfigDir(t)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)
@@ -1751,37 +1757,161 @@ func TestFormatFixFileSymlinkRejected(t *testing.T) {
 func TestBuildContextTOCTOU(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 	setupTestConfig(t, tmpDir, `rules {
-  	blank_lines { enabled = true; within_blocks = true }
-	}`)
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)
 
-	path := createHCLFile(t, tmpDir, "test.hcl", "locals {\n  x = 1\n}\n")
-
-	// Replace file mid-read by truncating and rewriting.
-	// buildContext reads file in two steps: Stat, ReadFile, Stat.
-	// We can't easily race this in-process, but we can test that
-	// a file replaced between preStat and postStat is detected.
-	// This test is exploratory; the TOCTOU guard uses SameFile which
-	// compares inodes, so replacing the file with a new one should trigger.
-	if err := os.WriteFile(path, []byte("locals {\n  y = 2\n}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	path := createHCLFile(t, tmpDir, "terragrunt.hcl", "locals {\n  x = 1\n}\n")
 
 	ctx, err := eng.buildContext(path)
 	if err != nil {
-		// Expect no error here because the file is replaced but
-		// the read itself succeeded. The TOCTOU check is between
-		// preStat and postStat, which happens within the same function call.
-		// To properly test TOCTOU, we would need to modify the file
-		// between those two Stats, which is hard to do reliably.
-		// For now, just ensure context builds.
-		t.Logf("buildContext error (may be expected): %v", err)
+		t.Fatalf("unexpected error for unmodified file: %v", err)
 	}
-	if ctx != nil {
-		// If we got a context, it means the file was read successfully.
-		// The TOCTOU check passed because the file wasn't modified
-		// between the two Stats (they are consecutive in code).
-		_ = ctx
+	if ctx == nil {
+		t.Fatal("expected non-nil context")
+	}
+}
+
+func TestReadFileStable_UnchangedFilePasses(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "stable.hcl")
+	if err := os.WriteFile(path, []byte("locals {\n  x = 1\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	content, err := readFileStable(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(content) != "locals {\n  x = 1\n}\n" {
+		t.Errorf("unexpected content: %q", content)
+	}
+}
+
+func TestFileChangedBetweenStats(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "test.hcl")
+	if err := os.WriteFile(path, []byte("x = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(t *testing.T)
+		want   bool
+	}{
+		{
+			name:   "no change",
+			mutate: func(t *testing.T) {},
+			want:   false,
+		},
+		{
+			name: "mtime changed, same size (in-place overwrite)",
+			mutate: func(t *testing.T) {
+				t.Helper()
+				newTime := time.Now().Add(time.Hour)
+				if err := os.Chtimes(path, newTime, newTime); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: true,
+		},
+		{
+			name: "size changed",
+			mutate: func(t *testing.T) {
+				t.Helper()
+				if err := os.WriteFile(path, []byte("x = 12345\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pre, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tt.mutate(t)
+			post, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := fileChangedBetweenStats(pre, post); got != tt.want {
+				t.Errorf("fileChangedBetweenStats() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// panickyRule implements rules.Rule and rules.Fixer, panicking in both Check
+// and Fix so LintFiles/FixFiles panic-recovery paths can be exercised without
+// depending on a real rule's internals.
+type panickyRule struct{}
+
+func (panickyRule) Name() string                          { return "panicky" }
+func (panickyRule) Priority() int                         { return rules.PrioritySemantic }
+func (panickyRule) Enabled(cfg *config.Rules) bool        { return true }
+func (panickyRule) Doc() rules.RuleDoc                    { return rules.RuleDoc{} }
+func (panickyRule) Check(ctx *rules.Context) []diag.Issue { panic("boom: check") }
+func (panickyRule) Fix(ctx *rules.Context) (int, error)   { panic("boom: fix") }
+
+func TestLintFilesRecoversFromPanic(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	setupTestConfig(t, tmpDir, "rules {}")
+	loader := newTestLoader(t, tmpDir)
+
+	reg := &rules.Registry{}
+	reg.Register(panickyRule{})
+	eng := New(loader, WithRegistry(reg))
+
+	srcDir := t.TempDir()
+	files := []string{
+		createHCLFile(t, srcDir, "a.hcl", "locals {}"),
+		createHCLFile(t, srcDir, "b.hcl", "locals {}"),
+		createHCLFile(t, srcDir, "c.hcl", "locals {}"),
+	}
+
+	results := eng.LintFiles(context.Background(), files, 2)
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results despite panics, got %d", len(results))
+	}
+	for _, result := range results {
+		hasLinterError := false
+		for _, issue := range result.Issues {
+			if issue.Rule == diag.RuleLinterError {
+				hasLinterError = true
+			}
+		}
+		if !hasLinterError {
+			t.Errorf("expected linter_error issue for %s after recovered panic", result.File)
+		}
+	}
+}
+
+func TestFixFilesRecoversFromPanic(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	setupTestConfig(t, tmpDir, "rules {}")
+	loader := newTestLoader(t, tmpDir)
+
+	reg := &rules.Registry{}
+	reg.Register(panickyRule{})
+	eng := New(loader, WithRegistry(reg))
+
+	srcDir := t.TempDir()
+	file := createHCLFile(t, srcDir, "a.hcl", "locals {}")
+
+	results := eng.FixFiles(context.Background(), []string{file}, 1)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Error == nil {
+		t.Error("expected non-nil Error after recovered panic")
 	}
 }

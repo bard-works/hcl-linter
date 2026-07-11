@@ -165,6 +165,19 @@ func TestValidateNameValidationWithPatternOk(t *testing.T) {
 	assertIssues(t, issues, 0)
 }
 
+func TestValidateNameValidationBadPattern(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, "default.hcl", `rules {
+  name_validation {
+    enabled = true
+    pattern = "[unterminated"
+  }
+}`)
+
+	issues := ValidateConfigFile(path)
+	assertIssues(t, issues, 1, "name_validation", "does not compile")
+}
+
 // --- required_blocks required fields ---
 
 func TestValidateRequiredBlocksNoEntries(t *testing.T) {
@@ -231,6 +244,21 @@ func TestValidateKeyValueWithDisallowedOk(t *testing.T) {
 
 	issues := ValidateConfigFile(path)
 	assertIssues(t, issues, 0)
+}
+
+func TestValidateKeyValueBadValuePattern(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, "default.hcl", `rules {
+  key_value {
+    enabled = true
+    value_pattern = {
+      env = "[unterminated"
+    }
+  }
+}`)
+
+	issues := ValidateConfigFile(path)
+	assertIssues(t, issues, 1, "value_pattern", "env", "does not compile")
 }
 
 // --- ValidateDir ---

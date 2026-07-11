@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,8 +12,6 @@ import (
 	"github.com/bard-works/hcl-linter/internal/fsutil"
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
-
-var flagInitForce bool
 
 const defaultInitTemplate = `rules {
   block_order {
@@ -40,10 +37,7 @@ rules {
 }
 `
 
-// initOut is where init writes its output. Swappable in tests.
-var initOut io.Writer = os.Stdout
-
-func runInit(_ *cobra.Command, args []string) error {
+func (a *app) runInit(_ *cobra.Command, args []string) error {
 	root := "."
 	if len(args) == 1 {
 		root = args[0]
@@ -57,26 +51,26 @@ func runInit(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("init target must be a directory: %s", root)
 	}
 
-	files := findHCLFiles(root)
+	files := a.findHCLFiles(root)
 	names := uniqueBasenames(files)
 
 	configDir := filepath.Join(root, ".hcl-linter")
 	proposed := proposedInitLayout(configDir, names)
 
-	printInitSummary(root, files, names, proposed)
+	a.printInitSummary(root, files, names, proposed)
 
-	if flagDryRun {
-		printInitContents(proposed)
+	if a.dryRun {
+		a.printInitContents(proposed)
 		return nil
 	}
 
-	if !flagInitForce {
+	if !a.initForce {
 		entries, _ := os.ReadDir(configDir)
 		if len(entries) > 0 {
-			fmt.Fprintf(initOut, "\n%s %s already contains:\n",
+			fmt.Fprintf(a.out, "\n%s %s already contains:\n",
 				termcolor.Warning("Refusing to overwrite:"), configDir)
 			for _, e := range entries {
-				fmt.Fprintf(initOut, "  %s\n", e.Name())
+				fmt.Fprintf(a.out, "  %s\n", e.Name())
 			}
 			return errors.New(".hcl-linter/ is non-empty; use --force to overwrite")
 		}
@@ -86,11 +80,11 @@ func runInit(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(initOut, "\n%s Wrote %d config file(s) to %s\n",
+	fmt.Fprintf(a.out, "\n%s Wrote %d config file(s) to %s\n",
 		termcolor.Success("OK:"), len(proposed), configDir)
-	fmt.Fprintln(initOut, "Next steps:")
-	fmt.Fprintln(initOut, "  hcl-linter validate-config")
-	fmt.Fprintln(initOut, "  hcl-linter fix ./ --dry-run")
+	fmt.Fprintln(a.out, "Next steps:")
+	fmt.Fprintln(a.out, "  hcl-linter validate-config")
+	fmt.Fprintln(a.out, "  hcl-linter fix ./ --dry-run")
 	return nil
 }
 
@@ -125,33 +119,25 @@ func proposedInitLayout(configDir string, names []string) map[string]string {
 	return layout
 }
 
-func printInitSummary(root string, files, names []string, proposed map[string]string) {
-	fmt.Fprintf(initOut, "Scanning %s\n", root)
-	fmt.Fprintf(initOut, "Found %d HCL/TF file(s)\n", len(files))
+func (a *app) printInitSummary(root string, files, names []string, proposed map[string]string) {
+	fmt.Fprintf(a.out, "Scanning %s\n", root)
+	fmt.Fprintf(a.out, "Found %d HCL/TF file(s)\n", len(files))
 	if len(names) > 0 {
-		fmt.Fprintln(initOut, "Unique filenames:")
+		fmt.Fprintln(a.out, "Unique filenames:")
 		for _, n := range names {
-			fmt.Fprintf(initOut, "  %s\n", n)
+			fmt.Fprintf(a.out, "  %s\n", n)
 		}
 	}
-	fmt.Fprintln(initOut, "\nProposed layout:")
+	fmt.Fprintln(a.out, "\nProposed layout:")
 	for _, p := range sortedKeys(proposed) {
-		rel, err := filepath.Rel(".", p)
-		if err != nil {
-			rel = p
-		}
-		fmt.Fprintf(initOut, "  %s\n", rel)
+		fmt.Fprintf(a.out, "  %s\n", relPath(p))
 	}
 }
 
-func printInitContents(proposed map[string]string) {
+func (a *app) printInitContents(proposed map[string]string) {
 	for _, p := range sortedKeys(proposed) {
-		rel, err := filepath.Rel(".", p)
-		if err != nil {
-			rel = p
-		}
-		fmt.Fprintf(initOut, "\n--- %s ---\n", rel)
-		fmt.Fprint(initOut, proposed[p])
+		fmt.Fprintf(a.out, "\n--- %s ---\n", relPath(p))
+		fmt.Fprint(a.out, proposed[p])
 	}
 }
 
