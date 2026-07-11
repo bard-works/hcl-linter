@@ -2,7 +2,6 @@ package rules
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
@@ -51,89 +50,6 @@ func (r BlockOrderRule) Check(ctx *Context) []diag.Issue {
 	var issues []diag.Issue
 	checkBlockOrderIssues(&issues, ctx.Blocks, ctx.Config.BlockOrder)
 	return issues
-}
-
-func (r BlockOrderRule) Fix(ctx *Context) (int, error) {
-	newContent := FixBlockOrder(string(ctx.Content), ctx.Blocks, ctx.Config.BlockOrder)
-	if newContent == string(ctx.Content) {
-		return 0, nil
-	}
-	ctx.Content = []byte(newContent)
-	return 1, nil
-}
-
-// FixBlockOrder reorders blocks according to cfg.
-func FixBlockOrder(content string, blocks []ast.BlockInfo, cfg *config.BlockOrderConfig) string {
-	lines := strings.Split(content, "\n")
-
-	orderMap := make(map[string]int)
-	for i, name := range cfg.Order {
-		orderMap[name] = i
-	}
-
-	type blockWithContent struct {
-		info    ast.BlockInfo
-		content []string
-	}
-
-	blockContents := make([]blockWithContent, len(blocks))
-	for i, block := range blocks {
-		var blockLines []string
-		for l := block.StartLine; l <= block.EndLine && l < len(lines); l++ {
-			blockLines = append(blockLines, lines[l])
-		}
-		blockContents[i] = blockWithContent{block, blockLines}
-	}
-
-	sort.SliceStable(blockContents, func(i, j int) bool {
-		posI := orderMap[blockContents[i].info.Type]
-		posJ := orderMap[blockContents[j].info.Type]
-		if posI == 0 && blockContents[i].info.Type != cfg.Order[0] {
-			posI = len(cfg.Order)
-		}
-		if posJ == 0 && blockContents[j].info.Type != cfg.Order[0] {
-			posJ = len(cfg.Order)
-		}
-		return posI < posJ
-	})
-
-	usedLines := make(map[int]bool)
-	for _, block := range blocks {
-		for l := block.StartLine; l <= block.EndLine; l++ {
-			usedLines[l] = true
-		}
-	}
-
-	var nonBlockLines []string
-	for i, line := range lines {
-		if !usedLines[i] {
-			nonBlockLines = append(nonBlockLines, line)
-		}
-	}
-	nonBlockLines = trimTrailingEmptyLines(nonBlockLines)
-
-	var resultLines []string
-	for i, bc := range blockContents {
-		resultLines = append(resultLines, bc.content...)
-		if i < len(blockContents)-1 {
-			resultLines = append(resultLines, "")
-		}
-	}
-
-	if len(nonBlockLines) > 0 {
-		if len(resultLines) > 0 && strings.TrimSpace(resultLines[len(resultLines)-1]) != "" {
-			resultLines = append(resultLines, "")
-		}
-		resultLines = append(resultLines, nonBlockLines...)
-	}
-
-	resultLines = normalizeBlankLines(resultLines)
-
-	for len(resultLines) > 0 && strings.TrimSpace(resultLines[len(resultLines)-1]) == "" {
-		resultLines = resultLines[:len(resultLines)-1]
-	}
-
-	return strings.Join(resultLines, "\n") + "\n"
 }
 
 func checkBlockOrderIssues(issues *[]diag.Issue, blocks []ast.BlockInfo, cfg *config.BlockOrderConfig) {
