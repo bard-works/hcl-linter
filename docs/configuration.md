@@ -37,7 +37,6 @@ Configs are loaded from the first source that exists, in this order:
 | 2        | Env `HCL_LINTER_CONFIG_DIR` | Environment variable             |
 | 3        | `.hcl-linter/` in cwd       | User config in current directory |
 | 4        | `.hcl-linter/` in home      | User config in home directory    |
-| 5        | Project's `.hcl-linter/`    | Built-in defaults (fallback)     |
 
 **Full override:** user config completely replaces project configs - no
 merging across source locations. Within a single config directory, use

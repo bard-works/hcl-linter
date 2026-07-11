@@ -25,15 +25,6 @@ func NewLoader(configDir string) *Loader {
 	}
 }
 
-func getProjectConfigDir() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	exeDir := filepath.Dir(exe)
-	return filepath.Join(exeDir, ".hcl-linter"), nil
-}
-
 func getHomeConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -74,15 +65,6 @@ func findConfigDir(loader *Loader) *ConfigResult {
 	if home, _ := getHomeConfigDir(); home != "" {
 		if _, err := os.Stat(home); err == nil {
 			return &ConfigResult{Source: ConfigSourceHome, SourcePath: home}
-		}
-	}
-	if proj, _ := getProjectConfigDir(); proj != "" {
-		if _, err := os.Stat(proj); err == nil {
-			return &ConfigResult{
-				Source:     ConfigSourceProject,
-				SourcePath: proj,
-				WarningMsg: "No user config found, using project defaults",
-			}
 		}
 	}
 
