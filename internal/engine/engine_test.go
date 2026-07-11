@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/diag"
@@ -1756,38 +1757,96 @@ func TestFormatFixFileSymlinkRejected(t *testing.T) {
 func TestBuildContextTOCTOU(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 	setupTestConfig(t, tmpDir, `rules {
-  	blank_lines { enabled = true; within_blocks = true }
-	}`)
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}`)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)
 
-	path := createHCLFile(t, tmpDir, "test.hcl", "locals {\n  x = 1\n}\n")
-
-	// Replace file mid-read by truncating and rewriting.
-	// buildContext reads file in two steps: Stat, ReadFile, Stat.
-	// We can't easily race this in-process, but we can test that
-	// a file replaced between preStat and postStat is detected.
-	// This test is exploratory; the TOCTOU guard uses SameFile which
-	// compares inodes, so replacing the file with a new one should trigger.
-	if err := os.WriteFile(path, []byte("locals {\n  y = 2\n}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	path := createHCLFile(t, tmpDir, "terragrunt.hcl", "locals {\n  x = 1\n}\n")
 
 	ctx, err := eng.buildContext(path)
 	if err != nil {
-		// Expect no error here because the file is replaced but
-		// the read itself succeeded. The TOCTOU check is between
-		// preStat and postStat, which happens within the same function call.
-		// To properly test TOCTOU, we would need to modify the file
-		// between those two Stats, which is hard to do reliably.
-		// For now, just ensure context builds.
-		t.Logf("buildContext error (may be expected): %v", err)
+		t.Fatalf("unexpected error for unmodified file: %v", err)
 	}
-	if ctx != nil {
-		// If we got a context, it means the file was read successfully.
-		// The TOCTOU check passed because the file wasn't modified
-		// between the two Stats (they are consecutive in code).
-		_ = ctx
+	if ctx == nil {
+		t.Fatal("expected non-nil context")
+	}
+}
+
+func TestReadFileStable_UnchangedFilePasses(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "stable.hcl")
+	if err := os.WriteFile(path, []byte("locals {\n  x = 1\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	content, err := readFileStable(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(content) != "locals {\n  x = 1\n}\n" {
+		t.Errorf("unexpected content: %q", content)
+	}
+}
+
+func TestFileChangedBetweenStats(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "test.hcl")
+	if err := os.WriteFile(path, []byte("x = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(t *testing.T)
+		want   bool
+	}{
+		{
+			name:   "no change",
+			mutate: func(t *testing.T) {},
+			want:   false,
+		},
+		{
+			name: "mtime changed, same size (in-place overwrite)",
+			mutate: func(t *testing.T) {
+				t.Helper()
+				newTime := time.Now().Add(time.Hour)
+				if err := os.Chtimes(path, newTime, newTime); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: true,
+		},
+		{
+			name: "size changed",
+			mutate: func(t *testing.T) {
+				t.Helper()
+				if err := os.WriteFile(path, []byte("x = 12345\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pre, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tt.mutate(t)
+			post, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := fileChangedBetweenStats(pre, post); got != tt.want {
+				t.Errorf("fileChangedBetweenStats() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

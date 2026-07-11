@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -97,37 +98,66 @@ func detectUnknownBlocks(path string) []ValidationIssue {
 
 func detectMisconfiguredRules(path string, rules *Rules) []ValidationIssue {
 	var issues []ValidationIssue
+	issues = append(issues, detectBlockOrderIssues(path, rules)...)
+	issues = append(issues, detectNameValidationIssues(path, rules)...)
+	issues = append(issues, detectRequiredBlocksIssues(path, rules)...)
+	issues = append(issues, detectKeyValueIssues(path, rules)...)
+	return issues
+}
 
+func detectBlockOrderIssues(path string, rules *Rules) []ValidationIssue {
 	if rules.BlockOrder != nil && rules.BlockOrder.Enabled && len(rules.BlockOrder.Order) == 0 {
-		issues = append(issues, ValidationIssue{
-			File:    path,
-			Message: "block_order: enabled but 'order' list is empty",
-		})
+		return []ValidationIssue{{File: path, Message: "block_order: enabled but 'order' list is empty"}}
 	}
+	return nil
+}
 
-	if rules.NameValidation != nil && rules.NameValidation.Enabled && rules.NameValidation.Pattern == "" {
-		issues = append(issues, ValidationIssue{
-			File:    path,
-			Message: "name_validation: enabled but 'pattern' is not set",
-		})
+func detectNameValidationIssues(path string, rules *Rules) []ValidationIssue {
+	if rules.NameValidation == nil || !rules.NameValidation.Enabled {
+		return nil
 	}
+	if rules.NameValidation.Pattern == "" {
+		return []ValidationIssue{{File: path, Message: "name_validation: enabled but 'pattern' is not set"}}
+	}
+	if _, err := regexp.Compile(rules.NameValidation.Pattern); err != nil {
+		return []ValidationIssue{{
+			File:    path,
+			Message: fmt.Sprintf("name_validation: pattern %q does not compile: %v", rules.NameValidation.Pattern, err),
+		}}
+	}
+	return nil
+}
 
+func detectRequiredBlocksIssues(path string, rules *Rules) []ValidationIssue {
 	if rules.RequiredBlocks != nil && len(rules.RequiredBlocks.Required) == 0 {
-		issues = append(issues, ValidationIssue{
+		return []ValidationIssue{{
 			File:    path,
 			Message: "required_blocks: configured but contains no 'required' entries",
-		})
+		}}
+	}
+	return nil
+}
+
+func detectKeyValueIssues(path string, rules *Rules) []ValidationIssue {
+	if rules.KeyValue == nil || !rules.KeyValue.Enabled {
+		return nil
 	}
 
-	if rules.KeyValue != nil && rules.KeyValue.Enabled {
-		if rules.KeyValue.KeyCase == "" && len(rules.KeyValue.ValuePattern) == 0 &&
-			len(rules.KeyValue.Disallowed) == 0 {
+	var issues []ValidationIssue
+	if rules.KeyValue.KeyCase == "" && len(rules.KeyValue.ValuePattern) == 0 &&
+		len(rules.KeyValue.Disallowed) == 0 {
+		issues = append(issues, ValidationIssue{
+			File:    path,
+			Message: "key_value: enabled but none of 'key_case', 'value_pattern', or 'disallowed' are set",
+		})
+	}
+	for key, pat := range rules.KeyValue.ValuePattern {
+		if _, err := regexp.Compile(pat); err != nil {
 			issues = append(issues, ValidationIssue{
 				File:    path,
-				Message: "key_value: enabled but none of 'key_case', 'value_pattern', or 'disallowed' are set",
+				Message: fmt.Sprintf("key_value.value_pattern[%q]: pattern %q does not compile: %v", key, pat, err),
 			})
 		}
 	}
-
 	return issues
 }
