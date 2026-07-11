@@ -24,6 +24,10 @@ const (
 	SeverityNotice  Severity = "notice"
 )
 
+// RuleLinterError marks issues synthesized from an internal recovery path
+// (e.g. a recovered panic) rather than a real rule check.
+const RuleLinterError = "linter_error"
+
 type Result struct {
 	File   string
 	Issues []Issue

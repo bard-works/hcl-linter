@@ -356,7 +356,7 @@ func (a *app) printLintResults(allResults []*diag.Result) (hasErrors bool, execF
 			if issue.Severity == diag.SeverityError {
 				hasErrors = true
 			}
-			if issue.Rule == "linter_error" {
+			if issue.Rule == diag.RuleLinterError {
 				execFailures++
 			}
 			a.printIssue(result.File, issue)

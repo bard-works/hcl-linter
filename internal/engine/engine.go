@@ -3,7 +3,6 @@ package engine
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -56,10 +55,6 @@ type ParseError struct {
 
 func (e *ParseError) Error() string {
 	return fmt.Sprintf("parse error in %s: %s", e.File, e.Cause)
-}
-
-func (e *ParseError) Unwrap() error {
-	return errors.New(e.Cause)
 }
 
 func New(loader *config.Loader, opts ...EngineOption) *Engine {
@@ -177,7 +172,7 @@ func (e *Engine) LintFiles(ctx context.Context, paths []string, maxConcurrency i
 			if r := recover(); r != nil {
 				result = &diag.Result{File: p, Issues: []diag.Issue{{
 					Severity: diag.SeverityError,
-					Rule:     "linter_error",
+					Rule:     diag.RuleLinterError,
 					Message:  fmt.Sprintf("internal error (recovered panic): %v", r),
 				}}}
 			}
@@ -189,7 +184,7 @@ func (e *Engine) LintFiles(ctx context.Context, paths []string, maxConcurrency i
 				File: p,
 				Issues: []diag.Issue{{
 					Severity: diag.SeverityError,
-					Rule:     "linter_error",
+					Rule:     diag.RuleLinterError,
 					Message:  err.Error(),
 				}},
 			}
