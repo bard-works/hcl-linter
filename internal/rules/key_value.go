@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/zclconf/go-cty/cty"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
@@ -172,6 +173,9 @@ func kvCheckBlockValuePattern(issues *[]diag.Issue, body hcl.Body, patterns map[
 			val, diags := attr.Expr.Value(nil)
 			if diags.HasErrors() {
 				continue
+			}
+			if val.IsNull() || !val.IsKnown() || val.Type() != cty.String {
+				continue // pattern checks apply to string literals only
 			}
 			strVal := val.AsString()
 			if !pattern.MatchString(strVal) {

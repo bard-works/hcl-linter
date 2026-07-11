@@ -172,8 +172,18 @@ func runConcurrent[R any](ctx context.Context, paths []string, maxConcurrency in
 }
 
 func (e *Engine) LintFiles(ctx context.Context, paths []string, maxConcurrency int) []*diag.Result {
-	allResults := runConcurrent(ctx, paths, maxConcurrency, func(p string) *diag.Result {
-		result, err := e.LintFile(p)
+	allResults := runConcurrent(ctx, paths, maxConcurrency, func(p string) (result *diag.Result) {
+		defer func() {
+			if r := recover(); r != nil {
+				result = &diag.Result{File: p, Issues: []diag.Issue{{
+					Severity: diag.SeverityError,
+					Rule:     "linter_error",
+					Message:  fmt.Sprintf("internal error (recovered panic): %v", r),
+				}}}
+			}
+		}()
+		var err error
+		result, err = e.LintFile(p)
 		if err != nil {
 			result = &diag.Result{
 				File: p,
@@ -266,8 +276,14 @@ func (e *Engine) fixConcurrent(
 	maxConcurrency int,
 	fixFn func(string) (*FixResult, error),
 ) []*FixResult {
-	allResults := runConcurrent(ctx, paths, maxConcurrency, func(p string) *FixResult {
-		result, err := fixFn(p)
+	allResults := runConcurrent(ctx, paths, maxConcurrency, func(p string) (result *FixResult) {
+		defer func() {
+			if r := recover(); r != nil {
+				result = &FixResult{File: p, Error: fmt.Errorf("internal error (recovered panic): %v", r)}
+			}
+		}()
+		var err error
+		result, err = fixFn(p)
 		if err != nil {
 			result = &FixResult{File: p, Error: err}
 		}

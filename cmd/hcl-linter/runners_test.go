@@ -367,3 +367,29 @@ func TestFindHCLFiles_ExplicitHiddenRoot(t *testing.T) {
 		t.Errorf("findHCLFiles(hidden root) = %v, want exactly 1 file", files)
 	}
 }
+
+// TestRunLint_MalformedConfigPathDoesNotCrash reproduces the phase-02 audit
+// finding: a non-string config_path must not panic the worker pool. The
+// type-guarded hclStringValue now skips the attribute silently, so this is a
+// normal clean lint run (exit 0), not a recovered-panic exec failure.
+func TestRunLint_MalformedConfigPathDoesNotCrash(t *testing.T) {
+	a := newTestApp()
+
+	root := setupProject(t,
+		`dependency "x" {
+  config_path = 123
+}
+`,
+		`rules {
+  dependency_paths {
+    enabled = true
+  }
+}`,
+	)
+	a.configSrc = filepath.Join(root, ".hcl-linter")
+
+	err := a.runLint(nil, []string{root})
+	if err != nil {
+		t.Errorf("expected clean run for malformed config_path, got error: %v", err)
+	}
+}
