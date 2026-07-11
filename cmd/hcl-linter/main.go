@@ -58,6 +58,10 @@ func execErrorf(format string, args ...any) error {
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go func() {
+		<-ctx.Done()
+		stop() // second signal now uses default handling: immediate termination
+	}()
 	os.Exit(run(ctx))
 }
 
@@ -157,7 +161,7 @@ func newRootCmd() *cobra.Command {
 
 	lintCmd := &cobra.Command{
 		Use:   "lint [path]",
-		Short: "Lint HCL files",
+		Short: "Lint HCL files and report issues (exit 0 even when issues are found; use 'check' to gate CI)",
 		Args:  cobra.ExactArgs(1),
 		RunE:  a.runLint,
 	}

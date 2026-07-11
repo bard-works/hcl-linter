@@ -69,25 +69,39 @@ func New(loader *config.Loader, opts ...EngineOption) *Engine {
 	return e
 }
 
+// readFileStable errors if a Stat taken before and after the read shows the
+// file was replaced or modified in between.
+func readFileStable(path string) ([]byte, error) {
+	preInfo, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	postInfo, err := os.Stat(path)
+	if err == nil && fileChangedBetweenStats(preInfo, postInfo) {
+		return nil, fmt.Errorf("file modified during read: %s", path)
+	}
+	return content, nil
+}
+
+// fileChangedBetweenStats catches inode replacement (SameFile) and in-place
+// writes that reuse the same inode (mtime/size).
+func fileChangedBetweenStats(pre, post os.FileInfo) bool {
+	return !os.SameFile(pre, post) || pre.ModTime() != post.ModTime() || pre.Size() != post.Size()
+}
+
 func (e *Engine) buildContext(path string) (*rules.Context, error) {
 	cfg, err := e.configLoader.LoadForFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	preInfo, err := os.Stat(path)
+	content, err := readFileStable(path)
 	if err != nil {
 		return nil, err
-	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	postInfo, err := os.Stat(path)
-	if err == nil && !os.SameFile(preInfo, postInfo) {
-		return nil, fmt.Errorf("file modified during read: %s", path)
 	}
 
 	// Parse the bytes already read; ParseFile would re-read from disk.
@@ -309,19 +323,9 @@ func defaultFormatConfig() *config.Rules {
 }
 
 func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
-	preInfo, err := os.Stat(path)
+	content, err := readFileStable(path)
 	if err != nil {
 		return nil, err
-	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	postInfo, err := os.Stat(path)
-	if err == nil && !os.SameFile(preInfo, postInfo) {
-		return nil, fmt.Errorf("file modified during read: %s", path)
 	}
 
 	parser := ast.NewParser()
