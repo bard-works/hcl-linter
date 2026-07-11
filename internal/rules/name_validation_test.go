@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/rules"
 )
@@ -257,6 +260,179 @@ locals {
 	}
 	if strings.Contains(got, `dependency["my-vpc"]`) {
 		t.Errorf("index notation reference not updated, got:\n%s", got)
+	}
+}
+
+func TestNameValidationFixStringValueImmunity(t *testing.T) {
+	cfg := &config.Rules{
+		NameValidation: &config.NameValidationConfig{
+			Enabled: true,
+			Blocks:  []string{"dependency"},
+		},
+	}
+	content := `dependency "my-vpc" {
+  config_path = "../my-vpc"
+}
+
+inputs = {
+  note = "my-vpc"
+}
+`
+	ctx := buildContext(t, content, cfg)
+	rule := rules.NameValidationRule{}
+	n, err := rule.Fix(ctx)
+	if err != nil {
+		t.Fatalf("Fix error: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected Fix to report a change")
+	}
+	got := string(ctx.Content)
+	if !strings.Contains(got, `dependency "my_vpc"`) {
+		t.Errorf("expected label renamed, got:\n%s", got)
+	}
+	if !strings.Contains(got, `config_path = "../my-vpc"`) {
+		t.Errorf("expected string value '../my-vpc' untouched, got:\n%s", got)
+	}
+	if !strings.Contains(got, `note = "my-vpc"`) {
+		t.Errorf("expected string value 'my-vpc' untouched, got:\n%s", got)
+	}
+}
+
+func TestNameValidationFixCommentImmunity(t *testing.T) {
+	cfg := &config.Rules{
+		NameValidation: &config.NameValidationConfig{
+			Enabled: true,
+			Blocks:  []string{"dependency"},
+		},
+	}
+	content := `# see dependency.my-vpc for details
+dependency "my-vpc" {
+  config_path = "../vpc"
+}
+`
+	ctx := buildContext(t, content, cfg)
+	rule := rules.NameValidationRule{}
+	n, err := rule.Fix(ctx)
+	if err != nil {
+		t.Fatalf("Fix error: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected Fix to report a change")
+	}
+	got := string(ctx.Content)
+	if !strings.Contains(got, "# see dependency.my-vpc for details") {
+		t.Errorf("expected comment untouched, got:\n%s", got)
+	}
+}
+
+func TestNameValidationFixPrefixImmunity(t *testing.T) {
+	cfg := &config.Rules{
+		NameValidation: &config.NameValidationConfig{
+			Enabled: true,
+			Blocks:  []string{"dependency"},
+		},
+	}
+	content := `dependency "net-x" {
+  config_path = "../net-x"
+}
+
+dependency "network" {
+  config_path = "../network"
+}
+
+locals {
+  a = dependency.net-x.outputs.id
+  b = dependency.network.outputs.id
+  c = dependency.net-x-standby.outputs.id
+}
+`
+	ctx := buildContext(t, content, cfg)
+	rule := rules.NameValidationRule{}
+	n, err := rule.Fix(ctx)
+	if err != nil {
+		t.Fatalf("Fix error: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected Fix to report a change")
+	}
+	got := string(ctx.Content)
+	if !strings.Contains(got, `dependency "net_x"`) {
+		t.Errorf("expected 'net-x' label renamed, got:\n%s", got)
+	}
+	if !strings.Contains(got, "dependency.net_x.outputs.id") {
+		t.Errorf("expected 'net-x' reference renamed, got:\n%s", got)
+	}
+	if !strings.Contains(got, `dependency "network"`) {
+		t.Errorf("expected 'network' label untouched, got:\n%s", got)
+	}
+	if !strings.Contains(got, "dependency.network.outputs.id") {
+		t.Errorf("expected 'network' reference untouched by 'net-x' rename, got:\n%s", got)
+	}
+	// "net-x-standby" shares "net-x" as a literal prefix but is a distinct
+	// identifier token; it must not be corrupted by the "net-x" rename.
+	if !strings.Contains(got, "dependency.net-x-standby.outputs.id") {
+		t.Errorf("expected 'net-x-standby' reference untouched by 'net-x' rename, got:\n%s", got)
+	}
+}
+
+func TestNameValidationFixTypeScoping(t *testing.T) {
+	cfg := &config.Rules{
+		NameValidation: &config.NameValidationConfig{
+			Enabled: true,
+			Blocks:  []string{"dependency"},
+		},
+	}
+	content := `dependency "my-vpc" {
+  config_path = "../vpc"
+}
+
+include "my-vpc" {
+  path = "../root.hcl"
+}
+`
+	ctx := buildContext(t, content, cfg)
+	rule := rules.NameValidationRule{}
+	n, err := rule.Fix(ctx)
+	if err != nil {
+		t.Fatalf("Fix error: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected Fix to report a change")
+	}
+	got := string(ctx.Content)
+	if !strings.Contains(got, `dependency "my_vpc"`) {
+		t.Errorf("expected 'dependency' label renamed, got:\n%s", got)
+	}
+	if !strings.Contains(got, `include "my-vpc"`) {
+		t.Errorf("expected 'include' label untouched (out of blockSet), got:\n%s", got)
+	}
+}
+
+func TestNameValidationFixOutputReparses(t *testing.T) {
+	cfg := &config.Rules{
+		NameValidation: &config.NameValidationConfig{
+			Enabled: true,
+			Blocks:  []string{"dependency"},
+		},
+	}
+	content := `dependency "my-vpc" {
+  config_path = "../vpc"
+}
+
+locals {
+  vpc_id = dependency.my-vpc.outputs.id
+  vpc_cidr = dependency["my-vpc"].outputs.cidr
+}
+`
+	ctx := buildContext(t, content, cfg)
+	rule := rules.NameValidationRule{}
+	if _, err := rule.Fix(ctx); err != nil {
+		t.Fatalf("Fix error: %v", err)
+	}
+	_, diags := hclsyntax.ParseConfig(ctx.Content, "test.hcl", hcl.InitialPos)
+	if diags.HasErrors() {
+		t.Fatalf("fixed output failed to re-parse: %s\n%s", diags.Error(), string(ctx.Content))
 	}
 }
 
