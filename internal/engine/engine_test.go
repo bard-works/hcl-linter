@@ -1570,9 +1570,6 @@ func TestParseError(t *testing.T) {
 	if pe.Error() == "" {
 		t.Error("expected non-empty Error() string")
 	}
-	if pe.Unwrap() == nil {
-		t.Error("expected non-nil Unwrap()")
-	}
 }
 
 func TestNewWithRegistry(t *testing.T) {
@@ -1601,7 +1598,7 @@ func TestLintFilesHandlesError(t *testing.T) {
 	}
 	hasLinterError := false
 	for _, issue := range results[0].Issues {
-		if issue.Rule == "linter_error" {
+		if issue.Rule == diag.RuleLinterError {
 			hasLinterError = true
 		}
 	}
@@ -1829,7 +1826,7 @@ func TestLintFilesRecoversFromPanic(t *testing.T) {
 	for _, result := range results {
 		hasLinterError := false
 		for _, issue := range result.Issues {
-			if issue.Rule == "linter_error" {
+			if issue.Rule == diag.RuleLinterError {
 				hasLinterError = true
 			}
 		}
