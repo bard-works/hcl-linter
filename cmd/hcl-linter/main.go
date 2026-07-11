@@ -436,7 +436,7 @@ func (a *app) filterFiles(files []string) []string {
 		}
 	}
 
-	if len(matched) > 0 {
+	if a.verbose && len(matched) > 0 {
 		fmt.Fprintln(a.errOut, "\nMatched files:")
 		for _, f := range matched {
 			fmt.Fprintf(a.errOut, "  %s\n", f)
@@ -460,28 +460,8 @@ func (a *app) matchesFilter(filename string) bool {
 }
 
 func matchPattern(pattern, filename string) bool {
-	if strings.Contains(pattern, "*") {
-		return matchGlob(filename, pattern)
-	}
-	return filename == pattern
-}
-
-func matchGlob(filename, pattern string) bool {
-	parts := strings.Split(pattern, "*")
-	if len(parts) == 2 {
-		prefix := parts[0]
-		suffix := parts[1]
-		return strings.HasPrefix(filename, prefix) && strings.HasSuffix(filename, suffix)
-	}
-	if strings.HasPrefix(pattern, "*") {
-		suffix := strings.TrimPrefix(pattern, "*")
-		return strings.HasSuffix(filename, suffix)
-	}
-	if strings.HasSuffix(pattern, "*") {
-		prefix := strings.TrimSuffix(pattern, "*")
-		return strings.HasPrefix(filename, prefix)
-	}
-	return filename == pattern
+	ok, err := filepath.Match(pattern, filename)
+	return err == nil && ok
 }
 
 func (a *app) runValidateConfig(cmd *cobra.Command, args []string) error {
