@@ -126,14 +126,16 @@ func cfeCheckEmptyForEach(issues *[]diag.Issue, blocks []ast.BlockInfo, enabled 
 			continue
 		}
 
-		valMap := val.AsValueMap()
-		if len(valMap) == 0 {
-			*issues = append(*issues, diag.Issue{
-				Severity: diag.SeverityWarning,
-				Rule:     "empty_for_each",
-				Message:  block.Type + " block has empty for_each, resource will not be created",
-				Location: forEachAttr.Range(),
-			})
+		if val.CanIterateElements() {
+			valMap := val.AsValueMap()
+			if len(valMap) == 0 {
+				*issues = append(*issues, diag.Issue{
+					Severity: diag.SeverityWarning,
+					Rule:     "empty_for_each",
+					Message:  block.Type + " block has empty for_each, resource will not be created",
+					Location: forEachAttr.Range(),
+				})
+			}
 		}
 	}
 }

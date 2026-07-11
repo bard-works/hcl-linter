@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 
@@ -63,7 +64,14 @@ func main() {
 // run executes the CLI and maps the returned error to an exit code. This is
 // the only place errors are printed and the only caller of os.Exit lives in
 // main, so deferred functions elsewhere always execute.
-func run(ctx context.Context) int {
+func run(ctx context.Context) (code int) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "hcl-linter: internal error: %v\n", r)
+			debug.PrintStack()
+			code = exitExec
+		}
+	}()
 	err := newRootCmd().ExecuteContext(ctx)
 	if err == nil {
 		return exitOK

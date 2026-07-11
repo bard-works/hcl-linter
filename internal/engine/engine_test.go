@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/bard-works/hcl-linter/internal/config"
+	"github.com/bard-works/hcl-linter/internal/diag"
 	"github.com/bard-works/hcl-linter/internal/rules"
 )
 
@@ -1790,5 +1791,71 @@ func TestBuildContextTOCTOU(t *testing.T) {
 		// The TOCTOU check passed because the file wasn't modified
 		// between the two Stats (they are consecutive in code).
 		_ = ctx
+	}
+}
+
+// panickyRule implements rules.Rule and rules.Fixer, panicking in both Check
+// and Fix so LintFiles/FixFiles panic-recovery paths can be exercised without
+// depending on a real rule's internals.
+type panickyRule struct{}
+
+func (panickyRule) Name() string                          { return "panicky" }
+func (panickyRule) Priority() int                         { return rules.PrioritySemantic }
+func (panickyRule) Enabled(cfg *config.Rules) bool        { return true }
+func (panickyRule) Doc() rules.RuleDoc                    { return rules.RuleDoc{} }
+func (panickyRule) Check(ctx *rules.Context) []diag.Issue { panic("boom: check") }
+func (panickyRule) Fix(ctx *rules.Context) (int, error)   { panic("boom: fix") }
+
+func TestLintFilesRecoversFromPanic(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	setupTestConfig(t, tmpDir, "rules {}")
+	loader := newTestLoader(t, tmpDir)
+
+	reg := &rules.Registry{}
+	reg.Register(panickyRule{})
+	eng := New(loader, WithRegistry(reg))
+
+	srcDir := t.TempDir()
+	files := []string{
+		createHCLFile(t, srcDir, "a.hcl", "locals {}"),
+		createHCLFile(t, srcDir, "b.hcl", "locals {}"),
+		createHCLFile(t, srcDir, "c.hcl", "locals {}"),
+	}
+
+	results := eng.LintFiles(context.Background(), files, 2)
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results despite panics, got %d", len(results))
+	}
+	for _, result := range results {
+		hasLinterError := false
+		for _, issue := range result.Issues {
+			if issue.Rule == "linter_error" {
+				hasLinterError = true
+			}
+		}
+		if !hasLinterError {
+			t.Errorf("expected linter_error issue for %s after recovered panic", result.File)
+		}
+	}
+}
+
+func TestFixFilesRecoversFromPanic(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	setupTestConfig(t, tmpDir, "rules {}")
+	loader := newTestLoader(t, tmpDir)
+
+	reg := &rules.Registry{}
+	reg.Register(panickyRule{})
+	eng := New(loader, WithRegistry(reg))
+
+	srcDir := t.TempDir()
+	file := createHCLFile(t, srcDir, "a.hcl", "locals {}")
+
+	results := eng.FixFiles(context.Background(), []string{file}, 1)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Error == nil {
+		t.Error("expected non-nil Error after recovered panic")
 	}
 }
