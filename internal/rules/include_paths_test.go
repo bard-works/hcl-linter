@@ -73,6 +73,30 @@ func TestIncludePathsRule(t *testing.T) {
 	}
 }
 
+func TestIncludePathsOpenBreakerSuspendsCheck(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Rules{
+		IncludePaths: &config.IncludePathsConfig{Enabled: true},
+	}
+
+	content := `include "root" { path = "non-existent" }` + "\n"
+	file := filepath.Join(tmpDir, "terragrunt.hcl")
+	writeFile(t, file, content)
+	ctx := buildContextFromFile(t, file, cfg)
+
+	cb := rules.NewCircuitBreaker()
+	cb.RecordFailure()
+	cb.RecordFailure()
+	cb.RecordFailure()
+	ctx.Breaker = cb
+
+	for _, issue := range (rules.IncludePathsRule{}).Check(ctx) {
+		if issue.Rule == "include_path_exists" {
+			t.Errorf("expected no include_path_exists issue while breaker open, got: %v", issue.Message)
+		}
+	}
+}
+
 func TestIncludePathsNoPathAttr(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Rules{
