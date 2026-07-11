@@ -316,6 +316,67 @@ inputs = {
 	}
 }
 
+// TestDependencyOutputsUnparseableModuleSuppressesRefErrors verifies that a
+// module with one unparseable .tf file is treated as incomplete: references
+// to outputs the linter couldn't confirm must not error, and exactly one
+// "cannot fully validate" warning fires instead.
+func TestDependencyOutputsUnparseableModuleSuppressesRefErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	vpcDir := filepath.Join(tmpDir, "vpc")
+	if err := os.MkdirAll(vpcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// One well-formed file and one truncated (invalid HCL) file.
+	if err := os.WriteFile(
+		filepath.Join(vpcDir, "good.tf"),
+		[]byte(`output "vpc_id" { value = "x" }`+"\n"),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vpcDir, "bad.tf"), []byte(`output "vpc_cidr" {`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	hclContent := `dependency "vpc" {
+  config_path = "vpc"
+}
+
+inputs = {
+  vpc_id   = dependency.vpc.outputs.vpc_id
+  vpc_cidr = dependency.vpc.outputs.vpc_cidr
+}
+`
+	hclFile := filepath.Join(tmpDir, "terragrunt.hcl")
+	if err := os.WriteFile(hclFile, []byte(hclContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Rules{DependencyOutputs: &config.DependencyOutputsConfig{Enabled: true}}
+	ctx := buildContextFromFile(t, hclFile, cfg)
+	issues := (rules.DependencyOutputsRule{}).Check(ctx)
+
+	var warnings, refErrors int
+	for _, issue := range issues {
+		if issue.Rule != "dependency_outputs" {
+			continue
+		}
+		if strings.Contains(issue.Message, "undeclared output") {
+			refErrors++
+		}
+		if strings.Contains(issue.Message, "cannot fully validate") {
+			warnings++
+		}
+	}
+	if refErrors != 0 {
+		t.Errorf("expected no undeclared-output errors for an incomplete module, got %d", refErrors)
+	}
+	if warnings != 1 {
+		t.Errorf("expected exactly 1 'cannot fully validate' warning, got %d", warnings)
+	}
+}
+
 // TestDependencyOutputsUnresolvableTargetNoRefErrors verifies fail-safe
 // behaviour: when the dependency directory does not exist, references produce
 // no errors - only the "cannot validate" warning fires.
