@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Removed the executable-directory config source (`.hcl-linter/` next to the
+  binary). A binary in a shared or group-writable directory let anyone with
+  write access there silently control lint policy for every user of that
+  binary. Discovery order is now `--config-source` → `HCL_LINTER_CONFIG_DIR`
+  → cwd → home. Installations relying on binary-adjacent config should place
+  config in the working directory, `~/.hcl-linter`, or set
+  `HCL_LINTER_CONFIG_DIR`.
+
 ### Added
 
 - POSIX-style exit-code contract: `0` no findings, `1` findings (check

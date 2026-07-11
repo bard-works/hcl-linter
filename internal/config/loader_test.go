@@ -218,7 +218,6 @@ func TestConfigSourceString(t *testing.T) {
 		expect string
 	}{
 		{ConfigSourceNone, "none"},
-		{ConfigSourceProject, "project"},
 		{ConfigSourceHome, "~/.hcl-linter"},
 		{ConfigSourceCwd, ".hcl-linter"},
 		{ConfigSourceEnv, "HCL_LINTER_CONFIG_DIR"},

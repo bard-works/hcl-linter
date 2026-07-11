@@ -146,7 +146,7 @@ func newRootCmd() *cobra.Command {
 
 	rootCmd.PersistentFlags().BoolVarP(&a.verbose, "verbose", "v", false, "Show detailed output")
 	rootCmd.PersistentFlags().
-		StringVarP(&a.configSrc, "config-source", "c", "", "Config source: explicit path, or auto-detect from cwd/home/project")
+		StringVarP(&a.configSrc, "config-source", "c", "", "Config source: explicit path, or auto-detect from cwd/home")
 	rootCmd.PersistentFlags().
 		StringArrayVar(&a.filter, "filter", nil, "Filter files by name pattern (glob supported, can be specified multiple times)")
 	rootCmd.PersistentFlags().

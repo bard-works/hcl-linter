@@ -31,16 +31,6 @@ func TestGetHomeConfigDir(t *testing.T) {
 	}
 }
 
-func TestGetProjectConfigDir(t *testing.T) {
-	got, err := getProjectConfigDir()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if filepath.Base(got) != ".hcl-linter" {
-		t.Errorf("expected path ending in .hcl-linter, got %s", got)
-	}
-}
-
 func TestFindConfigDir_EnvSource(t *testing.T) {
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, ".hcl-linter")
@@ -85,11 +75,8 @@ func TestFindConfigDir_None(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	result := findConfigDir(&Loader{})
-	if result.Source != ConfigSourceNone && result.Source != ConfigSourceProject {
-		t.Errorf(
-			"got source %v, want ConfigSourceNone or ConfigSourceProject (project binary dir may have .hcl-linter)",
-			result.Source,
-		)
+	if result.Source != ConfigSourceNone {
+		t.Errorf("got source %v, want ConfigSourceNone", result.Source)
 	}
 }
 
