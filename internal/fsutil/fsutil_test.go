@@ -3,6 +3,7 @@ package fsutil
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -60,12 +61,14 @@ func TestWriteFileSafe_AtomicOverwrite(t *testing.T) {
 		t.Fatalf("unexpected content: %s", data)
 	}
 
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Errorf("existing file permissions not preserved: got %v, want 0600", info.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Errorf("existing file permissions not preserved: got %v, want 0600", info.Mode().Perm())
+		}
 	}
 
 	entries, err := os.ReadDir(tmp)
