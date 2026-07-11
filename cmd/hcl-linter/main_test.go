@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +61,38 @@ func TestMatchPattern(t *testing.T) {
 			filename: "root.hcl",
 			expected: false,
 		},
+		{
+			// Prior hand-rolled matchGlob degraded to exact-string equality
+			// for any pattern with 2+ '*' — this must now match correctly.
+			name:     "multiple wildcards",
+			pattern:  "*env*.hcl",
+			filename: "prod-env-x.hcl",
+			expected: true,
+		},
+		{
+			name:     "three wildcards",
+			pattern:  "a*b*c",
+			filename: "axbxc",
+			expected: true,
+		},
+		{
+			name:     "single char wildcard",
+			pattern:  "terragrunt.?cl",
+			filename: "terragrunt.hcl",
+			expected: true,
+		},
+		{
+			name:     "character class",
+			pattern:  "service.[th]f",
+			filename: "service.tf",
+			expected: true,
+		},
+		{
+			name:     "malformed pattern does not panic",
+			pattern:  "[",
+			filename: "anything",
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -66,49 +100,6 @@ func TestMatchPattern(t *testing.T) {
 			result := matchPattern(tt.pattern, tt.filename)
 			if result != tt.expected {
 				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.pattern, tt.filename, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestMatchGlob(t *testing.T) {
-	tests := []struct {
-		name     string
-		filename string
-		pattern  string
-		expected bool
-	}{
-		{
-			name:     "prefix wildcard",
-			filename: "terragrunt.hcl",
-			pattern:  "terragrunt*",
-			expected: true,
-		},
-		{
-			name:     "suffix wildcard",
-			filename: "main.tf",
-			pattern:  "*.tf",
-			expected: true,
-		},
-		{
-			name:     "both wildcards",
-			filename: "service.hcl",
-			pattern:  "*.hcl",
-			expected: true,
-		},
-		{
-			name:     "no match",
-			filename: "other.json",
-			pattern:  "*.hcl",
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := matchGlob(tt.filename, tt.pattern)
-			if result != tt.expected {
-				t.Errorf("matchGlob(%q, %q) = %v, want %v", tt.filename, tt.pattern, result, tt.expected)
 			}
 		})
 	}
@@ -194,5 +185,26 @@ func TestFilterFiles(t *testing.T) {
 	result = a.filterFiles(testFiles)
 	if len(result) != 2 {
 		t.Errorf("expected 2 files, got %d", len(result))
+	}
+}
+
+func TestFilterFilesMatchedListingGatedByVerbose(t *testing.T) {
+	testFiles := []string{"/path/to/terragrunt.hcl"}
+
+	a := newTestApp()
+	var buf bytes.Buffer
+	a.errOut = &buf
+	a.filter = []string{"*.hcl"}
+	a.verbose = false
+	a.filterFiles(testFiles)
+	if strings.Contains(buf.String(), "Matched files:") {
+		t.Error("expected no 'Matched files:' listing without --verbose")
+	}
+
+	buf.Reset()
+	a.verbose = true
+	a.filterFiles(testFiles)
+	if !strings.Contains(buf.String(), "Matched files:") {
+		t.Error("expected 'Matched files:' listing with --verbose")
 	}
 }

@@ -142,14 +142,17 @@ func runConcurrent[R any](ctx context.Context, paths []string, maxConcurrency in
 		if ctx.Err() != nil {
 			break
 		}
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+		}
+		if ctx.Err() != nil {
+			break
+		}
 		wg.Add(1)
 		go func(p string) {
 			defer wg.Done()
-			sem <- struct{}{}
 			defer func() { <-sem }()
-			if ctx.Err() != nil {
-				return
-			}
 			ch <- fn(p)
 		}(path)
 	}

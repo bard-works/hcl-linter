@@ -101,7 +101,7 @@ func TestFilterFiles_NoMatch(t *testing.T) {
 	}
 }
 
-func TestMatchGlob_Combinations(t *testing.T) {
+func TestMatchPattern_Combinations(t *testing.T) {
 	tests := []struct {
 		filename string
 		pattern  string
@@ -113,21 +113,19 @@ func TestMatchGlob_Combinations(t *testing.T) {
 		{"b.tf", "*.hcl", false},
 		{"terragrunt.hcl", "terr*", true},
 		{"service.hcl", "terr*", false},
-		// Middle glob: `a*c` => HasPrefix && HasSuffix
 		{"abc", "a*c", true},
 		{"xbc", "a*c", false},
-		// No glob equality fallback
 		{"foo", "foo", true},
 		{"foo", "bar", false},
-		// Multi-star pattern: 3 parts → falls through to HasPrefix("*") branch
-		{"xbc", "*b*c", false},
-		// Multi-star ending with *: "a*b*" → HasSuffix("*") branch; prefix="a*b", no match
-		{"abc", "a*b*", false},
+		// filepath.Match correctly handles multiple wildcards, unlike the
+		// prior hand-rolled matchGlob (which degraded these to false).
+		{"xbc", "*b*c", true},
+		{"abc", "a*b*", true},
 		{"a*b", "a*b*", true},
 	}
 	for _, tt := range tests {
-		if got := matchGlob(tt.filename, tt.pattern); got != tt.want {
-			t.Errorf("matchGlob(%q, %q) = %v, want %v", tt.filename, tt.pattern, got, tt.want)
+		if got := matchPattern(tt.pattern, tt.filename); got != tt.want {
+			t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.pattern, tt.filename, got, tt.want)
 		}
 	}
 }
