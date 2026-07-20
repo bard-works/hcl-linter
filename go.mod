@@ -6,7 +6,7 @@ require (
 	github.com/fatih/color v1.19.0
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/mattn/go-isatty v0.0.22
+	github.com/mattn/go-isatty v0.0.23
 	github.com/spf13/cobra v1.10.2
 	github.com/zclconf/go-cty v1.18.1
 )
