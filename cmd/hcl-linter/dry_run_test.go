@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -253,5 +254,20 @@ func TestFixFormatWithoutConfigIsIdempotent(t *testing.T) {
 	a.dryRun = true
 	if err := a.runFix(nil, []string{root}); err != nil {
 		t.Fatalf("second run should be a no-op, got %v\n%s", err, buf.String())
+	}
+}
+
+func TestFixReportsUnparseableFileAsExecError(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "broken.hcl"), "locals {\n")
+	a, buf := newCaptureApp()
+	a.format = true
+	err := a.runFix(nil, []string{root})
+	var ee *execError
+	if !errors.As(err, &ee) {
+		t.Fatalf("expected execError, got %v", err)
+	}
+	if strings.Contains(buf.String(), "No changes needed") {
+		t.Errorf("must not claim success after a failure:\n%s", buf.String())
 	}
 }

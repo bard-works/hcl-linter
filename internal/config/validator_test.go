@@ -82,7 +82,10 @@ func TestValidateAllKnownBlocksClean(t *testing.T) {
     blocks  = ["include"]
   }
   array_format { enabled = true }
-  blank_lines  { enabled = true; within_blocks = true }
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
   duplicates   { enabled = true }
   dependency_paths { enabled = true }
   include_paths    { enabled = true }
@@ -385,4 +388,20 @@ func TestValidationIssueString(t *testing.T) {
 	if !strings.Contains(got, "unknown rule block") {
 		t.Errorf("String() should contain message, got %q", got)
 	}
+}
+
+func TestValidateReportsBrokenExtends(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, "default.hcl", `extends = "builtin:nope"
+rules {}
+`)
+	issues := ValidateConfigFile(path)
+	assertIssues(t, issues, 1)
+}
+
+func TestValidateReportsSyntaxErrors(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, "default.hcl", "rules {\n  blank_lines { enabled = true; within_blocks = true }\n}\n")
+	issues := ValidateConfigFile(path)
+	assertIssues(t, issues, 1)
 }

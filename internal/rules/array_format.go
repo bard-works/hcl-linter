@@ -1,9 +1,12 @@
 package rules
 
 import (
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 
@@ -66,229 +69,175 @@ func (r ArrayFormatRule) Fix(ctx *Context) (int, error) {
 	return changes, nil
 }
 
-// FixArrays converts single-line arrays with 2+ items to multiline format.
-// When sortItems is true, items are sorted alphabetically.
+var (
+	// key = ["a", "b"]   (optionally followed by a comma inside an object)
+	inlineArrayRe = regexp.MustCompile(`^(\s*)([A-Za-z_][\w-]*|"[^"]*")\s*=\s*\[(.*)\](\s*,?)\s*$`)
+	// key = [
+	arrayOpenRe = regexp.MustCompile(`^(\s*)([A-Za-z_][\w-]*|"[^"]*")\s*=\s*\[\s*$`)
+	// ]   or   ],
+	arrayCloseRe = regexp.MustCompile(`^\s*\](\s*,?)\s*$`)
+)
+
+// FixArrays converts single-line arrays with 2+ items to multiline format and
+// adds missing trailing commas to multiline ones. When sortItems is true,
+// items are sorted alphabetically.
+//
+// It works on text, so it only touches the shapes it can rewrite without
+// changing meaning: a whole line that is `key = [...]` (or an array opening
+// and closing on lines of their own) whose items are all plain string
+// literals. Arrays of objects, function calls, interpolations, trailing
+// comments, and anything inside heredocs are left alone.
 func FixArrays(content string, sortItems bool) (string, int) {
+	skip, ok := nonCodeLines(content)
+	if !ok {
+		return content, 0
+	}
 	lines := strings.Split(content, "\n")
+	out := make([]string, 0, len(lines))
 	changes := 0
-	var result strings.Builder
 
-	i := 0
-	for i < len(lines) {
+	for i := 0; i < len(lines); i++ {
 		line := lines[i]
-
-		if isArrayAssignment(line) && !isMultilineArrayStart(lines, i) {
-			items := extractAndFormatArray(line)
-			if len(items) >= 2 {
-				result.WriteString(formatMultilineArray(line, items, sortItems))
-				changes++
-				i++
-				continue
-			}
-		}
-
-		if isMultilineArrayStart(lines, i) {
-			arrayLines, itemCount := collectMultilineArray(lines, i)
-			if itemCount >= 2 && needsMultilineFix(arrayLines) {
-				fixed := fixMultilineArray(arrayLines, line, sortItems)
-				result.WriteString(fixed)
-				changes++
-				i += len(arrayLines)
-				continue
-			}
-			for _, l := range arrayLines {
-				result.WriteString(l)
-				result.WriteString("\n")
-			}
-			i += len(arrayLines)
+		if skip[i+1] {
+			out = append(out, line)
 			continue
 		}
-
-		result.WriteString(line)
-		result.WriteString("\n")
-		i++
-	}
-
-	// Every split element was re-emitted with a trailing "\n", including the
-	// final one, which had none in the input. Drop it so the file's original
-	// ending is preserved and repeated fixes are idempotent.
-	return strings.TrimSuffix(result.String(), "\n"), changes
-}
-
-func isArrayAssignment(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	return strings.Contains(trimmed, "=") && strings.Contains(trimmed, "[") && strings.Contains(trimmed, "]")
-}
-
-func isMultilineArrayStart(lines []string, idx int) bool {
-	if idx >= len(lines) {
-		return false
-	}
-	trimmed := strings.TrimSpace(lines[idx])
-	return strings.Contains(trimmed, "[") && !strings.Contains(trimmed, "]")
-}
-
-func collectMultilineArray(lines []string, start int) ([]string, int) {
-	var arrayLines []string
-	itemCount := 0
-	braceCount := 0
-
-	for i := start; i < len(lines); i++ {
-		line := lines[i]
-		arrayLines = append(arrayLines, line)
-
-		braceCount += strings.Count(line, "[") - strings.Count(line, "]")
-		if strings.Contains(line, "\"") {
-			itemCount += strings.Count(line, "\"")
+		if m := inlineArrayRe.FindStringSubmatch(line); m != nil {
+			if items, ok := splitStringItems(m[3]); ok && len(items) >= 2 {
+				out = append(out, renderArray(m[1], m[2], items, strings.TrimSpace(m[4]), sortItems)...)
+				changes++
+				continue
+			}
 		}
-
-		if braceCount <= 0 && strings.Contains(line, "]") {
-			break
+		if m := arrayOpenRe.FindStringSubmatch(line); m != nil {
+			if end, items, suffix, ok := collectMultilineArray(lines, i, skip); ok && len(items) >= 2 {
+				rendered := renderArray(m[1], m[2], items, suffix, sortItems)
+				if !slices.Equal(rendered, lines[i:end+1]) {
+					out = append(out, rendered...)
+					changes++
+					i = end
+					continue
+				}
+			}
 		}
+		out = append(out, line)
 	}
-
-	return arrayLines, itemCount / 2
+	return strings.Join(out, "\n"), changes
 }
 
-func extractAndFormatArray(line string) []string {
-	trimmed := strings.TrimSpace(line)
-
-	start := strings.Index(trimmed, "[")
-	end := strings.LastIndex(trimmed, "]")
-	if start == -1 || end == -1 || end <= start {
-		return nil
+// nonCodeLines returns the 1-based lines that belong to heredoc bodies or
+// multi-line comments, which the text-based fixer must never edit. ok is false
+// when the content does not lex cleanly.
+func nonCodeLines(content string) (map[int]bool, bool) {
+	tokens, diags := hclsyntax.LexConfig([]byte(content), "", hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, false
 	}
+	skip := map[int]bool{}
+	heredocStart := 0
+	for _, tok := range tokens {
+		switch tok.Type {
+		case hclsyntax.TokenOHeredoc:
+			heredocStart = tok.Range.Start.Line
+		case hclsyntax.TokenCHeredoc:
+			for l := heredocStart; l <= tok.Range.End.Line; l++ {
+				skip[l] = true
+			}
+		case hclsyntax.TokenComment:
+			if tok.Range.End.Line > tok.Range.Start.Line+1 || strings.HasPrefix(string(tok.Bytes), "/*") {
+				for l := tok.Range.Start.Line; l <= tok.Range.End.Line; l++ {
+					skip[l] = true
+				}
+			}
+		}
+	}
+	return skip, true
+}
 
-	inner := trimmed[start+1 : end]
+// collectMultilineArray reads the array opened on lines[start] up to its
+// closing bracket. ok is false unless every line in between holds only plain
+// string items.
+func collectMultilineArray(lines []string, start int, skip map[int]bool) (end int, items []string, suffix string, ok bool) {
+	for i := start + 1; i < len(lines); i++ {
+		if skip[i+1] {
+			return 0, nil, "", false
+		}
+		if m := arrayCloseRe.FindStringSubmatch(lines[i]); m != nil {
+			return i, items, strings.TrimSpace(m[1]), true
+		}
+		body := strings.TrimSpace(lines[i])
+		if body == "" {
+			continue
+		}
+		lineItems, ok := splitStringItems(body)
+		if !ok {
+			return 0, nil, "", false
+		}
+		items = append(items, lineItems...)
+	}
+	return 0, nil, "", false
+}
+
+// splitStringItems splits a comma-separated list whose items are all plain
+// quoted strings (no interpolation). ok is false for anything else.
+func splitStringItems(inner string) ([]string, bool) {
 	var items []string
-	inQuote := false
-	var current strings.Builder
-
+	var cur strings.Builder
+	inQuote, escaped := false, false
 	for _, ch := range inner {
 		switch {
+		case inQuote:
+			cur.WriteRune(ch)
+			switch {
+			case escaped:
+				escaped = false
+			case ch == '\\':
+				escaped = true
+			case ch == '"':
+				inQuote = false
+			}
 		case ch == '"':
-			inQuote = !inQuote
-			current.WriteRune(ch)
-		case ch == ',' && !inQuote:
-			item := strings.TrimSpace(current.String())
-			if item != "" {
+			if strings.TrimSpace(cur.String()) != "" {
+				return nil, false // text before the opening quote
+			}
+			cur.Reset()
+			cur.WriteRune(ch)
+			inQuote = true
+		case ch == ',':
+			if item := strings.TrimSpace(cur.String()); item != "" {
 				items = append(items, item)
 			}
-			current.Reset()
+			cur.Reset()
+		case ch == ' ' || ch == '\t':
+			cur.WriteRune(ch)
 		default:
-			current.WriteRune(ch)
+			return nil, false // unquoted token: reference, call, number, comment...
 		}
 	}
-
-	if item := strings.TrimSpace(current.String()); item != "" {
+	if inQuote {
+		return nil, false
+	}
+	if item := strings.TrimSpace(cur.String()); item != "" {
 		items = append(items, item)
 	}
-
-	return items
+	for _, item := range items {
+		if strings.Contains(item, "${") || strings.Contains(item, "%{") {
+			return nil, false
+		}
+	}
+	return items, true
 }
 
-func formatMultilineArray(line string, items []string, sortItems bool) string {
-	indent := ""
-	var indentBuilder strings.Builder
-	for _, ch := range line {
-		if ch != ' ' && ch != '\t' {
-			break
-		}
-		indentBuilder.WriteRune(ch)
-	}
-	indent = indentBuilder.String()
-
-	idx := strings.Index(line, "[")
-	if idx == -1 {
-		return ""
-	}
-	eqIdx := strings.Index(line, "=")
-	if eqIdx < 0 || eqIdx > idx {
-		return ""
-	}
-	key := strings.TrimSpace(line[:eqIdx])
-
+func renderArray(indent, key string, items []string, suffix string, sortItems bool) []string {
 	if sortItems {
+		items = slices.Clone(items)
 		sort.Strings(items)
 	}
-
-	var sb strings.Builder
-	sb.WriteString(indent)
-	sb.WriteString(key)
-	sb.WriteString(" = [\n")
+	out := []string{indent + key + " = ["}
 	for _, item := range items {
-		sb.WriteString(indent)
-		sb.WriteString("  ")
-		sb.WriteString(strings.TrimSpace(item))
-		sb.WriteString(",\n")
+		out = append(out, indent+"  "+item+",")
 	}
-	sb.WriteString(indent)
-	sb.WriteString("]\n")
-	return sb.String()
-}
-
-func needsMultilineFix(lines []string) bool {
-	if len(lines) < 2 {
-		return false
-	}
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasSuffix(trimmed, ",") {
-			return false
-		}
-		if strings.Count(trimmed, "\"") > 0 && !strings.Contains(trimmed, "]") {
-			return true
-		}
-	}
-	return false
-}
-
-func fixMultilineArray(lines []string, firstLine string, sortItems bool) string {
-	indent := ""
-	var indentBuilder strings.Builder
-	for _, ch := range firstLine {
-		if ch != ' ' && ch != '\t' {
-			break
-		}
-		indentBuilder.WriteRune(ch)
-	}
-	indent = indentBuilder.String()
-
-	idx := strings.Index(firstLine, "[")
-	if idx == -1 {
-		return ""
-	}
-	eqIdx := strings.Index(firstLine, "=")
-	if eqIdx < 0 || eqIdx > idx {
-		return ""
-	}
-	key := strings.TrimSpace(firstLine[:eqIdx])
-
-	var items []string
-	for _, line := range lines[1 : len(lines)-1] {
-		trimmed := strings.TrimSuffix(strings.TrimSpace(line), ",")
-		if trimmed != "" {
-			items = append(items, trimmed)
-		}
-	}
-
-	if sortItems {
-		sort.Strings(items)
-	}
-
-	var sb strings.Builder
-	sb.WriteString(indent)
-	sb.WriteString(key)
-	sb.WriteString(" = [\n")
-	for _, item := range items {
-		sb.WriteString(indent)
-		sb.WriteString("  ")
-		sb.WriteString(item)
-		sb.WriteString(",\n")
-	}
-	sb.WriteString(indent)
-	sb.WriteString("]\n")
-	return sb.String()
+	return append(out, indent+"]"+suffix)
 }
 
 // --- Check helpers ---

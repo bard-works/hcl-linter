@@ -127,3 +127,15 @@ func TestRemoteStateDisabled(t *testing.T) {
 		t.Errorf("expected no issues when RequireBackend is false, got %v", issues)
 	}
 }
+
+func TestRemoteStateTopLevelBlock(t *testing.T) {
+	cfg := &config.Rules{RemoteState: &config.RemoteStateConfig{Enabled: true, RequireBackend: true}}
+	missing := buildContext(t, "remote_state {\n  config = {\n    bucket = \"x\"\n  }\n}\n", cfg)
+	if issues := (rules.RemoteStateRule{}).Check(missing); len(issues) != 1 {
+		t.Fatalf("expected 1 issue for top-level remote_state without backend, got %v", issues)
+	}
+	ok := buildContext(t, "remote_state {\n  backend = \"s3\"\n  config = {}\n}\n", cfg)
+	if issues := (rules.RemoteStateRule{}).Check(ok); len(issues) != 0 {
+		t.Fatalf("expected no issues, got %v", issues)
+	}
+}

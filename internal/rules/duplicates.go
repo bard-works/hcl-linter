@@ -2,6 +2,7 @@ package rules
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
@@ -64,10 +65,9 @@ func checkDuplicates(issues *[]diag.Issue, blocks []ast.BlockInfo, cfg *config.D
 			if seen[block.Type] == nil {
 				seen[block.Type] = make(map[string]bool)
 			}
-			identifier := ""
-			if len(block.Labels) > 0 {
-				identifier = block.Labels[0]
-			}
+			// All labels form the identity: resource "aws_s3_bucket" "a" and
+			// resource "aws_s3_bucket" "b" are distinct blocks.
+			identifier := strings.Join(block.Labels, ".")
 			if seen[block.Type][identifier] {
 				*issues = append(*issues, diag.Issue{
 					Severity: diag.SeverityError,

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/bard-works/hcl-linter/internal/engine"
@@ -160,7 +161,10 @@ func TestRunFix_FileWithParseError(t *testing.T) {
 	}
 	// Use terragrunt.hcl to trigger specific-config match.
 	if err := os.WriteFile(filepath.Join(configDir, "terragrunt.hcl"), []byte(`rules {
-  blank_lines { enabled = true; within_blocks = true }
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
 }`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -174,16 +178,27 @@ func TestRunFix_FileWithParseError(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "broken.hcl"), []byte("locals { = invalid"), 0o644); err != nil {
+	// Named terragrunt.hcl so it matches the config and is actually parsed.
+	brokenDir := filepath.Join(root, "broken")
+	if err := os.MkdirAll(brokenDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(brokenDir, "terragrunt.hcl"), []byte("locals { = invalid"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	a.configSrc = configDir
 
-	// Even with a broken file, runFix should return nil (errors are printed
-	// per-file, not returned).
-	if err := a.runFix(nil, []string{root}); err != nil {
-		t.Errorf("runFix returned error: %v", err)
+	// The broken file is an execution failure (exit 3), but the other files
+	// are still fixed.
+	err := a.runFix(nil, []string{root})
+	var ee *execError
+	if !errors.As(err, &ee) {
+		t.Errorf("runFix: expected execError, got %v", err)
+	}
+	fixed, _ := os.ReadFile(filepath.Join(root, "terragrunt.hcl"))
+	if strings.Contains(string(fixed), "{\n\n") {
+		t.Errorf("valid file was not fixed alongside the broken one:\n%s", fixed)
 	}
 }
 
@@ -196,8 +211,9 @@ func TestRunFormatMode_FileWithParseError(t *testing.T) {
 	}
 	a.format = true
 
-	if err := a.runFix(nil, []string{root}); err != nil {
-		t.Errorf("runFix --format returned error: %v", err)
+	var ee *execError
+	if err := a.runFix(nil, []string{root}); !errors.As(err, &ee) {
+		t.Errorf("runFix --format: expected execError, got %v", err)
 	}
 }
 

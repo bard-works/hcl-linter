@@ -143,3 +143,21 @@ include "root" {}
 		t.Error("expected duplicates issue when no block filter is set, got none")
 	}
 }
+
+func TestDuplicatesUsesAllLabels(t *testing.T) {
+	src := `resource "aws_s3_bucket" "a" {}
+resource "aws_s3_bucket" "b" {}
+resource "aws_iam_role" "a" {}
+resource "aws_s3_bucket" "a" {}
+`
+	ctx := buildContext(t, src, &config.Rules{
+		Duplicates: &config.DuplicatesConfig{Enabled: true, Blocks: []string{"resource"}},
+	})
+	issues := rules.DuplicatesRule{}.Check(ctx)
+	if len(issues) != 1 {
+		t.Fatalf("expected exactly the repeated aws_s3_bucket.a to be reported, got %v", issues)
+	}
+	if issues[0].Location.Start.Line != 4 {
+		t.Errorf("expected issue on line 4, got %d", issues[0].Location.Start.Line)
+	}
+}

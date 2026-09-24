@@ -16,6 +16,7 @@ import (
 	"github.com/bard-works/hcl-linter/internal/diag"
 	"github.com/bard-works/hcl-linter/internal/fsutil"
 	"github.com/bard-works/hcl-linter/internal/rules"
+	"github.com/bard-works/hcl-linter/internal/suppress"
 )
 
 // Engine is the single entry point for lint and fix operations.
@@ -132,8 +133,9 @@ func (e *Engine) LintFile(path string) (*diag.Result, error) {
 
 	result := &diag.Result{File: path, Issues: []diag.Issue{}}
 
+	directives := suppress.Parse(ctx.Content, path)
 	for _, rule := range e.registry.Enabled(ctx.Config) {
-		result.Issues = append(result.Issues, rule.Check(ctx)...)
+		result.Issues = append(result.Issues, directives.Filter(rule.Name(), rule.Check(ctx))...)
 	}
 
 	return result, nil
@@ -218,10 +220,15 @@ func (e *Engine) LintFiles(ctx context.Context, paths []string, maxConcurrency i
 
 // runFixPipeline runs all enabled Fixer rules in priority order, refreshing the
 // parsed AST in ctx after each rule that makes changes.
+//
+// A rule disabled for the file with `# hcl-linter:ignore-file <rule>` is not
+// run. Line-level ignores only silence lint findings: fixers rewrite whole
+// files, so use ignore-file to keep a fixer away from a file.
 func (e *Engine) runFixPipeline(ctx *rules.Context) (int, error) {
 	total := 0
+	directives := suppress.Parse(ctx.Content, ctx.FilePath)
 	for _, rule := range e.registry.Sorted() {
-		if !rule.Enabled(ctx.Config) {
+		if !rule.Enabled(ctx.Config) || directives.FileSuppressed(rule.Name()) {
 			continue
 		}
 		fixer, ok := rule.(rules.Fixer)
@@ -316,8 +323,10 @@ var defaultFormatBlockOrder = &config.BlockOrderConfig{
 
 func defaultFormatConfig() *config.Rules {
 	return &config.Rules{
-		BlockOrder:  defaultFormatBlockOrder,
-		ArrayFormat: &config.ArrayFormatConfig{Enabled: true, Sort: true},
+		BlockOrder: defaultFormatBlockOrder,
+		// Never sort in --format: list order is meaningful in Terraform
+		// (subnets, command arguments), and terraform fmt never reorders.
+		ArrayFormat: &config.ArrayFormatConfig{Enabled: true},
 		BlankLines:  &config.BlankLinesConfig{Enabled: true, WithinBlocks: true},
 	}
 }

@@ -1,5 +1,6 @@
 rules {
   remote_state {
-    enabled = true
+    enabled         = true
+    require_backend = true
   }
 }

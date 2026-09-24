@@ -109,7 +109,9 @@ func processBlockContent(lines []string, lineIdx int, block ast.BlockInfo) ([]st
 	blockLines := append([]string{lines[lineIdx]}, lines[contentStart:contentEnd+1]...)
 	fixed := removeBlankLinesWithinBlock(blockLines)
 	changes := 0
-	if len(fixed) != len(blockLines) {
+	// Compare against the whole original span: blank lines skipped between
+	// the opening line and contentStart are removals too.
+	if len(fixed) != contentEnd-lineIdx+1 {
 		changes++
 	}
 	return fixed, changes, contentEnd
@@ -162,7 +164,9 @@ func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.Attribute
 		i++
 	nextLine:
 	}
-	return strings.Join(result, "\n") + "\n", changes
+	// Split/Join round-trips the file ending exactly; appending another
+	// newline here grew the file by one blank line on every run.
+	return strings.Join(result, "\n"), changes
 }
 
 func blankLinesBlockContentStart(lines []string, blockStart int) int {
@@ -195,6 +199,10 @@ func removeBlankLinesWithinBlock(lines []string) []string {
 				continue
 			}
 			if isBlockHeader {
+				continue
+			}
+			// Blank line right after an opening brace (block or object).
+			if len(result) > 0 && strings.HasSuffix(strings.TrimSpace(result[len(result)-1]), "{") {
 				continue
 			}
 			if !lastWasBlank {

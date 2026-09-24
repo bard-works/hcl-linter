@@ -1265,7 +1265,9 @@ func TestFixArraySortEnabled(t *testing.T) {
 
 // TestFormatFixFileArraySort verifies that fix --format always sorts array
 // items regardless of config, maintaining its original opinionated behaviour.
-func TestFormatFixFileArraySort(t *testing.T) {
+// --format must never reorder list items: order is meaningful in Terraform
+// (subnets, command arguments). Sorting is opt-in via array_format.sort.
+func TestFormatFixFileKeepsArrayOrder(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)
@@ -1287,8 +1289,8 @@ func TestFormatFixFileArraySort(t *testing.T) {
 		t.Fatalf("missing items in output:\n%s", result.Content)
 	}
 
-	if alphaIdx >= bravoIdx || bravoIdx >= charlieIdx {
-		t.Errorf("expected --format to always sort items (alpha < bravo < charlie), got:\n%s", result.Content)
+	if charlieIdx >= alphaIdx || alphaIdx >= bravoIdx {
+		t.Errorf("expected --format to keep item order (charlie, alpha, bravo), got:\n%s", result.Content)
 	}
 }
 
@@ -1672,7 +1674,10 @@ func TestFixFileWriteError(t *testing.T) {
 	}
 	tmpDir := createTestConfigDir(t)
 	setupTestConfig(t, tmpDir, `rules {
-  blank_lines { enabled = true; within_blocks = true }
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
 }`)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)
@@ -1714,7 +1719,10 @@ func TestFormatFixFileWriteError(t *testing.T) {
 func TestFixFileSymlinkRejected(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 	setupTestConfig(t, tmpDir, `rules {
-  	blank_lines { enabled = true; within_blocks = true }
+  	blank_lines {
+  	  enabled       = true
+  	  within_blocks = true
+  	}
 	}`)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)

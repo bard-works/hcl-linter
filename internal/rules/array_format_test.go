@@ -120,3 +120,45 @@ func TestFixArraysPreservesFileEnding(t *testing.T) {
 		}
 	}
 }
+
+// The text-based fixer must leave alone every shape it cannot rewrite
+// without changing meaning.
+func TestFixArraysLeavesUnsafeShapesAlone(t *testing.T) {
+	cases := map[string]string{
+		"array of objects": `policy = jsonencode({
+  Statement = [
+    {
+      Action = "s3:GetObject"
+    },
+  ]
+})
+`,
+		"function call wrapping array": "tags = merge(local.tags, [\"a\", \"b\"])\n",
+		"call inside array":            "x = [format(\"%s\", a), \"b\"]\n",
+		"references":                   "ids = [dependency.a.outputs.id, dependency.b.outputs.id]\n",
+		"interpolation":                "x = [\"${var.a}\", \"b\"]\n",
+		"trailing comment":             "x = [\"a\", \"b\"] # keep me\n",
+		"heredoc body": `user_data = <<EOT
+names = ["a", "b"]
+EOT
+`,
+		"block comment": "/*\nx = [\"a\", \"b\"]\n*/\n",
+	}
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, changes := rules.FixArrays(in, false)
+			if changes != 0 || got != in {
+				t.Errorf("expected no change, got %d change(s):\n%s", changes, got)
+			}
+		})
+	}
+}
+
+func TestFixArraysInsideObjectKeepsComma(t *testing.T) {
+	in := "inputs = {\n  azs = [\"a\", \"b\"],\n  name = \"x\"\n}\n"
+	want := "inputs = {\n  azs = [\n    \"a\",\n    \"b\",\n  ],\n  name = \"x\"\n}\n"
+	got, changes := rules.FixArrays(in, false)
+	if changes != 1 || got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}

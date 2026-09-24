@@ -66,7 +66,10 @@ func FixRequiredFields(content string, blocks []ast.BlockInfo, cfg *config.Requi
 		return content, false
 	}
 	changed := false
-	for _, block := range blocks {
+	// Insert bottom-up: each insertion shifts the lines below it, so going
+	// top-down would place later attributes using stale line numbers.
+	for i := len(blocks) - 1; i >= 0; i-- {
+		block := blocks[i]
 		if block.Type == "include" && len(block.Labels) > 0 {
 			attrs := ast.GetBlockAttributes(block.Block.Body)
 			if _, ok := attrs["expose"]; !ok {

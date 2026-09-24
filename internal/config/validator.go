@@ -37,7 +37,9 @@ func ValidateConfigFile(path string) []ValidationIssue {
 
 	rules, err := loadHCLConfig(path)
 	if err != nil {
-		// Parse errors are surfaced at load time; skip required-field checks.
+		// A syntax error or broken extends chain (missing file, unknown
+		// builtin: preset, cycle) makes every lint using this config fail.
+		issues = append(issues, ValidationIssue{File: path, Message: err.Error()})
 		return issues
 	}
 	issues = append(issues, detectMisconfiguredRules(path, rules)...)

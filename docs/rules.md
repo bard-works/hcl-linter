@@ -353,7 +353,7 @@ include "root" {
 
 **Rule ID:** `remote_state_backend_required` - **Severity:** error
 
-Applies to a `remote_state { }` block nested inside the top-level `terraform { }`. When `require_backend = true`, `backend` must be set and non-empty.
+Applies to top-level `remote_state { }` blocks, which is where Terragrunt defines them (usually in `root.hcl`). A `remote_state` nested inside `terraform { }` is also checked. When `require_backend = true`, `backend` must be set and non-empty.
 
 **Configuration:**
 
@@ -369,12 +369,11 @@ rules {
 **Example violation:**
 
 ```hcl
-terraform {
-  remote_state {
-    # ERROR: missing required 'backend' attribute
-    config {
-      bucket = "my-bucket"
-    }
+# root.hcl
+remote_state {
+  # ERROR: missing required 'backend' attribute
+  config = {
+    bucket = "my-bucket"
   }
 }
 ```

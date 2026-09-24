@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -13,25 +14,20 @@ import (
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
 
-const defaultInitTemplate = `rules {
-  block_order {
-    enabled = true
-    order   = ["include", "locals", "terraform", "dependency", "inputs"]
-  }
+// defaultInitTemplate is the fallback config for files without their own
+// config. %s is the builtin preset chosen for the project.
+const defaultInitTemplate = `# Fallback rules for any file without its own config in this directory.
+# builtin:%[1]s is the recommended rule set shipped with hcl-linter; list it
+# with ` + "`hcl-linter explain`" + `. To change a rule, redefine its block
+# below - a block here replaces the preset's block of the same name.
+extends = "builtin:%[1]s"
 
-  array_format {
-    enabled             = true
-    multiline_threshold = 2
-  }
-
-  blank_lines {
-    enabled       = true
-    within_blocks = true
-  }
+rules {
 }
 `
 
-const extendsInitTemplate = `extends = "default"
+// extendsInitTemplate is a per-filename config; %s is what it extends.
+const extendsInitTemplate = `extends = "%s"
 
 rules {
 }
@@ -83,8 +79,9 @@ func (a *app) runInit(_ *cobra.Command, args []string) error {
 	fmt.Fprintf(a.out, "\n%s Wrote %d config file(s) to %s\n",
 		termcolor.Success("OK:"), len(proposed), configDir)
 	fmt.Fprintln(a.out, "Next steps:")
-	fmt.Fprintln(a.out, "  hcl-linter validate-config")
-	fmt.Fprintln(a.out, "  hcl-linter fix ./ --dry-run")
+	fmt.Fprintln(a.out, "  hcl-linter check .              # see what the rules report")
+	fmt.Fprintln(a.out, "  hcl-linter fix . --dry-run     # preview auto-fixes")
+	fmt.Fprintln(a.out, "  hcl-linter explain             # list rules you can enable")
 	return nil
 }
 
@@ -103,18 +100,50 @@ func uniqueBasenames(files []string) []string {
 	return names
 }
 
-// proposedInitLayout returns a map of absolute config-file path to content.
-// default.hcl is always included; each unique non-default basename gets a
-// thin `extends = "default"` override file.
-func proposedInitLayout(configDir string, names []string) map[string]string {
-	layout := map[string]string{
-		filepath.Join(configDir, "default.hcl"): defaultInitTemplate,
-	}
+// isTerragruntProject reports whether any target is a Terragrunt file.
+func isTerragruntProject(names []string) bool {
 	for _, n := range names {
-		if n == "default.hcl" {
+		if n == "terragrunt.hcl" || n == "root.hcl" {
+			return true
+		}
+	}
+	return false
+}
+
+// proposedInitLayout returns a map of absolute config-file path to content.
+// Config files are keyed by target name without extension, which is how the
+// loader looks them up: main.tf -> main.hcl. default.hcl extends the preset
+// matching the project; each other name gets a thin override. In a Terragrunt
+// project, Terraform files extend builtin:terraform directly because the
+// Terragrunt preset's block order makes no sense for them.
+func proposedInitLayout(configDir string, names []string) map[string]string {
+	terragrunt := isTerragruntProject(names)
+	preset := "terraform"
+	if terragrunt {
+		preset = "terragrunt"
+	}
+	layout := map[string]string{
+		filepath.Join(configDir, "default.hcl"): fmt.Sprintf(defaultInitTemplate, preset),
+	}
+
+	// A foo.hcl and foo.tf share foo.hcl; the .hcl file's needs win.
+	stems := map[string]string{}
+	for _, n := range names {
+		stem := strings.TrimSuffix(n, filepath.Ext(n))
+		if stem == "default" || stem == "" {
 			continue
 		}
-		layout[filepath.Join(configDir, n)] = extendsInitTemplate
+		if prev, ok := stems[stem]; ok && filepath.Ext(prev) == ".hcl" {
+			continue
+		}
+		stems[stem] = n
+	}
+	for stem, n := range stems {
+		base := "default"
+		if terragrunt && filepath.Ext(n) == ".tf" {
+			base = "builtin:terraform"
+		}
+		layout[filepath.Join(configDir, stem+".hcl")] = fmt.Sprintf(extendsInitTemplate, base)
 	}
 	return layout
 }

@@ -109,6 +109,7 @@ type app struct {
 	dryRun            bool
 	color             string
 	validateRecursive bool
+	outputFormat      string
 	includeHidden     bool
 	initForce         bool
 }
@@ -118,6 +119,8 @@ func newApp() *app {
 		out:    os.Stdout,
 		errOut: os.Stderr,
 		color:  termcolor.ModeAuto,
+
+		outputFormat: outputText,
 	}
 }
 
@@ -160,21 +163,26 @@ func newRootCmd() *cobra.Command {
 		BoolVar(&a.includeHidden, "include-hidden", false, "Include files in hidden directories (directories starting with .)")
 
 	lintCmd := &cobra.Command{
-		Use:   "lint [path]",
+		Use:   "lint <path>...",
 		Short: "Lint HCL files and report issues (exit 0 even when issues are found; use 'check' to gate CI)",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE:  a.runLint,
 	}
 	checkCmd := &cobra.Command{
-		Use:   "check [path]",
+		Use:   "check <path>...",
 		Short: "Check HCL files (exit 1 if issues found)",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE:  a.runCheck,
 	}
+	for _, c := range []*cobra.Command{lintCmd, checkCmd} {
+		c.Flags().StringVarP(&a.outputFormat, "output", "o", outputText,
+			"Result format: "+strings.Join(outputFormats, ", "))
+		c.PreRunE = func(_ *cobra.Command, _ []string) error { return validateOutputFormat(a.outputFormat) }
+	}
 	fixCmd := &cobra.Command{
-		Use:   "fix [path]",
+		Use:   "fix <path>...",
 		Short: "Auto-fix HCL files",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE:  a.runFix,
 	}
 	fixCmd.Flags().
@@ -216,37 +224,27 @@ func (a *app) getLoader() (*config.Loader, *config.ConfigResult) {
 }
 
 func (a *app) runLint(cmd *cobra.Command, args []string) error {
-	path := args[0]
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("path error: %w", err)
-	}
-	loader, _ := a.loadConfig()
-	eng := engine.New(loader)
-	filesToLint := a.filterFilesByConfig(loader, path)
-	if len(filesToLint) == 0 {
-		return nil
-	}
-	a.listFilesVerbose(filesToLint)
-	allResults := eng.LintFiles(cmdContext(cmd), filesToLint, a.resolveConcurrency())
-	if err := interrupted(cmd); err != nil {
-		return err
-	}
-	_, execFailures := a.printLintResults(allResults)
-	if execFailures > 0 {
-		return execErrorf("%d file(s) could not be linted", execFailures)
-	}
-	return nil
+	return a.lintPaths(cmd, args, false)
 }
 
 func (a *app) runCheck(cmd *cobra.Command, args []string) error {
-	path := args[0]
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("path error: %w", err)
+	return a.lintPaths(cmd, args, true)
+}
+
+// lintPaths lints every target under paths. When gate is true (check), any
+// error-severity finding fails the run with exit 1.
+func (a *app) lintPaths(cmd *cobra.Command, paths []string, gate bool) error {
+	targets, err := a.collectTargets(paths)
+	if err != nil {
+		return err
 	}
-	loader, _ := a.loadConfig()
+	loader, err := a.loadConfig()
+	if err != nil {
+		return err
+	}
 	eng := engine.New(loader)
-	filesToLint := a.filterFilesByConfig(loader, path)
-	if len(filesToLint) == 0 {
+	filesToLint := a.filterFilesByConfig(loader, targets)
+	if len(filesToLint) == 0 && a.outputFormat == outputText {
 		return nil
 	}
 	a.listFilesVerbose(filesToLint)
@@ -254,11 +252,14 @@ func (a *app) runCheck(cmd *cobra.Command, args []string) error {
 	if err := interrupted(cmd); err != nil {
 		return err
 	}
-	hasErrors, execFailures := a.printLintResults(allResults)
+	hasErrors, execFailures, err := a.reportLintResults(allResults)
+	if err != nil {
+		return err
+	}
 	if execFailures > 0 {
 		return execErrorf("%d file(s) could not be linted", execFailures)
 	}
-	if hasErrors {
+	if gate && hasErrors {
 		return findingsErrorf("lint check failed")
 	}
 	return nil
@@ -293,21 +294,47 @@ func relPath(path string) string {
 	return rel
 }
 
-func (a *app) loadConfig() (*config.Loader, *config.ConfigResult) {
+// errNoConfig is returned by commands that need rules when none were found.
+var errNoConfig = errors.New(
+	"no .hcl-linter/ config found (looked in --config-source, HCL_LINTER_CONFIG_DIR, ./.hcl-linter, ~/.hcl-linter)\n" +
+		"  run `hcl-linter init` to create one, or `hcl-linter fix --format <path>` to format without config")
+
+func (a *app) loadConfig() (*config.Loader, error) {
 	loader, configResult := a.getLoader()
 	if configResult.Source == config.ConfigSourceNone {
-		fmt.Fprintf(a.errOut, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
-	} else {
-		fmt.Fprintf(a.errOut, "Using config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
-		if configResult.WarningMsg != "" {
-			fmt.Fprintf(a.errOut, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
-		}
-		a.warnConfigIssues(configResult.SourcePath)
+		return nil, errNoConfig
 	}
+	fmt.Fprintf(a.errOut, "Using config: %s (%s)\n", configResult.SourcePath, configResult.Source.String())
+	if configResult.WarningMsg != "" {
+		fmt.Fprintf(a.errOut, "%s %s\n", termcolor.Warning("Warning:"), configResult.WarningMsg)
+	}
+	a.warnConfigIssues(configResult.SourcePath)
 	if loader == nil {
 		loader = &config.Loader{}
 	}
-	return loader, configResult
+	return loader, nil
+}
+
+// collectTargets resolves every path argument to the HCL files beneath it,
+// applies --filter, and drops duplicates while keeping argument order.
+func (a *app) collectTargets(paths []string) ([]string, error) {
+	var files []string
+	seen := map[string]bool{}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err != nil {
+			return nil, fmt.Errorf("path error: %w", err)
+		}
+		for _, f := range a.resolveFiles(p) {
+			if !seen[f] {
+				seen[f] = true
+				files = append(files, f)
+			}
+		}
+	}
+	if len(a.filter) > 0 {
+		files = a.filterFiles(files)
+	}
+	return files, nil
 }
 
 func (a *app) resolveFiles(path string) []string {
@@ -321,20 +348,23 @@ func (a *app) resolveFiles(path string) []string {
 	return []string{path}
 }
 
-func (a *app) filterFilesByConfig(loader *config.Loader, path string) []string {
-	files := a.resolveFiles(path)
-	if len(a.filter) > 0 {
-		files = a.filterFiles(files)
-	}
+// filterFilesByConfig keeps the files that have a matching config. Files that
+// fall back to default.hcl are reported once per filename, not once per file,
+// so a monorepo with hundreds of terragrunt.hcl files stays readable.
+func (a *app) filterFilesByConfig(loader *config.Loader, files []string) []string {
 	var filesToProcess []string
+	warned := map[string]bool{}
 	for _, file := range files {
-		hasSpecificConfig := loader.HasSpecificConfigForFile(file)
-		rel := relPath(file)
 		if !loader.HasConfigForFile(file) {
 			continue
 		}
-		if !hasSpecificConfig {
-			fmt.Fprintf(a.errOut, "%s No specific config for %s, using defaults\n", termcolor.Warning("Warning:"), rel)
+		if !loader.HasSpecificConfigForFile(file) {
+			base := filepath.Base(file)
+			if !warned[base] {
+				warned[base] = true
+				fmt.Fprintf(a.errOut, "%s No specific config for %s files, using default.hcl\n",
+					termcolor.Warning("Warning:"), base)
+			}
 		}
 		filesToProcess = append(filesToProcess, file)
 	}
@@ -348,18 +378,10 @@ func (a *app) resolveConcurrency() int {
 	return config.GetMaxConcurrency(nil)
 }
 
-// printLintResults renders all issues to the result stream and returns whether
-// any error-severity issues were found and how many files failed to lint at
-// all (parse/IO failures surfaced as linter_error).
-func (a *app) printLintResults(allResults []*diag.Result) (hasErrors bool, execFailures int) {
+// printLintResults renders all issues and a summary as human-readable text.
+func (a *app) printLintResults(allResults []*diag.Result) {
 	for _, result := range allResults {
 		for _, issue := range result.Issues {
-			if issue.Severity == diag.SeverityError {
-				hasErrors = true
-			}
-			if issue.Rule == diag.RuleLinterError {
-				execFailures++
-			}
 			a.printIssue(result.File, issue)
 		}
 	}
@@ -375,21 +397,23 @@ func (a *app) printLintResults(allResults []*diag.Result) (hasErrors bool, execF
 	} else {
 		fmt.Fprintln(a.out, termcolor.Success("All files pass!"))
 	}
-	return hasErrors, execFailures
 }
 
 func (a *app) runFix(cmd *cobra.Command, args []string) error {
 	if a.format {
 		return a.runFormatMode(cmd, args)
 	}
-	path := args[0]
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("path error: %w", err)
+	targets, err := a.collectTargets(args)
+	if err != nil {
+		return err
 	}
-	loader, _ := a.loadConfig()
+	loader, err := a.loadConfig()
+	if err != nil {
+		return err
+	}
 	eng := engine.New(loader)
 	eng.DryRun = a.dryRun
-	filesToFix := a.filterFilesByConfig(loader, path)
+	filesToFix := a.filterFilesByConfig(loader, targets)
 	if len(filesToFix) == 0 {
 		return nil
 	}
@@ -401,23 +425,18 @@ func (a *app) runFix(cmd *cobra.Command, args []string) error {
 	if err := interrupted(cmd); err != nil {
 		return err
 	}
-	totalChanges, wouldChange := a.handleFixResults(results, a.dryRun)
-	return a.finalizeFixRun(totalChanges, wouldChange, a.dryRun)
+	return a.finishFix(results)
 }
 
 func (a *app) runFormatMode(cmd *cobra.Command, args []string) error {
-	path := args[0]
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("path error: %w", err)
-	}
 	// --format applies built-in defaults and never reads .hcl-linter/, so
-	// every HCL file under path is a target whether or not config exists.
+	// every HCL file under the paths is a target whether or not config exists.
+	files, err := a.collectTargets(args)
+	if err != nil {
+		return err
+	}
 	eng := engine.New(&config.Loader{})
 	eng.DryRun = a.dryRun
-	files := a.resolveFiles(path)
-	if len(a.filter) > 0 {
-		files = a.filterFiles(files)
-	}
 	if len(files) == 0 {
 		return nil
 	}
@@ -429,8 +448,7 @@ func (a *app) runFormatMode(cmd *cobra.Command, args []string) error {
 	if err := interrupted(cmd); err != nil {
 		return err
 	}
-	totalChanges, wouldChange := a.handleFixResults(results, a.dryRun)
-	return a.finalizeFixRun(totalChanges, wouldChange, a.dryRun)
+	return a.finishFix(results)
 }
 
 func (a *app) filterFiles(files []string) []string {
@@ -640,6 +658,22 @@ func (a *app) handleFixResults(results []*engine.FixResult, dryRun bool) (totalC
 		}
 	}
 	return totalChanges, wouldChange
+}
+
+// finishFix reports fix results and maps them to an exit status. A file that
+// could not be fixed is an execution failure (exit 3), never "no changes".
+func (a *app) finishFix(results []*engine.FixResult) error {
+	totalChanges, wouldChange := a.handleFixResults(results, a.dryRun)
+	failed := 0
+	for _, r := range results {
+		if r.Error != nil {
+			failed++
+		}
+	}
+	if failed > 0 {
+		return execErrorf("%d file(s) could not be fixed", failed)
+	}
+	return a.finalizeFixRun(totalChanges, wouldChange, a.dryRun)
 }
 
 // finalizeFixRun prints the trailing summary (or dry-run error) common to

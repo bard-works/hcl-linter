@@ -112,3 +112,16 @@ func TestRequiredFieldsRuleFix(t *testing.T) {
 		t.Errorf("expected expose = true in output:\n%s", string(ctx.Content))
 	}
 }
+
+func TestFixRequiredFieldsMultipleBlocks(t *testing.T) {
+	src := "include \"root\" {\n  path = \"a\"\n}\n\ninclude \"vpc\" {\n  path = \"b\"\n}\n"
+	cfg := &config.Rules{RequiredFields: &config.RequiredFieldsConfig{
+		Include: &config.IncludeRequired{Expose: true},
+	}}
+	ctx := buildContext(t, src, cfg)
+	got, changed := rules.FixRequiredFields(src, ctx.Blocks, cfg.RequiredFields)
+	want := "include \"root\" {\n  path = \"a\"\n  expose = true\n}\n\ninclude \"vpc\" {\n  path = \"b\"\n  expose = true\n}\n"
+	if !changed || got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}

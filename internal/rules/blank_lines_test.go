@@ -85,3 +85,12 @@ func TestBlankLinesRuleFix(t *testing.T) {
 		})
 	}
 }
+
+func TestFixBlankLinesLeadingBlankOnly(t *testing.T) {
+	src := "locals {\n\n  x = 1\n}\n"
+	ctx := buildContext(t, src, &config.Rules{BlankLines: &config.BlankLinesConfig{Enabled: true, WithinBlocks: true}})
+	got, changes := rules.FixBlankLines(src, ctx.Blocks, ctx.Attrs)
+	if changes == 0 || got != "locals {\n  x = 1\n}\n" {
+		t.Errorf("leading blank line not removed (changes=%d):\n%q", changes, got)
+	}
+}
