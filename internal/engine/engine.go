@@ -140,6 +140,14 @@ func (e *Engine) LintFile(path string) (*diag.Result, error) {
 			result.Issues = append(result.Issues, is)
 		}
 	}
+	// Report in file order, as editors and reviewers read it.
+	sort.SliceStable(result.Issues, func(i, j int) bool {
+		a, b := result.Issues[i].Location.Start, result.Issues[j].Location.Start
+		if a.Line != b.Line {
+			return a.Line < b.Line
+		}
+		return a.Column < b.Column
+	})
 
 	return result, nil
 }
@@ -270,9 +278,16 @@ func (e *Engine) FixFile(path string) (*FixResult, error) {
 		return nil, err
 	}
 
+	original := ctx.Content
 	changes, err := e.runFixPipeline(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// Never turn a terraform-fmt-clean file into one `terraform fmt -check`
+	// rejects (e.g. a fixer expanding an array breaks `=` alignment). Files
+	// that weren't fmt-clean are left to the user's own formatting.
+	if changes > 0 && bytes.Equal(hclwrite.Format(original), original) {
+		ctx.Content = hclwrite.Format(ctx.Content)
 	}
 
 	result := &FixResult{File: path, Changes: changes}

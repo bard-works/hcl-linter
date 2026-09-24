@@ -2,11 +2,12 @@
 
 ## Supported Versions
 
-Only the latest minor release receives security fixes.
+Only the latest release receives security fixes.
 
-| Version     | Supported          |
-| ----------- | ------------------ |
-| 0.0.1-alpha | :white_check_mark: |
+| Version        | Supported          |
+| -------------- | ------------------ |
+| latest release | :white_check_mark: |
+| older          | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -22,3 +23,14 @@ You can expect an initial response within 7 days. Please include:
 - A description of the issue and its impact
 - Steps to reproduce (a minimal HCL file or command invocation)
 - The version (`hcl-linter version`) and platform where you observed it
+
+## Verifying releases
+
+Release archives carry build-provenance attestations. Verify a download with:
+
+```bash
+gh attestation verify hcl-linter_<version>_<os>_<arch>.tar.gz --repo bard-works/hcl-linter
+```
+
+`checksums.txt` in each release lists SHA-256 sums; `scripts/install.sh`
+checks them automatically.

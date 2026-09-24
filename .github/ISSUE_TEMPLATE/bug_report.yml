@@ -1,0 +1,40 @@
+name: Bug report
+description: hcl-linter reported something wrong, missed something, or changed a file incorrectly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Minimal HCL file
+      description: The smallest file that reproduces it. Remove anything sensitive.
+      render: hcl
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Config
+      description: The matching `.hcl-linter/*.hcl` file(s), or "none" for `fix --format`.
+      render: hcl
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      placeholder: hcl-linter check . --output json
+    validations:
+      required: true
+  - type: textarea
+    id: version
+    attributes:
+      label: Version
+      description: Output of `hcl-linter version`, and your OS.
+      render: text
+    validations:
+      required: true

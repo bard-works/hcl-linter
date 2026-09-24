@@ -1,0 +1,39 @@
+name: Rule request
+description: Suggest a new check, a new option for an existing rule, or a preset change
+labels: [rule-request]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What mistake should be caught?
+      description: What goes wrong today, and how you notice it (plan failure, review comment, outage...).
+    validations:
+      required: true
+  - type: textarea
+    id: bad
+    attributes:
+      label: Example that should be flagged
+      render: hcl
+    validations:
+      required: true
+  - type: textarea
+    id: good
+    attributes:
+      label: The same example, corrected
+      render: hcl
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Applies to
+      options:
+        - Terragrunt
+        - Terraform
+        - Any HCL
+    validations:
+      required: true
+  - type: checkboxes
+    id: fix
+    attributes:
+      label: Auto-fix
+      options:
+        - label: This could be fixed automatically without changing what the configuration does

@@ -1,11 +1,14 @@
 package engine_test
 
 import (
+	"bytes"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/hcl/v2/hclwrite"
 
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/engine"
@@ -166,5 +169,40 @@ func TestDemoFilesMatchTheirNames(t *testing.T) {
 				t.Error("violation demo reports nothing")
 			}
 		})
+	}
+}
+
+// fix must not make a terraform-fmt-clean file fail `terraform fmt -check`.
+func TestFixKeepsFmtCleanFilesClean(t *testing.T) {
+	dir := t.TempDir()
+	cfgDir := filepath.Join(dir, ".hcl-linter")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(cfgDir, "default.hcl"),
+		[]byte(`extends = "builtin:terragrunt"`+"\n"),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "terragrunt.hcl")
+	src := "inputs = {\n  a   = \"x\"\n  azs = [\"a\", \"b\"]\n  b   = \"y\"\n}\n"
+	if !bytes.Equal(hclwrite.Format([]byte(src)), []byte(src)) {
+		t.Fatal("fixture must start fmt-clean")
+	}
+	if err := os.WriteFile(target, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := engine.New(config.NewLoader(cfgDir)).FixFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Changes == 0 {
+		t.Fatal("expected array_format to change the file")
+	}
+	got := []byte(res.Content)
+	if !bytes.Equal(hclwrite.Format(got), got) {
+		t.Errorf("fix left the file failing terraform fmt:\n%s", got)
 	}
 }
