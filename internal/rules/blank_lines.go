@@ -1,7 +1,10 @@
 package rules
 
 import (
+	"fmt"
 	"strings"
+
+	"github.com/hashicorp/hcl/v2"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
@@ -17,7 +20,7 @@ func init() { Register(BlankLinesRule{}) }
 
 func (r BlankLinesRule) Doc() RuleDoc {
 	return RuleDoc{
-		Summary:     "Removes excess blank lines within blocks and object attributes (fix-only).",
+		Summary:     "Removes excess blank lines within blocks and object attributes.",
 		Severity:    "warning",
 		Fixable:     true,
 		ConfigBlock: "blank_lines",
@@ -46,7 +49,28 @@ func (r BlankLinesRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.BlankLines != nil && cfg.BlankLines.Enabled && cfg.BlankLines.WithinBlocks
 }
 
-func (r BlankLinesRule) Check(_ *Context) []diag.Issue { return nil }
+// Check reports what Fix would change, so `check` in CI catches the same
+// drift as `fix --dry-run`: one warning at the first line Fix would remove.
+func (r BlankLinesRule) Check(ctx *Context) []diag.Issue {
+	fixed, changes := FixBlankLines(string(ctx.Content), ctx.Blocks, ctx.Attrs)
+	if changes == 0 || fixed == string(ctx.Content) {
+		return nil
+	}
+	before := strings.Split(string(ctx.Content), "\n")
+	after := strings.Split(fixed, "\n")
+	line := 1
+	for line <= len(before) && line <= len(after) && before[line-1] == after[line-1] {
+		line++
+	}
+	removed := len(before) - len(after)
+	pos := hcl.Pos{Line: line, Column: 1}
+	return []diag.Issue{{
+		Severity: diag.SeverityWarning,
+		Rule:     "blank_lines",
+		Message:  fmt.Sprintf("%d extra blank line(s) inside blocks; run `hcl-linter fix` to remove", removed),
+		Location: hcl.Range{Filename: ctx.FilePath, Start: pos, End: pos},
+	}}
+}
 
 func (r BlankLinesRule) Fix(ctx *Context) (int, error) {
 	newContent, changes := FixBlankLines(string(ctx.Content), ctx.Blocks, ctx.Attrs)

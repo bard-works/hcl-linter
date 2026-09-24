@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/zclconf/go-cty/cty"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
@@ -98,14 +99,42 @@ func (r TerraformBlockRule) Check(ctx *Context) []diag.Issue {
 }
 
 func checkTFSourceRequired(issues *[]diag.Issue, attrs map[string]hcl.Expression, block *hclsyntax.Block) {
-	if _, ok := attrs["source"]; !ok {
+	src, ok := attrs["source"]
+	if !ok {
 		*issues = append(*issues, diag.Issue{
 			Severity: diag.SeverityError,
 			Rule:     "terraform_source_required",
 			Message:  "terraform block must have 'source' attribute",
 			Location: block.TypeRange,
 		})
+		return
 	}
+	// An expression (interpolation, function call) can't be judged
+	// statically; only a literal empty string is certainly wrong.
+	if isEmptyStringLiteral(src) {
+		*issues = append(*issues, diag.Issue{
+			Severity: diag.SeverityError,
+			Rule:     "terraform_source_required",
+			Message:  "terraform block 'source' is empty",
+			Location: src.Range(),
+		})
+	}
+}
+
+func isEmptyStringLiteral(expr hcl.Expression) bool {
+	switch e := expr.(type) {
+	case *hclsyntax.TemplateExpr:
+		for _, part := range e.Parts {
+			lit, ok := part.(*hclsyntax.LiteralValueExpr)
+			if !ok || lit.Val.Type() != cty.String || lit.Val.AsString() != "" {
+				return false
+			}
+		}
+		return true
+	case *hclsyntax.LiteralValueExpr:
+		return e.Val.Type() == cty.String && e.Val.AsString() == ""
+	}
+	return false
 }
 
 func checkTFVersionFormat(issues *[]diag.Issue, attrs map[string]hcl.Expression) {

@@ -323,3 +323,18 @@ func TestTerraformDeprecatedFields(t *testing.T) {
 		})
 	}
 }
+
+func TestTerraformSourceEmptyString(t *testing.T) {
+	cfg := &config.Rules{TerraformBlock: &config.TerraformBlockConfig{Enabled: true, SourceRequired: true}}
+	for src, want := range map[string]int{
+		"terraform {\n  source = \"\"\n}\n":                             1,
+		"terraform {\n  source = \"../modules/app\"\n}\n":               0,
+		"terraform {\n  source = \"${get_repo_root()}/modules/x\"\n}\n": 0,
+		"terraform {\n  source = local.src\n}\n":                        0,
+	} {
+		issues := TerraformBlockRule{}.Check(buildContext(t, src, cfg))
+		if len(issues) != want {
+			t.Errorf("%q: got %d issue(s), want %d: %+v", src, len(issues), want, issues)
+		}
+	}
+}

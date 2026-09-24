@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"sort"
@@ -54,14 +55,21 @@ func (r ArrayFormatRule) Enabled(cfg *config.Rules) bool {
 }
 
 func (r ArrayFormatRule) Check(ctx *Context) []diag.Issue {
+	threshold := arrayThreshold(ctx.Config.ArrayFormat)
 	var issues []diag.Issue
-	checkArrayFormatBlocks(&issues, ctx.Blocks)
+	for _, attr := range ctx.Attrs {
+		if e, ok := attr.Expr.(hclsyntax.Expression); ok {
+			checkExprArrayFormat(&issues, e, threshold)
+		}
+	}
+	checkArrayFormatBlocks(&issues, ctx.Blocks, threshold)
 	return issues
 }
 
 func (r ArrayFormatRule) Fix(ctx *Context) (int, error) {
-	sortItems := ctx.Config.ArrayFormat != nil && ctx.Config.ArrayFormat.Sort
-	newContent, changes := FixArrays(string(ctx.Content), sortItems)
+	cfg := ctx.Config.ArrayFormat
+	sortItems := cfg != nil && cfg.Sort
+	newContent, changes := fixArrays(string(ctx.Content), sortItems, arrayThreshold(cfg))
 	if changes == 0 {
 		return 0, nil
 	}
@@ -69,12 +77,20 @@ func (r ArrayFormatRule) Fix(ctx *Context) (int, error) {
 	return changes, nil
 }
 
+// arrayThreshold is the item count from which arrays go one item per line.
+func arrayThreshold(cfg *config.ArrayFormatConfig) int {
+	if cfg == nil || cfg.MultilineThreshold < 1 {
+		return 2
+	}
+	return cfg.MultilineThreshold
+}
+
 var (
-	// key = ["a", "b"]   (optionally followed by a comma inside an object)
+	// Matches `key = ["a", "b"]`, optionally followed by a comma inside an object.
 	inlineArrayRe = regexp.MustCompile(`^(\s*)([A-Za-z_][\w-]*|"[^"]*")\s*=\s*\[(.*)\](\s*,?)\s*$`)
-	// key = [
+	// Matches `key = [` opening a multiline array.
 	arrayOpenRe = regexp.MustCompile(`^(\s*)([A-Za-z_][\w-]*|"[^"]*")\s*=\s*\[\s*$`)
-	// ]   or   ],
+	// Matches the closing `]` or `],`.
 	arrayCloseRe = regexp.MustCompile(`^\s*\](\s*,?)\s*$`)
 )
 
@@ -88,6 +104,10 @@ var (
 // literals. Arrays of objects, function calls, interpolations, trailing
 // comments, and anything inside heredocs are left alone.
 func FixArrays(content string, sortItems bool) (string, int) {
+	return fixArrays(content, sortItems, 2)
+}
+
+func fixArrays(content string, sortItems bool, threshold int) (string, int) {
 	skip, ok := nonCodeLines(content)
 	if !ok {
 		return content, 0
@@ -103,7 +123,7 @@ func FixArrays(content string, sortItems bool) (string, int) {
 			continue
 		}
 		if m := inlineArrayRe.FindStringSubmatch(line); m != nil {
-			if items, ok := splitStringItems(m[3]); ok && len(items) >= 2 {
+			if items, ok := splitStringItems(m[3]); ok && len(items) >= threshold {
 				out = append(out, renderArray(m[1], m[2], items, strings.TrimSpace(m[4]), sortItems)...)
 				changes++
 				continue
@@ -157,7 +177,11 @@ func nonCodeLines(content string) (map[int]bool, bool) {
 // collectMultilineArray reads the array opened on lines[start] up to its
 // closing bracket. ok is false unless every line in between holds only plain
 // string items.
-func collectMultilineArray(lines []string, start int, skip map[int]bool) (end int, items []string, suffix string, ok bool) {
+func collectMultilineArray(
+	lines []string,
+	start int,
+	skip map[int]bool,
+) (end int, items []string, suffix string, ok bool) {
 	for i := start + 1; i < len(lines); i++ {
 		if skip[i+1] {
 			return 0, nil, "", false
@@ -242,50 +266,58 @@ func renderArray(indent, key string, items []string, suffix string, sortItems bo
 
 // --- Check helpers ---
 
-func checkArrayFormatBlocks(issues *[]diag.Issue, blocks []ast.BlockInfo) {
+// The check reports exactly what the fixer rewrites: a single-line array of
+// plain string literals with at least threshold items.
+
+func checkArrayFormatBlocks(issues *[]diag.Issue, blocks []ast.BlockInfo, threshold int) {
 	for _, block := range blocks {
-		if len(block.Block.Body.Attributes) > 0 {
-			for _, attr := range block.Block.Body.Attributes {
-				checkExprArrayFormat(issues, attr.Expr)
-			}
+		for _, attr := range block.Block.Body.Attributes {
+			checkExprArrayFormat(issues, attr.Expr, threshold)
 		}
 		if len(block.Block.Body.Blocks) > 0 {
-			checkArrayFormatBlocks(issues, ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks))
+			checkArrayFormatBlocks(issues, ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks), threshold)
 		}
 	}
 }
 
-func checkExprArrayFormat(issues *[]diag.Issue, expr hclsyntax.Expression) {
+func checkExprArrayFormat(issues *[]diag.Issue, expr hclsyntax.Expression, threshold int) {
 	switch e := expr.(type) {
 	case *hclsyntax.TupleConsExpr:
-		if len(e.Exprs) > 1 {
-			allStrings := true
-			for _, ex := range e.Exprs {
-				if !isStringLiteralExpr(ex) {
-					allStrings = false
-					break
-				}
-			}
-			if allStrings {
-				*issues = append(*issues, diag.Issue{
-					Severity: diag.SeverityWarning,
-					Rule:     "array_format",
-					Message:  "tuple of string literals should be written as a list for better readability",
-				})
+		rng := e.Range()
+		if len(e.Exprs) < threshold || rng.Start.Line != rng.End.Line {
+			return
+		}
+		for _, ex := range e.Exprs {
+			if !isStringLiteralExpr(ex) {
+				return
 			}
 		}
+		*issues = append(*issues, diag.Issue{
+			Severity: diag.SeverityWarning,
+			Rule:     "array_format",
+			Message:  fmt.Sprintf("array with %d items should list one item per line", len(e.Exprs)),
+			Location: rng,
+		})
 	case *hclsyntax.ObjectConsExpr:
 		for _, item := range e.Items {
-			checkExprArrayFormat(issues, item.ValueExpr)
+			checkExprArrayFormat(issues, item.ValueExpr, threshold)
 		}
 	}
 }
 
+// isStringLiteralExpr reports whether expr is a plain quoted string with no
+// interpolation or template directives.
 func isStringLiteralExpr(expr hclsyntax.Expression) bool {
 	switch e := expr.(type) {
 	case *hclsyntax.LiteralValueExpr:
 		return e.Val.Type() == cty.String
 	case *hclsyntax.TemplateExpr:
+		for _, part := range e.Parts {
+			lit, ok := part.(*hclsyntax.LiteralValueExpr)
+			if !ok || lit.Val.Type() != cty.String {
+				return false
+			}
+		}
 		return true
 	default:
 		return false

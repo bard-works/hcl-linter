@@ -234,7 +234,11 @@ func TestFixFormatWithoutConfigIsIdempotent(t *testing.T) {
 
 	root := t.TempDir()
 	target := filepath.Join(root, "terragrunt.hcl")
-	writeFile(t, target, "terraform {\n  source = \"../m\"\n}\ninclude \"root\" {\n  path = \"../root.hcl\"\n}\ninputs = {\n  azs = [\"a\", \"b\"]\n  name = \"x\"\n}\n")
+	writeFile(
+		t,
+		target,
+		"terraform {\n  source = \"../m\"\n}\ninclude \"root\" {\n  path = \"../root.hcl\"\n}\ninputs = {\n  azs = [\"a\", \"b\"]\n  name = \"x\"\n}\n",
+	)
 
 	a, _ := newCaptureApp()
 	a.format = true

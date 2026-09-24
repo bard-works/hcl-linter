@@ -9,17 +9,17 @@ plus `.hcl-linter/` configs named after the demo files.
 docs/demo/
 ├── valid/                              # Pure/vanilla examples (valid only)
 │   ├── .hcl-linter/
-│   │   └── default.hcl                 # Config for .tf files (fallback)
+│   │   ├── default.hcl                 # Config for main.tf (fallback)
+│   │   └── iam_policy_valid.hcl        # Config for iam_policy_valid.hcl
 │   ├── iam_policy_valid.hcl            # Clean Terragrunt IAM policy
-│   └── iam_policy_valid.tf             # Clean Terraform IAM policy (.tf)
+│   └── main.tf                         # Clean Terraform IAM policy
 ├── invalid/                            # Violation examples
 │   ├── .hcl-linter/
-│   │   ├── default.hcl                 # Config for invalid_terraform.tf
-│   │   ├── iam_policy_violation.hcl    # Config for .hcl violation
-│   │   └── iam_policy_violation.tf.hcl # Config for .tf violation
+│   │   ├── default.hcl                 # Config for the .tf files (fallback)
+│   │   └── iam_policy_violation.hcl    # Config for iam_policy_violation.hcl
 │   ├── invalid_terraform.tf            # Multi-violation: order, camelCase, inline arrays
 │   ├── iam_policy_violation.hcl        # Violations: order, naming, arrays
-│   └── iam_policy_violation.tf         # Violations: order, camelCase, inline arrays
+│   └── main.tf                         # Violations: order, inline arrays
 ├── block_order/
 │   ├── .hcl-linter/
 │   │   ├── block_order_valid.hcl       # Config for valid file
@@ -32,6 +32,15 @@ docs/demo/
 │   └── array_format_violation.hcl
 └── ...
 ```
+
+Config files are matched by target name without extension (`main.tf` →
+`.hcl-linter/main.hcl`, falling back to `default.hcl`), which is why the
+Terraform examples are named `main.tf` rather than sharing a stem with the
+`.hcl` examples.
+
+`go test ./internal/engine/` checks this corpus: every `*_valid` file must
+lint clean, every `*_violation` file must report something, and `fix` must
+be stable (a second run changes nothing).
 
 ## File Naming
 
@@ -69,8 +78,8 @@ hcl-linter lint docs/demo/name_validation/ --config-source docs/demo/name_valida
 hcl-linter lint docs/demo/required_fields/ --config-source docs/demo/required_fields/.hcl-linter --verbose
 
 # Pure Terraform (.tf) examples - uses default.hcl fallback
-hcl-linter lint docs/demo/valid/iam_policy_valid.tf --config-source docs/demo/valid/.hcl-linter --verbose
-hcl-linter lint docs/demo/invalid/iam_policy_violation.tf --config-source docs/demo/invalid/.hcl-linter --verbose
+hcl-linter lint docs/demo/valid/main.tf --config-source docs/demo/valid/.hcl-linter --verbose
+hcl-linter lint docs/demo/invalid/main.tf --config-source docs/demo/invalid/.hcl-linter --verbose
 hcl-linter lint docs/demo/invalid/invalid_terraform.tf --config-source docs/demo/invalid/.hcl-linter --verbose
 
 # Non-fixable rules
@@ -96,7 +105,7 @@ hcl-linter fix docs/demo/name_validation/name_validation_violation.hcl --config-
 hcl-linter fix docs/demo/required_fields/required_fields_violation.hcl --config-source docs/demo/required_fields/.hcl-linter --dry-run
 
 # Pure Terraform (.tf) fix dry-run
-hcl-linter fix docs/demo/invalid/iam_policy_violation.tf --config-source docs/demo/invalid/.hcl-linter --dry-run
+hcl-linter fix docs/demo/invalid/main.tf --config-source docs/demo/invalid/.hcl-linter --dry-run
 hcl-linter fix docs/demo/invalid/iam_policy_violation.hcl --config-source docs/demo/invalid/.hcl-linter --dry-run
 hcl-linter fix docs/demo/invalid/invalid_terraform.tf --config-source docs/demo/invalid/.hcl-linter --dry-run
 ```

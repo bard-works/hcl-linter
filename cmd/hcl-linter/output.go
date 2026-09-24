@@ -250,7 +250,10 @@ func writeSARIF(a *app, results []*diag.Result) error {
 		if desc == "" {
 			desc = id
 		}
-		sarifRules = append(sarifRules, sarifRule{ID: id, ShortDescription: sarifMessage{Text: desc}, HelpURI: rulesDocURL})
+		sarifRules = append(
+			sarifRules,
+			sarifRule{ID: id, ShortDescription: sarifMessage{Text: desc}, HelpURI: rulesDocURL},
+		)
 	}
 
 	log := sarifLog{

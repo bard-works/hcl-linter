@@ -183,7 +183,11 @@ func TestRunFix_FileWithParseError(t *testing.T) {
 	if err := os.MkdirAll(brokenDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(brokenDir, "terragrunt.hcl"), []byte("locals { = invalid"), 0o644); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(brokenDir, "terragrunt.hcl"),
+		[]byte("locals { = invalid"),
+		0o644,
+	); err != nil {
 		t.Fatal(err)
 	}
 

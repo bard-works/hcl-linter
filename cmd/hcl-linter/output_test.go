@@ -56,7 +56,8 @@ func TestOutputSARIF(t *testing.T) {
 		t.Fatalf("unexpected SARIF envelope: %+v", log)
 	}
 	run := log.Runs[0]
-	if len(run.Results) != 1 || run.Results[0].Level != "error" || run.Results[0].Locations[0].PhysicalLocation.Region.StartLine != 2 {
+	if len(run.Results) != 1 || run.Results[0].Level != "error" ||
+		run.Results[0].Locations[0].PhysicalLocation.Region.StartLine != 2 {
 		t.Fatalf("unexpected results: %+v", run.Results)
 	}
 	if len(run.Tool.Driver.Rules) != 1 || run.Tool.Driver.Rules[0].ID != "block_order" ||

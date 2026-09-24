@@ -5,7 +5,7 @@
 rules {
   block_order {
     enabled = true
-    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+    order   = ["include", "locals", "terraform", "remote_state", "generate", "dependencies", "dependency"]
   }
 
   array_format {

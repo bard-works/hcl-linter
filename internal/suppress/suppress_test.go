@@ -69,3 +69,26 @@ func TestStackedDirectivesCoverNextCodeLine(t *testing.T) {
 		}
 	}
 }
+
+func TestDirectiveAboveBlockCoversWholeBlock(t *testing.T) {
+	src := `# hcl-linter:ignore dependency_path_exists
+dependency "bootstrap" {
+  config_path = "../bootstrap"
+  mock_outputs = {
+    id = "x"
+  }
+}
+dependency "other" {
+  config_path = "../other"
+}
+`
+	d := Parse([]byte(src), "t.hcl")
+	for line := 2; line <= 7; line++ {
+		if !d.Suppressed("dependency_paths", issueAt("dependency_path_exists", line)) {
+			t.Errorf("line %d inside the annotated block should be suppressed", line)
+		}
+	}
+	if d.Suppressed("dependency_paths", issueAt("dependency_path_exists", 9)) {
+		t.Error("the next block must not be covered")
+	}
+}

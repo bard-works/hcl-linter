@@ -9,6 +9,7 @@ import (
 
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/engine"
+	"github.com/bard-works/hcl-linter/internal/rules"
 )
 
 // demoTargets returns every demo file under docs/demo together with the
@@ -49,6 +50,7 @@ func copyToTemp(t *testing.T, src string) string {
 		t.Fatal(err)
 	}
 	dst := filepath.Join(t.TempDir(), filepath.Base(src))
+	//nolint:gosec // G703: dst is inside t.TempDir(), src is a repo demo file.
 	if err := os.WriteFile(dst, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -97,5 +99,72 @@ func assertSecondRunIsNoop(t *testing.T, target string, fix func(string) (*engin
 	if res.Changes != 0 || string(first) != string(second) {
 		t.Errorf("second run changed the file (%d changes)\n--- after first run ---\n%s\n--- after second run ---\n%s",
 			res.Changes, first, second)
+	}
+}
+
+// After fix, check must not report anything an auto-fixable rule is
+// responsible for; otherwise users are told to fix what fix cannot.
+func TestCheckIsCleanForFixableRulesAfterFix(t *testing.T) {
+	fixable := map[string]bool{}
+	for _, r := range rules.DefaultRegistry().All() {
+		if _, ok := r.(rules.Fixer); ok {
+			fixable[r.Name()] = true
+		}
+	}
+	// name_validation only fixes separators (my-vpc -> my_vpc); renaming
+	// camelCase labels would break every reference to them, so it is
+	// deliberately partial.
+	delete(fixable, "name_validation")
+	for src, cfgDir := range demoTargets(t) {
+		t.Run(filepath.ToSlash(src), func(t *testing.T) {
+			loader := config.NewLoader(cfgDir)
+			target := copyToTemp(t, src)
+			if _, err := os.Stat(cfgDir); err != nil || !loader.HasConfigForFile(target) {
+				t.Skip("no config for this demo")
+			}
+			eng := engine.New(loader)
+			if _, err := eng.FixFile(target); err != nil {
+				t.Fatalf("fix: %v", err)
+			}
+			res, err := eng.LintFile(target)
+			if err != nil {
+				t.Fatalf("lint: %v", err)
+			}
+			for _, is := range res.Issues {
+				if fixable[is.Source] {
+					fixed, _ := os.ReadFile(target)
+					t.Errorf("%s still reported after fix: %s\n%s", is.Source, is.Message, fixed)
+				}
+			}
+		})
+	}
+}
+
+// The demo corpus is documentation: every *_valid file must lint clean and
+// every *_violation file must report something with its own config.
+func TestDemoFilesMatchTheirNames(t *testing.T) {
+	for src, cfgDir := range demoTargets(t) {
+		name := filepath.Base(src)
+		wantClean := strings.Contains(name, "_valid.")
+		wantIssues := strings.Contains(name, "_violation.")
+		if !wantClean && !wantIssues {
+			continue
+		}
+		t.Run(filepath.ToSlash(src), func(t *testing.T) {
+			loader := config.NewLoader(cfgDir)
+			if _, err := os.Stat(cfgDir); err != nil || !loader.HasConfigForFile(src) {
+				t.Fatalf("demo has no matching config in %s", cfgDir)
+			}
+			res, err := engine.New(loader).LintFile(src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if wantClean && len(res.Issues) > 0 {
+				t.Errorf("valid demo reports issues: %+v", res.Issues)
+			}
+			if wantIssues && len(res.Issues) == 0 {
+				t.Error("violation demo reports nothing")
+			}
+		})
 	}
 }

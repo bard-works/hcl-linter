@@ -76,11 +76,11 @@ written and how the engine behaves.
   count; the engine re-parses the file between rules when that count is
   non-zero, so later rules see a consistent AST. This rules out whole
   classes of "fix A broke fix B" bugs.
-- **`fix --dry-run` is the CI enforcement mode, not `check`.** `check`
-  reports rule violations; `--dry-run` reports byte-level drift and
-  exits non-zero when it finds any. Fix-only rules like `blank_lines`
-  have no `Check` phase, so they'd silently pass a `check` run - that's
-  why `--dry-run` exists.
+- **`check` reports what `fix` would change.** Every fixable rule's
+  `Check` flags exactly the shapes its `Fix` rewrites, so a file that
+  passes `check` is left alone by `fix`, and a fixed file passes `check`
+  (enforced over `docs/demo` by `internal/engine/idempotency_test.go`).
+  `fix --dry-run` additionally shows the byte-level diff.
 
 ## Package layout
 

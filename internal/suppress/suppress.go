@@ -34,21 +34,25 @@ type Directives struct {
 // Parse extracts suppression directives from file content.
 //
 // A line directive written after code on the same line covers that line. A
-// line directive on a line of its own covers the next line containing code,
-// so several directives can be stacked above one line.
+// line directive on a line of its own covers the whole construct that starts
+// on the next line with code - every line of a block or a multi-line
+// attribute - so a comment above a block silences findings anywhere in it.
+// Several directives can be stacked above one construct.
 func Parse(content []byte, filename string) Directives {
 	d := Directives{}
 	tokens, _ := hclsyntax.LexConfig(content, filename, hcl.InitialPos)
 	lastCodeLine := 0
 	var pending []string
-	for _, tok := range tokens {
+	for i, tok := range tokens {
 		switch tok.Type {
 		case hclsyntax.TokenNewline, hclsyntax.TokenEOF:
 			continue
 		case hclsyntax.TokenComment:
 		default:
 			if len(pending) > 0 {
-				d.addLine(tok.Range.Start.Line, pending)
+				for l := tok.Range.Start.Line; l <= constructEndLine(tokens, i); l++ {
+					d.addLine(l, pending)
+				}
 				pending = nil
 			}
 			lastCodeLine = tok.Range.End.Line
@@ -71,6 +75,29 @@ func Parse(content []byte, filename string) Directives {
 		}
 	}
 	return d
+}
+
+// constructEndLine returns the last line of the construct starting at
+// tokens[start]: the first newline reached with all brackets closed.
+func constructEndLine(tokens hclsyntax.Tokens, start int) int {
+	depth := 0
+	end := tokens[start].Range.Start.Line
+	for _, tok := range tokens[start:] {
+		switch tok.Type {
+		case hclsyntax.TokenOBrace, hclsyntax.TokenOBrack, hclsyntax.TokenOParen,
+			hclsyntax.TokenTemplateInterp, hclsyntax.TokenTemplateControl:
+			depth++
+		case hclsyntax.TokenCBrace, hclsyntax.TokenCBrack, hclsyntax.TokenCParen,
+			hclsyntax.TokenTemplateSeqEnd:
+			depth--
+		case hclsyntax.TokenNewline, hclsyntax.TokenEOF:
+			if depth <= 0 {
+				return end
+			}
+		}
+		end = tok.Range.End.Line
+	}
+	return end
 }
 
 func (d *Directives) addLine(line int, ruleIDs []string) {

@@ -302,7 +302,13 @@ func TestInit_TerraformFilesGetMatchingConfig(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
 
-	root := initTestProject(t, "terragrunt.hcl", "modules/app/main.tf", "modules/app/main.hcl", "modules/app/variables.tf")
+	root := initTestProject(
+		t,
+		"terragrunt.hcl",
+		"modules/app/main.tf",
+		"modules/app/main.hcl",
+		"modules/app/variables.tf",
+	)
 	a, _ := newCaptureApp()
 	if err := a.runInit(nil, []string{root}); err != nil {
 		t.Fatalf("runInit: %v", err)

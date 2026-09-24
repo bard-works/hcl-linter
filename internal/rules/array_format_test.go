@@ -162,3 +162,46 @@ func TestFixArraysInsideObjectKeepsComma(t *testing.T) {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+// check must report exactly what fix rewrites, so a fixed file passes check.
+func TestArrayFormatCheckMatchesFix(t *testing.T) {
+	cfg := &config.Rules{ArrayFormat: &config.ArrayFormatConfig{Enabled: true, MultilineThreshold: 2}}
+	src := `inputs = {
+  azs    = ["a", "b"]
+  single = ["x"]
+  refs   = [var.a, var.b]
+  done = [
+    "c",
+    "d",
+  ]
+}
+`
+	rule := rules.ArrayFormatRule{}
+	ctx := buildContext(t, src, cfg)
+	issues := rule.Check(ctx)
+	if len(issues) != 1 || issues[0].Location.Start.Line != 2 {
+		t.Fatalf("expected one issue for azs on line 2, got %+v", issues)
+	}
+
+	if _, err := rule.Fix(ctx); err != nil {
+		t.Fatal(err)
+	}
+	fixed := buildContext(t, string(ctx.Content), cfg)
+	if issues := rule.Check(fixed); len(issues) != 0 {
+		t.Errorf("fixed file still fails check: %+v\n%s", issues, ctx.Content)
+	}
+}
+
+func TestArrayFormatThreshold(t *testing.T) {
+	cfg := &config.Rules{ArrayFormat: &config.ArrayFormatConfig{Enabled: true, MultilineThreshold: 3}}
+	src := "locals {\n  two   = [\"a\", \"b\"]\n  three = [\"a\", \"b\", \"c\"]\n}\n"
+	ctx := buildContext(t, src, cfg)
+	issues := rules.ArrayFormatRule{}.Check(ctx)
+	if len(issues) != 1 || issues[0].Location.Start.Line != 3 {
+		t.Fatalf("threshold 3 should only flag the 3-item array, got %+v", issues)
+	}
+	n, err := rules.ArrayFormatRule{}.Fix(ctx)
+	if err != nil || n != 1 || !strings.Contains(string(ctx.Content), `two   = ["a", "b"]`) {
+		t.Errorf("fix should honor the threshold (n=%d):\n%s", n, ctx.Content)
+	}
+}

@@ -12,6 +12,7 @@ dependency outputs) ship as built-ins.
 
 ## Contents
 
+1. [Presets](#presets)
 1. [Summary table](#summary-table)
 2. [`block_order` - Block Order](#1-block-order-block_order)
 3. [`array_format` - Array Format](#2-array-format-array_format)
@@ -29,13 +30,42 @@ dependency outputs) ship as built-ins.
 15. [`count_for_each` - Count / ForEach](#14-countforeach-validation-count_for_each)
 16. [`dependency_outputs` - Dependency Outputs](#15-dependency-output-validation-dependency_outputs)
 
+## Presets
+
+Rather than enabling rules one by one, a config can start from a preset
+shipped in the binary and override individual rule blocks:
+
+```hcl
+# .hcl-linter/default.hcl
+extends = "builtin:terragrunt"
+
+rules {
+  # Replaces the preset's block_order block; other preset rules stay on.
+  block_order {
+    enabled = true
+    order   = ["include", "locals", "dependency", "terraform", "inputs"]
+  }
+}
+```
+
+| Preset               | For                                   | Enables                                                                                                                                                                                                  |
+| -------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `builtin:terragrunt` | `terragrunt.hcl`, `root.hcl`, other Terragrunt `.hcl` | `block_order`, `array_format`, `blank_lines`, `duplicates`, `dependency_paths`, `include_paths`, `hcl_functions`, `terraform_block` (without `source_required`), `remote_state` (`require_backend`) |
+| `builtin:terraform`  | `.tf` files                           | `array_format`, `blank_lines`, `duplicates` (resource, data, module, variable, output), `count_for_each`                                                                                                 |
+
+`hcl-linter init` picks the preset matching the project. The preset
+sources live in
+[`internal/config/presets/`](../internal/config/presets/).
+Opinionated rules (`name_validation`, `key_value`, `required_blocks`,
+`required_fields`, `dependency_outputs`) are left for projects to enable.
+
 ## Summary table
 
 | Config block         | Rule ID(s) emitted                                                                                                                              | Default severity |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | `block_order`        | `block_order`                                                                                                                                   | error            |
 | `array_format`       | `array_format`                                                                                                                                  | warning          |
-| `blank_lines`        | _(fix-only - no Check phase, emits no issues)_                                                                                                  | -                |
+| `blank_lines`        | `blank_lines` (one warning per file, at the first line `fix` would remove)                                                                     | warning          |
 | `name_validation`    | `name_validation`                                                                                                                               | error            |
 | `duplicates`         | `duplicates`                                                                                                                                    | error            |
 | `required_fields`    | `required_fields`                                                                                                                               | error            |
@@ -47,7 +77,7 @@ dependency outputs) ship as built-ins.
 | `terraform_block`    | `terraform_source_required` (error), `terraform_version_format`, `terraform_extra_arguments_valid`, `terraform_deprecated_fields` (all warning) | mixed            |
 | `key_value`          | `key_case`, `disallowed_keys` (error), `value_pattern` (warning)                                                                                | mixed            |
 | `count_for_each`     | `count_zero` (warning), `empty_for_each` (warning), `count_for_each_conflict` (error)                                                           | mixed            |
-| `dependency_outputs` | `dependency_outputs`                                                                                                                            | warning          |
+| `dependency_outputs` | `dependency_outputs` (error for an undeclared output; warning when the module's outputs cannot be read)                                        | mixed            |
 
 ---
 
@@ -144,16 +174,39 @@ actions = [
 ]
 ```
 
-**Edge cases:**
+**Configuration:**
 
-- Arrays with non-quoted items (e.g. `dependency.x.outputs.y`) are left unchanged
-- Empty arrays remain unchanged
+```hcl
+rules {
+  array_format {
+    enabled             = true
+    multiline_threshold = 2
+    sort                = false # true sorts items alphabetically when fixing
+  }
+}
+```
+
+Leave `sort` off unless order really doesn't matter: list order is
+meaningful in Terraform (availability zones, command arguments).
+`fix --format` never sorts.
+
+**Edge cases - the fixer leaves these unchanged:**
+
+- Arrays with any item that is not a plain string literal: references
+  (`dependency.x.outputs.y`), function calls, interpolations (`"${var.x}"`),
+  objects (`[{ ... }]`)
+- Arrays that are part of a larger expression (`merge(local.tags, ["a", "b"])`)
+  or followed by a comment on the same line
+- Anything inside a heredoc or `/* */` comment
+- Empty arrays
 
 ### 3. Blank Lines (`blank_lines`)
 
-**Rule ID:** _(fix-only; no issues emitted during lint/check)_
+**Rule ID:** `blank_lines` - **Severity:** warning
 
-Cleans blank lines inside blocks and object attributes. Fix-only - there is no `Check` phase.
+Cleans blank lines inside blocks and object attributes. `lint`/`check`
+report one warning per file (at the first line `fix` would change) when
+`fix` would remove anything.
 
 **Configuration:**
 
@@ -221,12 +274,24 @@ include "my_vpc" {}
 
 **Rule ID:** `duplicates` - **Severity:** error
 
-Flags repeated labels on `dependency` and `include` blocks.
+Flags a block that repeats an earlier block's type and **all** of its
+labels, for the block types listed in `blocks` (every type when `blocks`
+is empty). `resource "aws_s3_bucket" "a"` and `resource "aws_s3_bucket" "b"`
+are different blocks; a second `resource "aws_s3_bucket" "a"` is a
+duplicate. Unlabelled blocks (`locals`, `terraform`) count as duplicates
+when repeated, so leave them out of `blocks` for Terraform files, where
+repeating them is legal.
 
-**Checks:**
+**Configuration:**
 
-- Duplicate `dependency` block labels
-- Duplicate `include` block labels
+```hcl
+rules {
+  duplicates {
+    enabled = true
+    blocks  = ["dependency", "include"]
+  }
+}
+```
 
 **Example violation:**
 
@@ -609,7 +674,7 @@ resource "aws_instance" "test" {
 
 ### 15. Dependency Output Validation (`dependency_outputs`)
 
-**Rule ID:** `dependency_outputs` - **Severity:** warning
+**Rule ID:** `dependency_outputs` - **Severity:** error for a reference to an undeclared output; warning when validation is skipped
 
 Resolves `dependency.*.outputs.*` references by walking the dependency chain and reading `output` blocks from each module's `.tf` files.
 
@@ -634,7 +699,6 @@ rules {
 2. **Output validation:**
    - Parse `output` blocks from `.tf` files in dependency module
    - Validate output name exists
-   - Warn if output doesn't exist
 
 3. **Mock outputs** (for development):
    - Support `.mock-outputs.json` in dependency module directory
@@ -642,8 +706,8 @@ rules {
    - Optional - if not present, only validate against `.tf` files
 
 4. **Error handling:**
-   - If output doesn't exist = warning
-   - If dependency path doesn't exist = warning (validation skipped)
+   - If a referenced output doesn't exist = error, reported at the reference
+   - If the dependency's outputs cannot be found or parsed = warning (validation skipped)
    - No terraform/terragrunt execution - purely static analysis
 
 **Example violations:**
