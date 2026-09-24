@@ -135,7 +135,10 @@ func (e *Engine) LintFile(path string) (*diag.Result, error) {
 
 	directives := suppress.Parse(ctx.Content, path)
 	for _, rule := range e.registry.Enabled(ctx.Config) {
-		result.Issues = append(result.Issues, directives.Filter(rule.Name(), rule.Check(ctx))...)
+		for _, is := range directives.Filter(rule.Name(), rule.Check(ctx)) {
+			is.Source = rule.Name()
+			result.Issues = append(result.Issues, is)
+		}
 	}
 
 	return result, nil

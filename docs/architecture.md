@@ -215,7 +215,7 @@ consistent AST.
 
 ```bash
 make build          # Build binary to dist/hcl-linter
-make build-all      # Build for all platforms (darwin/linux/windows)
+make snapshot       # Build every release artifact locally (needs goreleaser)
 make test           # Run tests
 make test-coverage  # Run tests with coverage report
 make lint           # Run golangci-lint
@@ -228,33 +228,40 @@ make install        # Install to GOPATH/bin
 
 ### Versioning
 
-Version is managed via the `VERSION` file:
-
-```
-0.0.1-alpha
-```
+Releases are versioned by git tag (`v0.1.0`). Tags with a pre-release
+suffix (`v0.2.0-alpha.1`) are published as GitHub pre-releases and do not
+update the Homebrew tap. The `VERSION` file only feeds `make build`.
 
 Version info is injected at build time via ldflags:
 
-- `main.Version` - from VERSION file
-- `main.BuildDate` - build timestamp
-- `main.GitCommit` - git SHA
+- `main.Version` - tag without the `v`
+- `main.BuildDate` - commit date
+- `main.GitCommit` - full commit SHA
+
+Builds without ldflags (`go install ...@v0.1.0`) fill these in from Go's
+embedded build info, so `hcl-linter version` still reports the module
+version and commit.
 
 ### Release workflow
 
 ```bash
-# Tag a release
 make tag VERSION=0.1.0
-
-# Build all platforms and generate checksums
-make release VERSION=0.1.0
+git push origin v0.1.0
 ```
 
-This creates:
+Pushing the tag runs `.github/workflows/release.yml`, which runs the tests
+and then [GoReleaser](https://goreleaser.com) (`.goreleaser.yaml`) to
+publish:
 
-- `dist/hcl-linter-darwin-amd64`
-- `dist/hcl-linter-darwin-arm64`
-- `dist/hcl-linter-linux-amd64`
-- `dist/hcl-linter-linux-arm64`
-- `dist/hcl-linter-windows-amd64.exe`
-- `dist/*sha256` checksum files
+- `hcl-linter_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows) for
+  linux/darwin/windows on amd64 and arm64, plus `checksums.txt` and a
+  source archive
+- a build-provenance attestation for every archive
+  (`gh attestation verify <file> --repo bard-works/hcl-linter`)
+- `ghcr.io/bard-works/hcl-linter:<version>` and `:latest` (linux/amd64,
+  linux/arm64)
+- the `hcl-linter` cask in `bard-works/homebrew-tap` (stable tags only;
+  needs the `HOMEBREW_TAP_GITHUB_TOKEN` secret)
+
+Run `make snapshot` to build the same artifacts locally without
+publishing.

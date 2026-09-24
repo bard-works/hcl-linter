@@ -7,7 +7,7 @@ project conventions, and how to add a new lint rule.
 
 Requirements:
 
-- Go (see `.tool-versions` for the pinned version)
+- Go (the version in `go.mod`)
 - `make`
 - `golangci-lint` (for `make lint`)
 
@@ -164,5 +164,6 @@ rules {
 
 ## Release process
 
-Maintainers only. See [docs/architecture.md](docs/architecture.md#build--release)
-for the Makefile targets (`make tag VERSION=…`, `make release VERSION=…`).
+Maintainers only. Tag and push (`make tag VERSION=0.1.0 && git push origin
+v0.1.0`); the Release workflow publishes everything via GoReleaser. See
+[docs/architecture.md](docs/architecture.md#build--release).

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -75,6 +76,7 @@ type jsonIssue struct {
 	EndColumn int    `json:"end_column,omitempty"`
 	Severity  string `json:"severity"`
 	Rule      string `json:"rule"`
+	Source    string `json:"source,omitempty"`
 	Message   string `json:"message"`
 }
 
@@ -102,6 +104,7 @@ func writeJSON(a *app, results []*diag.Result) error {
 				EndColumn: is.Location.End.Column,
 				Severity:  string(is.Severity),
 				Rule:      is.Rule,
+				Source:    is.Source,
 				Message:   is.Message,
 			})
 			report.Summary.Issues++
@@ -190,6 +193,19 @@ func sarifLevel(s diag.Severity) string {
 	}
 }
 
+// sarifURI keeps repo-relative paths as relative references (what GitHub code
+// scanning expects) and turns absolute paths into file:// URIs.
+func sarifURI(p string) string {
+	if !filepath.IsAbs(filepath.FromSlash(p)) {
+		return p
+	}
+	u := url.URL{Scheme: "file", Path: p}
+	if !strings.HasPrefix(p, "/") {
+		u.Path = "/" + p // Windows drive paths: file:///C:/...
+	}
+	return u.String()
+}
+
 func writeSARIF(a *app, results []*diag.Result) error {
 	summaries := map[string]string{}
 	for _, r := range rules.DefaultRegistry().All() {
@@ -198,14 +214,16 @@ func writeSARIF(a *app, results []*diag.Result) error {
 
 	seenRules := map[string]bool{}
 	var ruleIDs []string
+	sourceOf := map[string]string{}
 	out := []sarifResult{}
 	for _, r := range results {
 		for _, is := range r.Issues {
 			if !seenRules[is.Rule] {
 				seenRules[is.Rule] = true
 				ruleIDs = append(ruleIDs, is.Rule)
+				sourceOf[is.Rule] = is.Source
 			}
-			phys := sarifPhysical{ArtifactLocation: sarifArtifact{URI: issuePath(r.File, is)}}
+			phys := sarifPhysical{ArtifactLocation: sarifArtifact{URI: sarifURI(issuePath(r.File, is))}}
 			if is.Location.Start.Line > 0 {
 				phys.Region = &sarifRegion{
 					StartLine:   is.Location.Start.Line,
@@ -226,6 +244,9 @@ func writeSARIF(a *app, results []*diag.Result) error {
 	sarifRules := []sarifRule{}
 	for _, id := range ruleIDs {
 		desc := summaries[id]
+		if desc == "" {
+			desc = summaries[sourceOf[id]]
+		}
 		if desc == "" {
 			desc = id
 		}

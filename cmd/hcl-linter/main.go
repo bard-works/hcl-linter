@@ -28,6 +28,30 @@ var (
 	GitCommit = "unknown"
 )
 
+// resolveVersion fills in version details for builds made without ldflags,
+// such as `go install ...@v0.1.0`, from the module and VCS build info.
+func resolveVersion() {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+	if Version == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		Version = strings.TrimPrefix(info.Main.Version, "v")
+	}
+	for _, kv := range info.Settings {
+		switch {
+		case kv.Key == "vcs.revision" && GitCommit == "unknown":
+			GitCommit = kv.Value
+		case kv.Key == "vcs.time" && BuildDate == "unknown":
+			BuildDate = kv.Value
+		}
+	}
+}
+
+func versionString() string {
+	return fmt.Sprintf("hcl-linter %s\nBuild date: %s\nGit commit: %s\n", Version, BuildDate, GitCommit)
+}
+
 // Exit codes. Diagnostics always go to stderr, results to stdout, so CI can
 // rely on both the code and the streams.
 const (
@@ -56,6 +80,7 @@ func execErrorf(format string, args ...any) error {
 }
 
 func main() {
+	resolveVersion()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
@@ -209,11 +234,12 @@ func newRootCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(_ *cobra.Command, _ []string) {
-			fmt.Fprintf(a.out, "hcl-linter %s\n", Version)
-			fmt.Fprintf(a.out, "Build date: %s\n", BuildDate)
-			fmt.Fprintf(a.out, "Git commit: %s\n", GitCommit)
+			fmt.Fprint(a.out, versionString())
 		},
 	}
+
+	rootCmd.Version = Version
+	rootCmd.SetVersionTemplate(versionString())
 
 	rootCmd.AddCommand(lintCmd, checkCmd, fixCmd, validateConfigCmd, initCmd, a.newExplainCmd(), versionCmd)
 	return rootCmd
@@ -285,10 +311,21 @@ func (a *app) listFilesVerbose(files []string) {
 	}
 }
 
-// relPath renders path relative to the working directory when possible.
+// relPath renders path relative to the working directory when it lies
+// beneath it; anything else is returned unchanged.
 func relPath(path string) string {
-	rel, err := filepath.Rel(".", path)
-	if err != nil || rel == "" {
+	if !filepath.IsAbs(path) {
+		if rel, err := filepath.Rel(".", path); err == nil && rel != "" {
+			return rel
+		}
+		return path
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+	rel, err := filepath.Rel(cwd, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return path
 	}
 	return rel

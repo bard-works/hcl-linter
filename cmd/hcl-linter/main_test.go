@@ -208,3 +208,16 @@ func TestFilterFilesMatchedListingGatedByVerbose(t *testing.T) {
 		t.Error("expected 'Matched files:' listing with --verbose")
 	}
 }
+
+func TestVersionFlag(t *testing.T) {
+	cmd := newRootCmd()
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"--version"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("--version: %v", err)
+	}
+	if !strings.HasPrefix(buf.String(), "hcl-linter ") {
+		t.Errorf("unexpected --version output: %q", buf.String())
+	}
+}
