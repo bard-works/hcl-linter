@@ -1,0 +1,53 @@
+name: hcl-linter
+description: Lint and format-check Terraform and Terragrunt HCL with hcl-linter
+author: bard-works
+branding:
+  icon: check-square
+  color: purple
+
+inputs:
+  version:
+    description: hcl-linter version to install (e.g. 0.1.0), or "latest"
+    required: false
+    default: latest
+  args:
+    description: Arguments passed to hcl-linter
+    required: false
+    default: check .
+  working-directory:
+    description: Directory to run hcl-linter in
+    required: false
+    default: .
+  output-file:
+    description: >-
+      Write hcl-linter's stdout to this file instead of the log, e.g. with
+      args "check . --output sarif" for github/codeql-action/upload-sarif
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install hcl-linter
+      shell: bash
+      env:
+        HCL_LINTER_VERSION: ${{ inputs.version }}
+        INSTALL_DIR: ${{ runner.temp }}/hcl-linter-bin
+      run: |
+        sh "${GITHUB_ACTION_PATH}/scripts/install.sh" -v "$HCL_LINTER_VERSION" -b "$INSTALL_DIR"
+        echo "$INSTALL_DIR" >> "$GITHUB_PATH"
+
+    - name: Run hcl-linter
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        HCL_LINTER_ARGS: ${{ inputs.args }}
+        HCL_LINTER_OUTPUT_FILE: ${{ inputs.output-file }}
+      run: |
+        # args is written by the workflow author, so shell word splitting and
+        # quoting apply as they would on the command line.
+        if [ -n "$HCL_LINTER_OUTPUT_FILE" ]; then
+          eval "hcl-linter $HCL_LINTER_ARGS" > "$HCL_LINTER_OUTPUT_FILE"
+        else
+          eval "hcl-linter --color=always $HCL_LINTER_ARGS"
+        fi
