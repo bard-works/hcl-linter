@@ -222,3 +222,36 @@ func TestFixDryRunWithFormat(t *testing.T) {
 		t.Error("file on disk was modified during dry-run --format")
 	}
 }
+
+// fix --format must work in a project with no .hcl-linter/ at all, and a
+// second run over its output must be a no-op.
+func TestFixFormatWithoutConfigIsIdempotent(t *testing.T) {
+	if err := termcolor.SetMode(termcolor.ModeNever); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	t.Cleanup(func() { _ = termcolor.SetMode(termcolor.ModeAuto) })
+
+	root := t.TempDir()
+	target := filepath.Join(root, "terragrunt.hcl")
+	writeFile(t, target, "terraform {\n  source = \"../m\"\n}\ninclude \"root\" {\n  path = \"../root.hcl\"\n}\ninputs = {\n  azs = [\"a\", \"b\"]\n  name = \"x\"\n}\n")
+
+	a, _ := newCaptureApp()
+	a.format = true
+	if err := a.runFix(nil, []string{root}); err != nil {
+		t.Fatalf("first fix: %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(got), "include \"root\"") {
+		t.Fatalf("expected default block order to be applied without config, got:\n%s", got)
+	}
+
+	a, buf := newCaptureApp()
+	a.format = true
+	a.dryRun = true
+	if err := a.runFix(nil, []string{root}); err != nil {
+		t.Fatalf("second run should be a no-op, got %v\n%s", err, buf.String())
+	}
+}

@@ -112,9 +112,17 @@ files without requiring any config to be present:
 - **Array format:** converts inline arrays with 2+ items to multiline
 - **Blank lines:** removes blank lines at block boundaries, collapses consecutive blank lines
 
+- **Canonical HCL formatting:** the same formatter `terraform fmt` uses
+  (`hclwrite.Format`) - attribute alignment, indentation, spacing
+
+`.hcl-linter/` is never read in this mode: every `.hcl` / `.tf` file under
+the target path is formatted with the defaults above, whether or not a
+config exists. `--filter` and `--include-hidden` still apply. Running it
+twice produces no further changes, so `fix --format --dry-run` is a safe
+CI gate after a local `fix --format`.
+
 This is useful for one-off formatting or bootstrapping a codebase before
-introducing config-based rules. Config-based `array_format` and
-`blank_lines` rules are also applied if a config exists for the file.
+introducing config-based rules.
 
 ### `fix --dry-run` flag
 

@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `fix --format` now works with no `.hcl-linter/` config, as documented.
+  Previously every file without a matching config was dropped before
+  formatting, so the command silently did nothing in unconfigured projects.
+- `array_format` fixes no longer append a blank line at end of file. A
+  `fix` followed by `fix --dry-run` used to report drift because the second
+  run removed the line the first run added.
 - `dependency_outputs` now performs its documented validation:
   `dependency.<name>.outputs.<attr>` references anywhere in a file are checked
   against the target module's `output` blocks (and `.mock-outputs.json`), and

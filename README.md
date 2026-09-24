@@ -95,7 +95,7 @@ A `.hcl-linter/` directory anywhere in the tree overrides rules for files beneat
 
 ### `fix --format`
 
-Applies opinionated defaults without a config file: block order `include → locals → terraform → dependency → inputs`, multiline arrays at 2+ items, blank-line cleanup. Good for one-off formatting or bootstrapping before config-based rules.
+Applies opinionated defaults without a config file: block order `include → locals → terraform → dependency → inputs`, multiline arrays at 2+ items, blank-line cleanup, then the same canonical formatting `terraform fmt` applies. `.hcl-linter/` is ignored in this mode. Good for one-off formatting or bootstrapping before config-based rules.
 
 ## CLI flags
 

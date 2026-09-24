@@ -103,3 +103,20 @@ func TestArrayFormatRuleFixSort(t *testing.T) {
 		})
 	}
 }
+
+func TestFixArraysPreservesFileEnding(t *testing.T) {
+	for _, in := range []string{
+		"inputs = {\n  azs = [\"a\", \"b\"]\n}\n",
+		"inputs = {\n  azs = [\"a\", \"b\"]\n}",
+		"azs = [\"a\", \"b\"]\n",
+	} {
+		once, _ := rules.FixArrays(in, false)
+		if strings.HasSuffix(in, "\n") != strings.HasSuffix(once, "\n") || strings.HasSuffix(once, "\n\n") {
+			t.Errorf("file ending changed for %q: got %q", in, once)
+		}
+		twice, changes := rules.FixArrays(once, false)
+		if changes != 0 || twice != once {
+			t.Errorf("not idempotent for %q: %q -> %q", in, once, twice)
+		}
+	}
+}

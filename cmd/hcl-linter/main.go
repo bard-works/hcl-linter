@@ -222,7 +222,7 @@ func (a *app) runLint(cmd *cobra.Command, args []string) error {
 	}
 	loader, _ := a.loadConfig()
 	eng := engine.New(loader)
-	filesToLint := a.filterFilesByConfig(loader, nil, path)
+	filesToLint := a.filterFilesByConfig(loader, path)
 	if len(filesToLint) == 0 {
 		return nil
 	}
@@ -245,7 +245,7 @@ func (a *app) runCheck(cmd *cobra.Command, args []string) error {
 	}
 	loader, _ := a.loadConfig()
 	eng := engine.New(loader)
-	filesToLint := a.filterFilesByConfig(loader, nil, path)
+	filesToLint := a.filterFilesByConfig(loader, path)
 	if len(filesToLint) == 0 {
 		return nil
 	}
@@ -321,7 +321,7 @@ func (a *app) resolveFiles(path string) []string {
 	return []string{path}
 }
 
-func (a *app) filterFilesByConfig(loader *config.Loader, configResult *config.ConfigResult, path string) []string {
+func (a *app) filterFilesByConfig(loader *config.Loader, path string) []string {
 	files := a.resolveFiles(path)
 	if len(a.filter) > 0 {
 		files = a.filterFiles(files)
@@ -331,9 +331,6 @@ func (a *app) filterFilesByConfig(loader *config.Loader, configResult *config.Co
 		hasSpecificConfig := loader.HasSpecificConfigForFile(file)
 		rel := relPath(file)
 		if !loader.HasConfigForFile(file) {
-			if configResult != nil && configResult.Source != config.ConfigSourceNone {
-				fmt.Fprintf(a.errOut, "%s No config found for %s, skipping\n", termcolor.Warning("Warning:"), rel)
-			}
 			continue
 		}
 		if !hasSpecificConfig {
@@ -392,7 +389,7 @@ func (a *app) runFix(cmd *cobra.Command, args []string) error {
 	loader, _ := a.loadConfig()
 	eng := engine.New(loader)
 	eng.DryRun = a.dryRun
-	filesToFix := a.filterFilesByConfig(loader, nil, path)
+	filesToFix := a.filterFilesByConfig(loader, path)
 	if len(filesToFix) == 0 {
 		return nil
 	}
@@ -413,10 +410,14 @@ func (a *app) runFormatMode(cmd *cobra.Command, args []string) error {
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("path error: %w", err)
 	}
-	loader, configResult := a.loadConfig()
-	eng := engine.New(loader)
+	// --format applies built-in defaults and never reads .hcl-linter/, so
+	// every HCL file under path is a target whether or not config exists.
+	eng := engine.New(&config.Loader{})
 	eng.DryRun = a.dryRun
-	files := a.filterFilesByConfig(loader, configResult, path)
+	files := a.resolveFiles(path)
+	if len(a.filter) > 0 {
+		files = a.filterFiles(files)
+	}
 	if len(files) == 0 {
 		return nil
 	}

@@ -109,7 +109,10 @@ func FixArrays(content string, sortItems bool) (string, int) {
 		i++
 	}
 
-	return result.String(), changes
+	// Every split element was re-emitted with a trailing "\n", including the
+	// final one, which had none in the input. Drop it so the file's original
+	// ending is preserved and repeated fixes are idempotent.
+	return strings.TrimSuffix(result.String(), "\n"), changes
 }
 
 func isArrayAssignment(line string) bool {
