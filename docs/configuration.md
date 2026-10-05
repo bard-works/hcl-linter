@@ -11,8 +11,10 @@ files being linted) and are matched to targets by filename.
 3. [Config file matching](#config-file-matching)
 4. [Per-directory overrides](#per-directory-overrides)
 5. [Config inheritance (`extends`)](#config-inheritance-extends)
-6. [Full schema example](#full-schema-example)
-7. [Validating your config](#validating-your-config)
+6. [Built-in presets](#built-in-presets)
+7. [Inline suppression](#inline-suppression)
+8. [Full schema example](#full-schema-example)
+9. [Validating your config](#validating-your-config)
 
 ## Directory layout
 
@@ -42,16 +44,22 @@ Configs are loaded from the first source that exists, in this order:
 merging across source locations. Within a single config directory, use
 `extends` for inheritance (see below).
 
-The resolved config source is printed at startup. If no user config is
-found and the linter falls back to project defaults, a warning is printed.
+The resolved config source is printed at startup (on stderr). If no config
+directory is found, `lint`, `check` and `fix` exit `2` with a hint to run
+`hcl-linter init`; `fix --format` never needs config.
 
 ## Config file matching
 
 For each target HCL file, the linter:
 
-1. Tries an exact filename match: `terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`
-2. Falls back to `.hcl-linter/default.hcl` if present
-3. Skips the file with a warning if neither exists
+1. Tries the filename without its extension plus `.hcl`:
+   `terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`,
+   `main.tf` → `.hcl-linter/main.hcl`
+2. Falls back to `.hcl-linter/default.hcl` if present (`--verbose` notes
+   this once per filename)
+3. Skips the file if neither exists
+
+`foo.hcl` and `foo.tf` therefore share `.hcl-linter/foo.hcl`.
 
 A matched config may use `extends` to inherit from another config in the
 same directory (see below).
@@ -124,7 +132,7 @@ rules {
 
 **Behavior:**
 
-- `extends` takes a config name (with or without the `.hcl` extension) relative to the same directory
+- `extends` takes a config name (with or without the `.hcl` extension) relative to the same directory, or a built-in preset (`builtin:terragrunt`, see below)
 - Base config is loaded first; child rules override the base at the rule-block level (whole rule blocks, not individual fields)
 - Unset rules in the child are inherited from the base unchanged
 - Chains are supported: `child extends parent extends grandparent`
@@ -139,6 +147,65 @@ rules {
 └── root.hcl          # extends = "default", adds required_blocks
 ```
 
+## Built-in presets
+
+`extends = "builtin:terragrunt"` or `extends = "builtin:terraform"` starts
+from a rule set shipped in the binary. Presets follow the same override
+rules as any base config: a rule block in your file replaces the preset's
+block of the same name, and everything else is inherited. Presets are
+versioned with the binary, so upgrading hcl-linter can enable new checks
+in them; pin the version in CI to control when that happens.
+
+```hcl
+# .hcl-linter/default.hcl
+extends = "builtin:terragrunt"
+
+rules {
+  name_validation {
+    enabled = true
+    pattern = "^[a-z][a-z0-9_]*$"
+    blocks  = ["dependency"]
+  }
+}
+```
+
+What each preset enables is listed in [rules.md → Presets](rules.md#presets).
+An unknown preset name is reported by `validate-config` and fails the run.
+
+## Inline suppression
+
+Silence a finding in the file itself instead of turning a rule off for
+everything:
+
+```hcl
+# hcl-linter:ignore-file array_format -- generated from a template
+
+# hcl-linter:ignore dependency_path_exists -- created by the bootstrap stack
+dependency "bootstrap" {
+  config_path = "../bootstrap"
+}
+
+include "root" { path = find_in_parent_folders("root.hcl") } # hcl-linter:ignore block_order
+```
+
+- `hcl-linter:ignore [rules]` on a line of its own covers the whole
+  construct that starts on the next line with code - every line of a block
+  or a multi-line attribute. After code on the same line, it covers only
+  that line. Several directives can be stacked above one construct.
+- `hcl-linter:ignore-file [rules]` anywhere in the file covers the whole file.
+- Rules can be named by config block (`dependency_paths`) or by the emitted
+  rule ID (`dependency_path_exists`), separated by commas or spaces. With no
+  rules listed, every rule is suppressed.
+- `#`, `//` and `/* */` comments all work. Text after ` -- ` is a free-form
+  reason.
+- `fix` skips a fixer for files that `ignore-file` it. The line-based
+  fixers (`array_format`, `blank_lines`) also leave lines covered by a
+  line-level `ignore` alone, so an annotated one-line list stays one line.
+  Structural fixers (`block_order`, `required_fields`, `name_validation`)
+  rewrite the whole file; use `ignore-file` to keep them away.
+- Internal errors (`linter_error`, e.g. a file that doesn't parse) can't be
+  suppressed.
+
 ## Full schema example
 
 Every rule block shown here with its commonly-used fields. Any rule block
@@ -149,7 +216,7 @@ details.
 rules {
   block_order {
     enabled = true
-    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+    order   = ["include", "locals", "terraform", "dependency"]
   }
 
   array_format {

@@ -1263,9 +1263,9 @@ func TestFixArraySortEnabled(t *testing.T) {
 	}
 }
 
-// TestFormatFixFileArraySort verifies that fix --format always sorts array
-// items regardless of config, maintaining its original opinionated behaviour.
-func TestFormatFixFileArraySort(t *testing.T) {
+// --format must never reorder list items: order is meaningful in Terraform
+// (subnets, command arguments). Sorting is opt-in via array_format.sort.
+func TestFormatFixFileKeepsArrayOrder(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)
@@ -1287,8 +1287,93 @@ func TestFormatFixFileArraySort(t *testing.T) {
 		t.Fatalf("missing items in output:\n%s", result.Content)
 	}
 
-	if alphaIdx >= bravoIdx || bravoIdx >= charlieIdx {
-		t.Errorf("expected --format to always sort items (alpha < bravo < charlie), got:\n%s", result.Content)
+	if charlieIdx >= alphaIdx || alphaIdx >= bravoIdx {
+		t.Errorf("expected --format to keep item order (charlie, alpha, bravo), got:\n%s", result.Content)
+	}
+}
+
+// fix --format and builtin:terragrunt must agree on block order: a file in
+// preset order is left alone and formatted output passes the preset's
+// block_order check. Otherwise the format and check hooks undo each other.
+func TestFormatBlockOrderMatchesTerragruntPreset(t *testing.T) {
+	tmpDir := createTestConfigDir(t)
+	setupTestConfig(t, tmpDir, `extends = "builtin:terragrunt"
+`)
+	formatter := New(&config.Loader{})
+	checker := New(newTestLoader(t, tmpDir))
+
+	inPresetOrder := `include "root" {
+  path = "root.hcl"
+}
+
+locals {
+  env = "prod"
+}
+
+terraform {
+  source = "../modules/app"
+}
+
+remote_state {
+  backend = "s3"
+}
+
+generate "provider" {
+  path     = "provider.tf"
+  contents = "x"
+}
+
+dependencies {
+  paths = ["../vpc"]
+}
+
+dependency "vpc" {
+  config_path = "../vpc"
+}
+
+inputs = {
+  vpc_id = dependency.vpc.outputs.id
+}
+`
+	file := createHCLFile(t, tmpDir, "terragrunt.hcl", inPresetOrder)
+	result, err := formatter.FormatFixFile(file)
+	if err != nil {
+		t.Fatalf("FormatFixFile failed: %v", err)
+	}
+	if result.Changes != 0 {
+		t.Errorf("--format changed a file already in preset order:\n%s", result.Content)
+	}
+
+	scrambled := `dependency "vpc" {
+  config_path = "../vpc"
+}
+
+generate "provider" {
+  path     = "provider.tf"
+  contents = "x"
+}
+
+remote_state {
+  backend = "s3"
+}
+
+include "root" {
+  path = "root.hcl"
+}
+`
+	file = createHCLFile(t, tmpDir, "terragrunt.hcl", scrambled)
+	if _, err := formatter.FormatFixFile(file); err != nil {
+		t.Fatalf("FormatFixFile failed: %v", err)
+	}
+	lint, err := checker.LintFile(file)
+	if err != nil {
+		t.Fatalf("LintFile failed: %v", err)
+	}
+	for _, is := range lint.Issues {
+		if is.Rule == "block_order" {
+			content, _ := os.ReadFile(file)
+			t.Errorf("preset block_order rejects --format output: %s\n%s", is.Message, content)
+		}
 	}
 }
 
@@ -1672,7 +1757,10 @@ func TestFixFileWriteError(t *testing.T) {
 	}
 	tmpDir := createTestConfigDir(t)
 	setupTestConfig(t, tmpDir, `rules {
-  blank_lines { enabled = true; within_blocks = true }
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
 }`)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)
@@ -1714,7 +1802,10 @@ func TestFormatFixFileWriteError(t *testing.T) {
 func TestFixFileSymlinkRejected(t *testing.T) {
 	tmpDir := createTestConfigDir(t)
 	setupTestConfig(t, tmpDir, `rules {
-  	blank_lines { enabled = true; within_blocks = true }
+  	blank_lines {
+  	  enabled       = true
+  	  within_blocks = true
+  	}
 	}`)
 	loader := newTestLoader(t, tmpDir)
 	eng := New(loader)

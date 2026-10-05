@@ -205,7 +205,7 @@ func TestFindHCLFiles_Walks(t *testing.T) {
 	a := newTestApp()
 	root := t.TempDir()
 
-	for _, name := range []string{"a.hcl", "b.tf", "c.json"} {
+	for _, name := range []string{"a.hcl", "b.tf", "c.json", ".terraform.lock.hcl"} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -225,6 +225,9 @@ func TestFindHCLFiles_Walks(t *testing.T) {
 	for _, f := range files {
 		if strings.Contains(f, ".git") {
 			t.Errorf("hidden dir not skipped: %s", f)
+		}
+		if strings.HasSuffix(f, ".terraform.lock.hcl") {
+			t.Errorf("generated lock file not skipped: %s", f)
 		}
 	}
 }

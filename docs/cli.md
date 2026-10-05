@@ -9,15 +9,16 @@
 5. [`fix`](#fix)
    - [`fix --format` flag](#fix---format-flag)
    - [`fix --dry-run` flag](#fix---dry-run-flag)
-6. [`validate-config`](#validate-config-command)
-7. [`init`](#init)
-8. [`explain`](#explain)
-9. [`version`](#version)
-10. [Target file filtering (`--filter`)](#target-file-filtering---filter)
-11. [Concurrency](#concurrency)
-12. [Coloured output](#coloured-output)
-13. [Environment variables](#environment-variables)
-14. [Exit codes](#exit-codes)
+6. [Report formats (`--output`)](#report-formats---output)
+7. [`validate-config`](#validate-config-command)
+8. [`init`](#init)
+9. [`explain`](#explain)
+10. [`version`](#version)
+11. [Target file filtering (`--filter`)](#filtering-files)
+12. [Concurrency](#concurrency)
+13. [Coloured output](#coloured-output)
+14. [Environment variables](#environment-variables)
+15. [Exit codes](#exit-codes)
 
 ## Commands
 
@@ -25,8 +26,9 @@
 # Lint all files under a path
 hcl-linter lint ./
 
-# Lint specific files (exact match)
+# Lint specific files or several paths at once
 hcl-linter lint ./payments/integration/iam-policy/terragrunt.hcl
+hcl-linter check live/prod live/staging modules/vpc/main.tf
 
 # Filter files by name (glob patterns, OR logic)
 hcl-linter check ./my-dir --filter terragrunt.hcl --filter service.hcl
@@ -68,10 +70,14 @@ hcl-linter explain
 hcl-linter explain block_order
 ```
 
-**Note:** Files without a matching config (e.g. `something-special.hcl`
-without `.hcl-linter/something-special.hcl` or `.hcl-linter/default.hcl`)
-are warned and skipped. Use `fix --format` to apply formatting to any
-file without requiring config.
+`lint`, `check` and `fix` accept one or more paths (files or directories).
+
+**Config is required** for `lint`, `check` and `fix` (without `--format`):
+with no `.hcl-linter/` found they exit `2` and suggest `hcl-linter init`,
+rather than passing silently. Files without a matching config file (no
+`.hcl-linter/<name>.hcl` and no `.hcl-linter/default.hcl`) are skipped.
+Files that fall back to `default.hcl` trigger one warning per filename.
+`fix --format` needs no config at all.
 
 ## Global flags
 
@@ -81,24 +87,56 @@ file without requiring config.
 --concurrency         Max concurrent workers (default: CPU count)
 --verbose, -v         Show detailed output
 --color               Coloured output: auto (default), always, never
+--include-hidden      Include files in hidden directories (dirs starting with .)
+--version             Print version information
 ```
+
+Directory targets skip hidden directories (unless `--include-hidden`) and
+`.terraform.lock.hcl`, which `terraform init` generates. Pass a file
+explicitly to lint it anyway.
 
 ## `lint`
 
-Lints every matching file under the given path and prints all issues.
+Lints every matching file under the given paths and prints all issues.
 Exits `0` regardless of issue count - use `check` if you want a non-zero
 exit on issues.
 
 ## `check`
 
-Same rule set as `lint`, but exits `1` if any file has issues. Intended
-for CI.
+Same rule set as `lint`, but exits `1` if any error-severity issue is
+found (warnings are reported but do not fail the run). Intended for CI.
+
+Findings can be silenced in the file itself with
+`# hcl-linter:ignore <rule>` comments - see
+[configuration.md → Inline suppression](configuration.md#inline-suppression).
+
+## Report formats (`--output`)
+
+`lint` and `check` take `--output` / `-o`:
+
+| Format       | Use                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------- |
+| `text`       | Default. `path:line:col: [severity] rule: message` plus a summary line              |
+| `json`       | Scripts. `{"version":1,"issues":[{file,line,column,severity,rule,source,message}],"summary":{...}}` |
+| `sarif`      | GitHub code scanning (`github/codeql-action/upload-sarif`) and other SARIF 2.1.0 tools |
+| `checkstyle` | reviewdog (`-f=checkstyle`), Jenkins, GitLab plugins                                |
+
+Only the report goes to stdout, so `hcl-linter check . -o sarif > hcl.sarif`
+is safe; the config banner and warnings stay on stderr. Exit codes are the
+same for every format. Paths are relative to the working directory when the
+target is beneath it, except in SARIF, which uses absolute `file://` URIs:
+GitHub code scanning reads relative URIs from the repository root, so they
+would point at the wrong file when hcl-linter runs in a subdirectory, and
+`upload-sarif` turns absolute ones into repository-relative paths.
 
 ## `fix`
 
 Runs the fix pipeline (BlockOrder → NameValidation → RequiredFields →
 ArrayFormat → BlankLines) against each matching file and writes the
-result back to disk. Rules without a `Fix` implementation are skipped.
+result back to disk. Rules without a `Fix` implementation are skipped, as
+are rules disabled for a file with `# hcl-linter:ignore-file <rule>`.
+Each fix is re-parsed before it is written; a file that can't be parsed
+(before or after fixing) is left untouched and the run exits `3`.
 
 Rules are only applied when enabled in the matched config, unless
 `--format` is given.
@@ -108,13 +146,22 @@ Rules are only applied when enabled in the matched config, unless
 The `--format` flag applies opinionated default formatting to all HCL
 files without requiring any config to be present:
 
-- **Block order:** `include → locals → terraform → dependency → inputs`
+- **Block order:** `include → locals → terraform → remote_state → generate → dependencies → dependency`,
+  the same as the `builtin:terragrunt` preset, so `fix --format` and `check` never disagree
 - **Array format:** converts inline arrays with 2+ items to multiline
 - **Blank lines:** removes blank lines at block boundaries, collapses consecutive blank lines
 
+- **Canonical HCL formatting:** the same formatter `terraform fmt` uses
+  (`hclwrite.Format`) - attribute alignment, indentation, spacing
+
+`.hcl-linter/` is never read in this mode: every `.hcl` / `.tf` file under
+the target path is formatted with the defaults above, whether or not a
+config exists. `--filter` and `--include-hidden` still apply. Running it
+twice produces no further changes, so `fix --format --dry-run` is a safe
+CI gate after a local `fix --format`.
+
 This is useful for one-off formatting or bootstrapping a codebase before
-introducing config-based rules. Config-based `array_format` and
-`blank_lines` rules are also applied if a config exists for the file.
+introducing config-based rules.
 
 ### `fix --dry-run` flag
 
@@ -127,8 +174,8 @@ hcl-linter fix ./ --format --dry-run   # config-free formatting check
 ```
 
 Not the same as `check`: `check` reports rule violations, `--dry-run`
-reports byte-level drift - including drift from fix-only rules like
-`blank_lines` that have no `Check` phase. Use `--dry-run` in CI to fail
+reports byte-level drift, including formatting a rule's check doesn't
+describe line by line. Use `--dry-run` in CI to fail
 the build when committed files don't match the fixer's output.
 
 ## `validate-config` command
@@ -179,14 +226,19 @@ hcl-linter init . --dry-run        # preview without writing
 hcl-linter init . --force          # overwrite existing .hcl-linter/
 ```
 
-Walks the target directory for `.hcl` / `.tf` files (skipping hidden dirs),
+Walks the target directory for `.hcl` / `.tf` files (skipping hidden dirs
+and `.terraform.lock.hcl`),
 groups them by unique basename, then writes:
 
-- `.hcl-linter/default.hcl` - baseline template with `block_order`,
-  `array_format`, and `blank_lines` enabled with safe defaults.
-- `.hcl-linter/<name>.hcl` per unique basename - a thin
+- `.hcl-linter/default.hcl` - extends the recommended preset:
+  `builtin:terragrunt` when the project contains `terragrunt.hcl` or
+  `root.hcl`, otherwise `builtin:terraform`
+  (see [rules.md → Presets](rules.md#presets)).
+- `.hcl-linter/<name>.hcl` per unique target name without its extension
+  (`main.tf` → `main.hcl`, which is how configs are matched) - a thin
   `extends = "default"` override with an empty `rules {}` block, ready for
-  per-filename customisation.
+  per-filename customisation. In a Terragrunt project, `.tf` names extend
+  `builtin:terraform` instead.
 
 **Flags:**
 
@@ -196,9 +248,8 @@ groups them by unique basename, then writes:
   `init` refuses when the target `.hcl-linter/` directory is non-empty and
   lists what it found.
 
-The generated layout is designed to pass `validate-config` unchanged - run
-`hcl-linter validate-config` and `hcl-linter fix ./ --dry-run` as suggested
-next steps.
+The generated layout passes `validate-config` unchanged; `check .` right
+after `init` reports real findings only.
 
 ## `explain`
 
@@ -244,7 +295,9 @@ Rule name matching is exact - no fuzzy search.
 
 ## `version`
 
-Prints version, build date, and git commit (all injected at build time).
+Prints version, build date, and git commit (`hcl-linter --version` is
+equivalent). Release builds inject these at build time; `go install` builds
+read them from Go's embedded build info.
 
 ## Filtering Files
 
@@ -267,7 +320,8 @@ hcl-linter lint ./ --filter "test*.hcl"
 **How it works:**
 
 - Filters match against `filepath.Base()` (filename only, not full path)
-- `*` is the only wildcard supported (simple prefix/suffix matching around `*`)
+- Patterns use Go's [`filepath.Match`](https://pkg.go.dev/path/filepath#Match)
+  syntax: `*`, `?`, and character classes like `[a-z]`
 - Multiple `--filter` flags use OR logic
 - Files without a matching config are warned and skipped
 
@@ -277,15 +331,10 @@ For more complex filtering scenarios (recursive patterns, exclusions, etc.), com
 
 ```bash
 # Recursive search with find
-find ./infra -name "*.hcl" -o -name "*.tf" | xargs hcl-linter lint
+find ./infra \( -name "*.hcl" -o -name "*.tf" \) -print0 | xargs -0 hcl-linter lint
 
 # Exclude specific files
-for f in *.hcl; do
-  case "$f" in
-    terragrunt.hcl) continue ;;
-    *) hcl-linter lint "$f" ;;
-  esac
-done
+find . -name "*.hcl" ! -name terragrunt.hcl -print0 | xargs -0 hcl-linter lint
 
 # Exclude multiple patterns
 find . -type f \( -name "*.hcl" -o -name "*.tf" \) ! -name "*test*" | xargs hcl-linter lint
@@ -294,7 +343,7 @@ find . -type f \( -name "*.hcl" -o -name "*.tf" \) ! -name "*test*" | xargs hcl-
 ## Concurrency
 
 Defaults to CPU count. Override with `--concurrency <n>` or
-`HCL_LINTER_MAX_CONCURRENCY` (the env var wins over the flag). Higher
+`HCL_LINTER_MAX_CONCURRENCY` (the flag wins over the env var). Higher
 values trade memory for throughput on large trees.
 
 ## Coloured output
@@ -345,7 +394,7 @@ non-TTY output.
 ## Environment variables
 
 - `HCL_LINTER_CONFIG_DIR` - Path to custom config directory (priority 2; see [configuration.md](configuration.md#config-source-precedence))
-- `HCL_LINTER_MAX_CONCURRENCY` - Max number of concurrent workers (overrides `--concurrency` flag)
+- `HCL_LINTER_MAX_CONCURRENCY` - Max number of concurrent workers (used when `--concurrency` is not set)
 - `NO_COLOR` - When set to any non-empty value, disables coloured output in `--color=auto` mode (see https://no-color.org)
 
 ## Exit codes
@@ -354,8 +403,8 @@ non-TTY output.
 | ---- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `0`  | Success (no findings; `lint` also exits 0 when it finds issues - it is report-only)                                            |
 | `1`  | Findings: issues found (`check`), config validation failed (`validate-config`), or `fix --dry-run` detected files that would change |
-| `2`  | Usage or configuration error (bad flag, missing path, no config directory)                                                     |
-| `3`  | Execution failure: the tool itself could not process input (unparseable file, IO error, interrupted)                           |
+| `2`  | Usage or configuration error (bad flag, missing path, no config directory for `lint`/`check`/`fix`)                            |
+| `3`  | Execution failure: the tool itself could not process input (unparseable file, IO error, interrupted) - also for `fix`          |
 
 Results (issues, diffs, summaries) go to stdout; diagnostics (config banner,
 warnings, progress) go to stderr, so piping stdout yields machine-readable

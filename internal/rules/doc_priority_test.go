@@ -1,8 +1,10 @@
 package rules_test
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/rules"
 )
 
@@ -66,8 +68,15 @@ func TestRegistrySortedOrdersByPriorityAscending(t *testing.T) {
 	}
 }
 
-func TestBlankLinesRuleCheckReturnsNil(t *testing.T) {
-	if issues := (rules.BlankLinesRule{}).Check(nil); issues != nil {
-		t.Errorf("BlankLinesRule.Check should return nil, got %v", issues)
+func TestBlankLinesRuleCheckReportsWhatFixChanges(t *testing.T) {
+	cfg := &config.Rules{BlankLines: &config.BlankLinesConfig{Enabled: true, WithinBlocks: true}}
+	clean := buildContext(t, "locals {\n  a = 1\n\n  b = 2\n}\n", cfg)
+	if issues := (rules.BlankLinesRule{}).Check(clean); issues != nil {
+		t.Errorf("clean file should pass, got %v", issues)
+	}
+	dirty := buildContext(t, "locals {\n  a = 1\n\n\n  b = 2\n\n}\n", cfg)
+	issues := (rules.BlankLinesRule{}).Check(dirty)
+	if len(issues) != 1 || issues[0].Location.Start.Line != 4 || !strings.Contains(issues[0].Message, "2 extra") {
+		t.Errorf("expected one warning at line 4 (the first removed line) for 2 extra blank lines, got %+v", issues)
 	}
 }

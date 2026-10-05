@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean install run help
+.PHONY: all build snapshot test test-coverage lint fmt vet tidy deps clean install run version tag help
 
 # Go parameters
 GOCMD=go
@@ -38,33 +38,9 @@ build:
 	@mkdir -p $(DIST_DIR)
 	$(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
 
-# Build for multiple platforms
-build-all: build-darwin-amd64 build-darwin-arm64 build-linux-amd64 build-linux-arm64 build-windows-amd64
-
-build-darwin-amd64:
-	@echo "Building $(BINARY_NAME)-darwin-amd64..."
-	@mkdir -p $(DIST_DIR)
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-darwin-amd64 ./$(CMD_DIR)
-
-build-darwin-arm64:
-	@echo "Building $(BINARY_NAME)-darwin-arm64..."
-	@mkdir -p $(DIST_DIR)
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-darwin-arm64 ./$(CMD_DIR)
-
-build-linux-amd64:
-	@echo "Building $(BINARY_NAME)-linux-amd64..."
-	@mkdir -p $(DIST_DIR)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-linux-amd64 ./$(CMD_DIR)
-
-build-linux-arm64:
-	@echo "Building $(BINARY_NAME)-linux-arm64..."
-	@mkdir -p $(DIST_DIR)
-	GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-linux-arm64 ./$(CMD_DIR)
-
-build-windows-amd64:
-	@echo "Building $(BINARY_NAME)-windows-amd64.exe..."
-	@mkdir -p $(DIST_DIR)
-	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-windows-amd64.exe ./$(CMD_DIR)
+# Build every release platform locally via GoReleaser (no publishing)
+snapshot:
+	goreleaser release --snapshot --clean --skip=docker,publish
 
 # Run tests
 test:
@@ -129,21 +105,15 @@ tag:
 		echo "Usage: make tag VERSION=x.x.x"; \
 		exit 1; \
 	fi
+	@if [ "$(VERSION)" != "$$(tr -d '[:space:]' < VERSION)" ]; then \
+		echo "VERSION file says $$(cat VERSION); set it to $(VERSION) and commit first"; \
+		echo "(the GitHub Action installs the release named in VERSION)"; \
+		exit 1; \
+	fi
 	@echo "Tagging v$(VERSION)..."
 	git tag -a v$(VERSION) -m "Release v$(VERSION)"
 	@echo "Tagged v$(VERSION). Push with: git push origin v$(VERSION)"
-
-# Release: tag, build all, and create checksums
-release: tag build-all checksums
-
-# Generate checksums for all binaries
-checksums:
-	@echo "Generating checksums..."
-	@cd $(DIST_DIR) && \
-	for f in $(BINARY_NAME)*; do \
-		sha256sum $$f > $$f.sha256; \
-	done
-	@ls -la $(DIST_DIR)
+	@echo "The Release workflow then publishes binaries, the image and the Homebrew cask."
 
 # Show help
 help:
@@ -154,7 +124,7 @@ help:
 	@echo "Targets:"
 	@echo "  all           -- Run test and build (default)"
 	@echo "  build         -- Build the binary to dist/"
-	@echo "  build-all     -- Build for all platforms"
+	@echo "  snapshot      -- Build all release artifacts locally (GoReleaser)"
 	@echo "  test          -- Run tests"
 	@echo "  test-coverage -- Run tests with coverage report"
 	@echo "  lint          -- Run golangci-lint"
@@ -167,5 +137,4 @@ help:
 	@echo "  run           -- Run the built binary"
 	@echo "  version       -- Show version info"
 	@echo "  tag           -- Tag a release (VERSION=x.x.x make tag)"
-	@echo "  release       -- Tag, build all, and generate checksums"
 	@echo "  help          -- Show this help"

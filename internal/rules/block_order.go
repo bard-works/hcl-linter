@@ -67,7 +67,10 @@ func checkBlockOrderIssues(issues *[]diag.Issue, blocks []ast.BlockInfo, cfg *co
 		if idx, ok := orderMap[block.Type]; ok {
 			pos = idx
 		}
-		if pos < lastPos && lastPos < len(cfg.Order) {
+		// Unlisted blocks rank after every listed one (which is where fix
+		// moves them), so a listed block after an unlisted one is out of
+		// order too.
+		if pos < lastPos {
 			*issues = append(*issues, diag.Issue{
 				Severity: diag.SeverityError,
 				Rule:     "block_order",

@@ -1,0 +1,69 @@
+name: hcl-linter
+description: Lint and format-check Terraform and Terragrunt HCL with hcl-linter
+author: bard-works
+branding:
+  icon: check-square
+  color: purple
+
+inputs:
+  version:
+    description: >-
+      hcl-linter version to install (e.g. 0.1.0), or "latest". Defaults to
+      the version in the action's VERSION file, so
+      `uses: bard-works/hcl-linter@v0.1.0` installs hcl-linter 0.1.0.
+    required: false
+    default: ""
+  args:
+    description: Arguments passed to hcl-linter
+    required: false
+    default: check .
+  working-directory:
+    description: Directory to run hcl-linter in
+    required: false
+    default: .
+  output-file:
+    description: >-
+      Write hcl-linter's stdout to this file instead of the log, e.g. with
+      args "check . --output sarif" for github/codeql-action/upload-sarif.
+      A relative path is relative to the repository root, not
+      working-directory, so later steps can use it as is.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install hcl-linter
+      shell: bash
+      env:
+        HCL_LINTER_VERSION: ${{ inputs.version }}
+        INSTALL_DIR: ${{ runner.temp }}/hcl-linter-bin
+      run: |
+        # Pinning the action ref pins the binary: the release workflow fails
+        # unless VERSION matches the tag being released.
+        version="$HCL_LINTER_VERSION"
+        if [ -z "$version" ]; then
+          version=$(tr -d '[:space:]' < "${GITHUB_ACTION_PATH}/VERSION")
+        fi
+        sh "${GITHUB_ACTION_PATH}/scripts/install.sh" -v "$version" -b "$INSTALL_DIR"
+        echo "$INSTALL_DIR" >> "$GITHUB_PATH"
+
+    - name: Run hcl-linter
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        HCL_LINTER_ARGS: ${{ inputs.args }}
+        HCL_LINTER_OUTPUT_FILE: ${{ inputs.output-file }}
+      run: |
+        # args is written by the workflow author, so shell word splitting and
+        # quoting apply as they would on the command line.
+        if [ -n "$HCL_LINTER_OUTPUT_FILE" ]; then
+          case "$HCL_LINTER_OUTPUT_FILE" in
+            /* | [A-Za-z]:[\\/]*) out="$HCL_LINTER_OUTPUT_FILE" ;;
+            *) out="${GITHUB_WORKSPACE}/${HCL_LINTER_OUTPUT_FILE}" ;;
+          esac
+          mkdir -p "$(dirname "$out")"
+          eval "hcl-linter $HCL_LINTER_ARGS" > "$out"
+        else
+          eval "hcl-linter --color=always $HCL_LINTER_ARGS"
+        fi

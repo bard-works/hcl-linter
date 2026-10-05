@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- `lint`, `check` and `fix` (without `--format`) exit `2` when no
+  `.hcl-linter/` config is found, with a hint to run `hcl-linter init`.
+  They used to print a warning and exit `0`, so a CI job with a missing
+  config passed silently.
+- `fix` exits `3` when a file cannot be fixed (e.g. it does not parse)
+  instead of printing "No changes needed" and exiting `0`.
+- `fix --format` no longer sorts array items; list order is meaningful in
+  Terraform. Opt in with `array_format { sort = true }`.
+- `fix --format` orders blocks like the `builtin:terragrunt` preset
+  (`include → locals → terraform → remote_state → generate → dependencies →
+  dependency`), so it no longer moves `dependency` above `remote_state` and
+  then fails `check`. `inputs` was dropped from the order: it is an
+  attribute, and `block_order` only moves blocks.
+- `init` names per-file configs after the target without its extension
+  (`main.tf` → `.hcl-linter/main.hcl`, which is what the loader reads) and
+  `default.hcl` now extends a built-in preset.
+- `check` findings changed so they match what `fix` rewrites:
+  `blank_lines` now reports a warning when `fix` would change the file,
+  `array_format` reports exactly the arrays `fix` rewrites (including a
+  multiline array missing a trailing comma, and nothing `fix` leaves alone,
+  such as an array followed by a comment), and `block_order` reports a
+  listed block placed after an unlisted one (which `fix` already moved).
 - Removed the executable-directory config source (`.hcl-linter/` next to the
   binary). A binary in a shared or group-writable directory let anyone with
   write access there silently control lint policy for every user of that
@@ -19,6 +41,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Built-in presets: `extends = "builtin:terragrunt"` and
+  `extends = "builtin:terraform"`. `init` picks the one matching the
+  project.
+- Inline suppression: `# hcl-linter:ignore [rules]` (covers the next block
+  or line, or its own line when trailing) and
+  `# hcl-linter:ignore-file [rules]`. `fix` skips fixers disabled with
+  `ignore-file`, and `array_format` and `blank_lines` leave lines covered by
+  `ignore` alone.
+- `lint`/`check --output json|sarif|checkstyle` for scripts, GitHub code
+  scanning and reviewdog. JSON and SARIF include the config rule that
+  produced each finding. SARIF uses absolute `file://` URIs so code scanning
+  finds the file even when hcl-linter runs in a subdirectory.
+- `lint`, `check` and `fix` accept several paths.
+- GitHub Action (`uses: bard-works/hcl-linter@v0.1.0`), pre-commit hooks
+  (`hcl-linter-check`, `hcl-linter-fix`, `hcl-linter-format`), a Docker
+  image (`ghcr.io/bard-works/hcl-linter`), and `scripts/install.sh`. The
+  action installs the release matching its own tag, so pinning the action
+  pins the linter (`version: latest` opts out).
+- Directory walks skip `.terraform.lock.hcl`, which `terraform init`
+  generates; `init` no longer writes a config for it.
+- Releases via GoReleaser: linux/darwin/windows × amd64/arm64 archives,
+  checksums, provenance attestations, and a Homebrew cask
+  (`brew install --cask bard-works/tap/hcl-linter`).
+- `--version` flag; `go install` builds report their module version and
+  commit instead of `dev`.
+- `terraform_block` `source_required` flags `source = ""`.
+- `remote_state` checks top-level `remote_state` blocks, where Terragrunt
+  defines them (previously only blocks nested in `terraform {}`).
+- `array_format` honours `multiline_threshold`.
+- `validate-config` reports config syntax errors and broken `extends`
+  chains (unknown preset, missing file, cycle).
+- Findings are listed in file order; paths under the working directory are
+  printed relative even when passed as absolute paths.
 - POSIX-style exit-code contract: `0` no findings, `1` findings (check
   failures, config issues, dry-run drift), `2` usage/config errors, `3`
   execution failures (unparseable files, IO errors, interruption). `lint` and
@@ -36,12 +91,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stderr. Previously warnings were split across both streams.
 - `--color=auto` enables colour only when both stdout and stderr are TTYs,
   since both streams carry coloured text.
+- Files that fall back to `.hcl-linter/default.hcl` are no longer warned
+  about on every run (it is the documented setup); `--verbose` notes it
+  once per filename.
 - Fixed files are written atomically (temp file + fsync + rename), so an
   interrupted `fix` can no longer truncate a file. Existing permission bits
   are preserved and read-only targets are still refused.
 
 ### Fixed
 
+- `array_format`'s fixer corrupted arrays of objects (`Statement = [{ ... }]`
+  in `jsonencode`), arrays inside function calls (`merge(x, ["a", "b"])`),
+  calls inside arrays, trailing comments, and text inside heredocs. It now
+  only rewrites whole-line arrays of plain string literals.
+- `required_fields`'s fixer inserted the attribute in the wrong place when
+  a file had several `include` blocks, producing invalid HCL.
+- `blank_lines` did not remove a blank line directly after `{` when that
+  was the only change, and added a trailing newline on every run.
+- `duplicates` compared only the first label, so `resource "aws_s3_bucket"
+  "a"` and `"b"` were reported as duplicates.
+- `array_format`'s check flagged arrays already written one item per line,
+  so a fixed file could never pass.
+- `fix` keeps files that were `terraform fmt`-clean fmt-clean.
+- `fix --format` now works with no `.hcl-linter/` config, as documented.
+  Previously every file without a matching config was dropped before
+  formatting, so the command silently did nothing in unconfigured projects.
+- `array_format` fixes no longer append a blank line at end of file. A
+  `fix` followed by `fix --dry-run` used to report drift because the second
+  run removed the line the first run added.
 - `dependency_outputs` now performs its documented validation:
   `dependency.<name>.outputs.<attr>` references anywhere in a file are checked
   against the target module's `output` blocks (and `.mock-outputs.json`), and

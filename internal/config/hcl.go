@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -28,11 +29,17 @@ func loadHCLConfigWithVisited(path string, visited map[string]bool) (*Rules, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config %s: %w", absPath, err)
 	}
+	return parseHCLConfig(data, absPath, visited)
+}
 
+// parseHCLConfig parses config source. name is the file path for on-disk
+// configs (relative extends resolve against its directory) or "builtin:<x>"
+// for presets.
+func parseHCLConfig(data []byte, name string, visited map[string]bool) (*Rules, error) {
 	parser := hclparse.NewParser()
-	file, diags := parser.ParseHCL(data, absPath)
+	file, diags := parser.ParseHCL(data, name)
 	if diags.HasErrors() {
-		return nil, fmt.Errorf("failed to parse HCL config %s: %w", absPath, diags)
+		return nil, fmt.Errorf("failed to parse HCL config %s: %w", name, diags)
 	}
 
 	syntaxBody, ok := file.Body.(*hclsyntax.Body)
@@ -43,8 +50,7 @@ func loadHCLConfigWithVisited(path string, visited map[string]bool) (*Rules, err
 	rules := &Rules{}
 
 	if s, ok := attrString(syntaxBody, "extends"); ok {
-		basePath := resolveExtendsPath(absPath, s)
-		baseRules, baseErr := loadHCLConfigWithVisited(basePath, visited)
+		baseRules, baseErr := loadExtends(name, s, visited)
 		if baseErr != nil {
 			return nil, fmt.Errorf("failed to load extended config %q: %w", s, baseErr)
 		}
@@ -60,6 +66,27 @@ func loadHCLConfigWithVisited(path string, visited map[string]bool) (*Rules, err
 	}
 
 	return rules, nil
+}
+
+// loadExtends resolves an extends reference: a built-in preset
+// ("builtin:terragrunt") or a config file relative to the current one.
+func loadExtends(current, ref string, visited map[string]bool) (*Rules, error) {
+	if preset, ok := strings.CutPrefix(ref, builtinPrefix); ok {
+		key := builtinPrefix + preset
+		if visited[key] {
+			return nil, fmt.Errorf("circular extends reference detected: %s", key)
+		}
+		visited[key] = true
+		data, err := presetSource(preset)
+		if err != nil {
+			return nil, err
+		}
+		return parseHCLConfig(data, key, visited)
+	}
+	if strings.HasPrefix(current, builtinPrefix) {
+		return nil, fmt.Errorf("preset %s may only extend other builtin: presets", current)
+	}
+	return loadHCLConfigWithVisited(resolveExtendsPath(current, ref), visited)
 }
 
 func resolveExtendsPath(currentPath, ref string) string {

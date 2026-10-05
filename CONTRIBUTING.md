@@ -7,7 +7,7 @@ project conventions, and how to add a new lint rule.
 
 Requirements:
 
-- Go (see `.tool-versions` for the pinned version)
+- Go (the version in `go.mod`)
 - `make`
 - `golangci-lint` (for `make lint`)
 
@@ -31,6 +31,8 @@ cmd/hcl-linter/               # CLI entrypoint (cobra): lint, check, fix, versio
 internal/engine/              # Engine: entry point for lint and fix operations
 internal/rules/               # Rule implementations (Rule/Fixer interface)
 internal/config/              # Config loading - HCL only, file-based matching
+internal/config/presets/      # builtin:<name> presets, embedded in the binary
+internal/suppress/            # `# hcl-linter:ignore` comment parsing
 internal/diag/                # Types only: Issue, Result, Severity
 internal/ast/                 # HCL parse helpers
 internal/termcolor/           # ANSI colour helpers
@@ -90,6 +92,20 @@ When adding or modifying a rule in `internal/rules/`:
   touch `ctx.Content`. `Fix(ctx) ([]byte, bool, error)` returns the new
   bytes, a `changed` bool (false = no-op, return original content), and an
   error.
+- **Check reports exactly what Fix changes.** For a fixable rule, a file
+  that passes `Check` must be left alone by `Fix`, and a fixed file must
+  pass `Check`. `internal/engine/idempotency_test.go` enforces this (and
+  that a second `fix` changes nothing) over every file in `docs/demo/`.
+- **Text fixers must be conservative.** If a fixer edits text rather than
+  the AST, it must skip shapes it can't rewrite without changing meaning
+  (see `array_format`: heredocs, interpolation, calls, comments) and keep
+  the file's trailing newline as it was.
+- **Add demos.** `docs/demo/<rule>/<rule>_valid.hcl` must lint clean and
+  `<rule>_violation.hcl` must report something, each with a matching config
+  in `docs/demo/<rule>/.hcl-linter/`; tests fail otherwise.
+- **Consider the presets.** If the rule has a low false-positive rate for
+  most projects, propose adding it to `internal/config/presets/` and
+  document it in `docs/rules.md#presets`.
 - **Every rule has a co-located test.** For every
   `internal/rules/<rule>.go`, there must be an
   `internal/rules/<rule>_test.go` exercising `Check` (and `Fix`, if
@@ -164,5 +180,8 @@ rules {
 
 ## Release process
 
-Maintainers only. See [docs/architecture.md](docs/architecture.md#build--release)
-for the Makefile targets (`make tag VERSION=…`, `make release VERSION=…`).
+Maintainers only. Set `VERSION` to the release and commit it, then tag and
+push (`make tag VERSION=0.1.0 && git push origin v0.1.0`); the Release
+workflow publishes everything via GoReleaser. The tag must match `VERSION`,
+which is what the GitHub Action installs. See
+[docs/architecture.md](docs/architecture.md#build--release).

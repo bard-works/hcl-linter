@@ -8,8 +8,12 @@ import (
 )
 
 type Issue struct {
-	Severity     Severity
-	Rule         string
+	Severity Severity
+	// Rule is the emitted rule ID (e.g. dependency_path_exists).
+	Rule string
+	// Source is the config rule that produced the issue (e.g.
+	// dependency_paths). Set by the engine; empty for internal errors.
+	Source       string
 	Message      string
 	Location     hcl.Range
 	SuggestedFix string

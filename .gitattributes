@@ -1,0 +1,5 @@
+# Keep HCL fixtures and demos byte-identical on every OS; the demo corpus is
+# exercised by tests that compare fixer output byte for byte.
+*.hcl text eol=lf
+*.tf  text eol=lf
+*.sh  text eol=lf

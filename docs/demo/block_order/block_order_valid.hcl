@@ -1,6 +1,6 @@
 # Demo: block_order rule - VALID
 # Blocks appear in correct order:
-#   include → locals → terraform → dependency → inputs
+#   include → locals → terraform → dependency
 
 include "root" {
   path = find_in_parent_folders()

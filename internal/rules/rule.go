@@ -6,6 +6,7 @@ import (
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/diag"
+	"github.com/bard-works/hcl-linter/internal/suppress"
 )
 
 // Context holds all parsed state passed to every rule.
@@ -16,6 +17,12 @@ type Context struct {
 	Blocks   []ast.BlockInfo
 	Attrs    []ast.AttributeInfo
 	Config   *config.Rules
+
+	// Directives are the file's `# hcl-linter:ignore` comments. Line-based
+	// fixers (array_format, blank_lines) leave covered lines alone. The
+	// engine re-parses them whenever a fix changes Content; the zero value
+	// suppresses nothing.
+	Directives suppress.Directives
 
 	// Breaker guards filesystem access for rules that read paths outside the
 	// file under lint (dependency_paths, dependency_outputs). It is shared

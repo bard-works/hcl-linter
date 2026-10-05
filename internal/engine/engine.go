@@ -16,6 +16,7 @@ import (
 	"github.com/bard-works/hcl-linter/internal/diag"
 	"github.com/bard-works/hcl-linter/internal/fsutil"
 	"github.com/bard-works/hcl-linter/internal/rules"
+	"github.com/bard-works/hcl-linter/internal/suppress"
 )
 
 // Engine is the single entry point for lint and fix operations.
@@ -112,13 +113,14 @@ func (e *Engine) buildContext(path string) (*rules.Context, error) {
 	}
 
 	return &rules.Context{
-		FilePath: path,
-		Content:  content,
-		File:     file,
-		Blocks:   ast.GetTopLevelBlocks(file),
-		Attrs:    ast.GetTopLevelAttributes(file),
-		Config:   cfg,
-		Breaker:  e.breaker,
+		FilePath:   path,
+		Content:    content,
+		File:       file,
+		Blocks:     ast.GetTopLevelBlocks(file),
+		Attrs:      ast.GetTopLevelAttributes(file),
+		Config:     cfg,
+		Directives: suppress.Parse(content, path),
+		Breaker:    e.breaker,
 	}, nil
 }
 
@@ -133,8 +135,19 @@ func (e *Engine) LintFile(path string) (*diag.Result, error) {
 	result := &diag.Result{File: path, Issues: []diag.Issue{}}
 
 	for _, rule := range e.registry.Enabled(ctx.Config) {
-		result.Issues = append(result.Issues, rule.Check(ctx)...)
+		for _, is := range ctx.Directives.Filter(rule.Name(), rule.Check(ctx)) {
+			is.Source = rule.Name()
+			result.Issues = append(result.Issues, is)
+		}
 	}
+	// Report in file order, as editors and reviewers read it.
+	sort.SliceStable(result.Issues, func(i, j int) bool {
+		a, b := result.Issues[i].Location.Start, result.Issues[j].Location.Start
+		if a.Line != b.Line {
+			return a.Line < b.Line
+		}
+		return a.Column < b.Column
+	})
 
 	return result, nil
 }
@@ -218,10 +231,15 @@ func (e *Engine) LintFiles(ctx context.Context, paths []string, maxConcurrency i
 
 // runFixPipeline runs all enabled Fixer rules in priority order, refreshing the
 // parsed AST in ctx after each rule that makes changes.
+//
+// A rule disabled for the file with `# hcl-linter:ignore-file <rule>` is not
+// run. Line-level ignores are honored by the line-based fixers (array_format,
+// blank_lines) through ctx.Directives; structural fixers such as block_order
+// rewrite the whole file, so keep them away with ignore-file.
 func (e *Engine) runFixPipeline(ctx *rules.Context) (int, error) {
 	total := 0
 	for _, rule := range e.registry.Sorted() {
-		if !rule.Enabled(ctx.Config) {
+		if !rule.Enabled(ctx.Config) || ctx.Directives.FileSuppressed(rule.Name()) {
 			continue
 		}
 		fixer, ok := rule.(rules.Fixer)
@@ -251,6 +269,7 @@ func (e *Engine) refreshContext(ctx *rules.Context) error {
 	ctx.File = file
 	ctx.Blocks = ast.GetTopLevelBlocks(file)
 	ctx.Attrs = ast.GetTopLevelAttributes(file)
+	ctx.Directives = suppress.Parse(ctx.Content, ctx.FilePath)
 	return nil
 }
 
@@ -260,9 +279,16 @@ func (e *Engine) FixFile(path string) (*FixResult, error) {
 		return nil, err
 	}
 
+	original := ctx.Content
 	changes, err := e.runFixPipeline(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// Never turn a terraform-fmt-clean file into one `terraform fmt -check`
+	// rejects (e.g. a fixer expanding an array breaks `=` alignment). Files
+	// that weren't fmt-clean are left to the user's own formatting.
+	if changes > 0 && bytes.Equal(hclwrite.Format(original), original) {
+		ctx.Content = hclwrite.Format(ctx.Content)
 	}
 
 	result := &FixResult{File: path, Changes: changes}
@@ -309,15 +335,23 @@ func (e *Engine) fixConcurrent(
 
 // --- Format fix (opinionated defaults, no config required) ---
 
-var defaultFormatBlockOrder = &config.BlockOrderConfig{
-	Enabled: true,
-	Order:   []string{"include", "locals", "terraform", "dependency", "inputs"},
-}
+// defaultFormatBlockOrder is builtin:terragrunt's block order, so `fix
+// --format` and a config extending the preset never move blocks against each
+// other.
+var defaultFormatBlockOrder = func() *config.BlockOrderConfig {
+	preset, err := config.PresetRules("terragrunt")
+	if err != nil || preset.BlockOrder == nil {
+		panic(fmt.Sprintf("builtin:terragrunt preset has no block_order: %v", err))
+	}
+	return preset.BlockOrder
+}()
 
 func defaultFormatConfig() *config.Rules {
 	return &config.Rules{
-		BlockOrder:  defaultFormatBlockOrder,
-		ArrayFormat: &config.ArrayFormatConfig{Enabled: true, Sort: true},
+		BlockOrder: defaultFormatBlockOrder,
+		// Never sort in --format: list order is meaningful in Terraform
+		// (subnets, command arguments), and terraform fmt never reorders.
+		ArrayFormat: &config.ArrayFormatConfig{Enabled: true},
 		BlankLines:  &config.BlankLinesConfig{Enabled: true, WithinBlocks: true},
 	}
 }
@@ -335,13 +369,14 @@ func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 	}
 
 	ctx := &rules.Context{
-		FilePath: path,
-		Content:  content,
-		File:     file,
-		Blocks:   ast.GetTopLevelBlocks(file),
-		Attrs:    ast.GetTopLevelAttributes(file),
-		Config:   defaultFormatConfig(),
-		Breaker:  e.breaker,
+		FilePath:   path,
+		Content:    content,
+		File:       file,
+		Blocks:     ast.GetTopLevelBlocks(file),
+		Attrs:      ast.GetTopLevelAttributes(file),
+		Config:     defaultFormatConfig(),
+		Directives: suppress.Parse(content, path),
+		Breaker:    e.breaker,
 	}
 
 	changes, err := e.runFixPipeline(ctx)

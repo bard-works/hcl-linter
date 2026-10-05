@@ -1,0 +1,34 @@
+# pre-commit hooks (https://pre-commit.com). Usage in .pre-commit-config.yaml:
+#
+#   - repo: https://github.com/bard-works/hcl-linter
+#     rev: v0.1.0
+#     hooks:
+#       - id: hcl-linter-check
+#
+# Hooks build hcl-linter from source with Go (pre-commit provisions it).
+- id: hcl-linter-check
+  name: hcl-linter check
+  description: Lint changed .hcl/.tf files with the project's .hcl-linter/ rules
+  entry: hcl-linter check
+  language: golang
+  files: \.(hcl|tf)$
+  exclude: (^|/)(\.hcl-linter/|\.terraform\.lock\.hcl$)
+  require_serial: true
+
+- id: hcl-linter-fix
+  name: hcl-linter fix
+  description: Apply auto-fixable rules from .hcl-linter/ to changed files
+  entry: hcl-linter fix
+  language: golang
+  files: \.(hcl|tf)$
+  exclude: (^|/)(\.hcl-linter/|\.terraform\.lock\.hcl$)
+  require_serial: true
+
+- id: hcl-linter-format
+  name: hcl-linter format
+  description: Format changed .hcl/.tf files with built-in defaults (no config needed)
+  entry: hcl-linter fix --format
+  language: golang
+  files: \.(hcl|tf)$
+  exclude: (^|/)(\.hcl-linter/|\.terraform\.lock\.hcl$)
+  require_serial: true

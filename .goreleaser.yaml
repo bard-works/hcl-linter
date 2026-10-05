@@ -1,0 +1,93 @@
+# Release pipeline: `git tag vX.Y.Z && git push origin vX.Y.Z` runs
+# .github/workflows/release.yml, which runs `goreleaser release`.
+# Validate locally with `goreleaser check` and
+# `goreleaser release --snapshot --clean --skip=docker,publish`.
+version: 2
+
+project_name: hcl-linter
+
+builds:
+  - id: hcl-linter
+    main: ./cmd/hcl-linter
+    binary: hcl-linter
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.Version={{ .Version }}
+      - -X main.BuildDate={{ .CommitDate }}
+      - -X main.GitCommit={{ .FullCommit }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    # hcl-linter_0.1.0_linux_amd64.tar.gz - the name action.yml downloads.
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+
+source:
+  enabled: true
+  name_template: "{{ .ProjectName }}_{{ .Version }}_source"
+
+changelog:
+  use: github-native
+
+release:
+  # Tags like v0.2.0-alpha.1 are published as pre-releases.
+  prerelease: auto
+  footer: |
+    **Install:** `brew install --cask bard-works/tap/hcl-linter`, `go install github.com/bard-works/hcl-linter/cmd/hcl-linter@{{ .Tag }}`, or `docker run --rm -v "$PWD:/src" -w /src ghcr.io/bard-works/hcl-linter:{{ .Version }} check .`
+    Verify an archive: `gh attestation verify <file> --repo bard-works/hcl-linter`
+
+homebrew_casks:
+  - name: hcl-linter
+    repository:
+      owner: bard-works
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/bard-works/hcl-linter
+    description: Linter and formatter for Terraform and Terragrunt HCL
+    license: Apache-2.0
+    # Pre-releases never update the tap.
+    skip_upload: auto
+    hooks:
+      post:
+        # Binaries are not notarized; clear the quarantine flag so macOS runs them.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/hcl-linter"]
+          end
+
+dockers_v2:
+  - id: hcl-linter
+    dockerfile: Dockerfile
+    images:
+      - ghcr.io/bard-works/hcl-linter
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.title: hcl-linter
+      org.opencontainers.image.description: Linter and formatter for Terraform and Terragrunt HCL
+      org.opencontainers.image.source: https://github.com/bard-works/hcl-linter
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: Apache-2.0

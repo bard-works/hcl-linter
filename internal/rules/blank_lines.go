@@ -1,7 +1,10 @@
 package rules
 
 import (
+	"fmt"
 	"strings"
+
+	"github.com/hashicorp/hcl/v2"
 
 	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
@@ -17,7 +20,7 @@ func init() { Register(BlankLinesRule{}) }
 
 func (r BlankLinesRule) Doc() RuleDoc {
 	return RuleDoc{
-		Summary:     "Removes excess blank lines within blocks and object attributes (fix-only).",
+		Summary:     "Removes excess blank lines within blocks and object attributes.",
 		Severity:    "warning",
 		Fixable:     true,
 		ConfigBlock: "blank_lines",
@@ -46,15 +49,41 @@ func (r BlankLinesRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.BlankLines != nil && cfg.BlankLines.Enabled && cfg.BlankLines.WithinBlocks
 }
 
-func (r BlankLinesRule) Check(_ *Context) []diag.Issue { return nil }
+// Check reports what Fix would change, so `check` in CI catches the same
+// drift as `fix --dry-run`: one warning at the first line Fix would remove.
+func (r BlankLinesRule) Check(ctx *Context) []diag.Issue {
+	fixed, changes := r.fix(ctx)
+	if changes == 0 || fixed == string(ctx.Content) {
+		return nil
+	}
+	before := strings.Split(string(ctx.Content), "\n")
+	after := strings.Split(fixed, "\n")
+	line := 1
+	for line <= len(before) && line <= len(after) && before[line-1] == after[line-1] {
+		line++
+	}
+	removed := len(before) - len(after)
+	pos := hcl.Pos{Line: line, Column: 1}
+	return []diag.Issue{{
+		Severity: diag.SeverityWarning,
+		Rule:     "blank_lines",
+		Message:  fmt.Sprintf("%d extra blank line(s) inside blocks; run `hcl-linter fix` to remove", removed),
+		Location: hcl.Range{Filename: ctx.FilePath, Start: pos, End: pos},
+	}}
+}
 
 func (r BlankLinesRule) Fix(ctx *Context) (int, error) {
-	newContent, changes := FixBlankLines(string(ctx.Content), ctx.Blocks, ctx.Attrs)
+	newContent, changes := r.fix(ctx)
 	if changes == 0 {
 		return 0, nil
 	}
 	ctx.Content = []byte(newContent)
 	return changes, nil
+}
+
+func (r BlankLinesRule) fix(ctx *Context) (string, int) {
+	suppressed := func(line int) bool { return ctx.Directives.LineSuppressed(line, r.Name()) }
+	return fixBlankLines(string(ctx.Content), ctx.Blocks, ctx.Attrs, suppressed)
 }
 
 type objectAttr struct {
@@ -109,7 +138,9 @@ func processBlockContent(lines []string, lineIdx int, block ast.BlockInfo) ([]st
 	blockLines := append([]string{lines[lineIdx]}, lines[contentStart:contentEnd+1]...)
 	fixed := removeBlankLinesWithinBlock(blockLines)
 	changes := 0
-	if len(fixed) != len(blockLines) {
+	// Compare against the whole original span: blank lines skipped between
+	// the opening line and contentStart are removals too.
+	if len(fixed) != contentEnd-lineIdx+1 {
 		changes++
 	}
 	return fixed, changes, contentEnd
@@ -117,6 +148,17 @@ func processBlockContent(lines []string, lineIdx int, block ast.BlockInfo) ([]st
 
 // FixBlankLines removes unnecessary blank lines within blocks and object attributes.
 func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.AttributeInfo) (string, int) {
+	return fixBlankLines(content, blocks, attrs, nil)
+}
+
+// fixBlankLines is FixBlankLines leaving alone every block or object
+// attribute whose first line suppressed (may be nil) reports as covered.
+func fixBlankLines(
+	content string,
+	blocks []ast.BlockInfo,
+	attrs []ast.AttributeInfo,
+	suppressed func(line int) bool,
+) (string, int) {
 	lines := strings.Split(content, "\n")
 	usedLines, objectAttrs := buildUsedLines(blocks, attrs)
 
@@ -134,6 +176,11 @@ func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.Attribute
 				for j := i; j <= endLine; j++ {
 					processedLines[j] = true
 				}
+				if suppressed != nil && suppressed(i+1) {
+					result = append(result, lines[i:endLine+1]...)
+					i = endLine + 1
+					goto nextLine
+				}
 				fixed, c := processObjectAttrBlock(lines, i, endLine)
 				changes += c
 				result = append(result, fixed...)
@@ -146,6 +193,11 @@ func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.Attribute
 				}
 				for j := i; j <= block.EndLine; j++ {
 					processedLines[j] = true
+				}
+				if suppressed != nil && suppressed(i+1) {
+					result = append(result, lines[i:block.EndLine+1]...)
+					i = block.EndLine + 1
+					goto nextLine
 				}
 				cs := blankLinesBlockContentStart(lines, i)
 				if cs < block.EndLine && !hasNestedBlockAt(blocks, cs, block.EndLine) {
@@ -162,7 +214,9 @@ func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.Attribute
 		i++
 	nextLine:
 	}
-	return strings.Join(result, "\n") + "\n", changes
+	// Split/Join round-trips the file ending exactly; appending another
+	// newline here grew the file by one blank line on every run.
+	return strings.Join(result, "\n"), changes
 }
 
 func blankLinesBlockContentStart(lines []string, blockStart int) int {
@@ -195,6 +249,10 @@ func removeBlankLinesWithinBlock(lines []string) []string {
 				continue
 			}
 			if isBlockHeader {
+				continue
+			}
+			// Blank line right after an opening brace (block or object).
+			if len(result) > 0 && strings.HasSuffix(strings.TrimSpace(result[len(result)-1]), "{") {
 				continue
 			}
 			if !lastWasBlank {

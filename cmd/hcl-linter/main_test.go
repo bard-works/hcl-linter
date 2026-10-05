@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -206,5 +208,47 @@ func TestFilterFilesMatchedListingGatedByVerbose(t *testing.T) {
 	a.filterFiles(testFiles)
 	if !strings.Contains(buf.String(), "Matched files:") {
 		t.Error("expected 'Matched files:' listing with --verbose")
+	}
+}
+
+func TestVersionFlag(t *testing.T) {
+	cmd := newRootCmd()
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"--version"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("--version: %v", err)
+	}
+	if !strings.HasPrefix(buf.String(), "hcl-linter ") {
+		t.Errorf("unexpected --version output: %q", buf.String())
+	}
+}
+
+// Falling back to default.hcl is the documented, common setup, so it is only
+// mentioned with --verbose.
+func TestDefaultConfigFallbackNoticeNeedsVerbose(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".hcl-linter")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "default.hcl"), []byte("rules {\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "terragrunt.hcl"), []byte("locals {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, verbose := range []bool{false, true} {
+		a, _ := newCaptureApp()
+		errBuf := &bytes.Buffer{}
+		a.errOut = errBuf
+		a.configSrc = cfgDir
+		a.verbose = verbose
+		if err := a.runCheck(nil, []string{root}); err != nil {
+			t.Fatalf("check: %v", err)
+		}
+		if got := strings.Contains(errBuf.String(), "using default.hcl"); got != verbose {
+			t.Errorf("verbose=%v: fallback notice shown=%v\n%s", verbose, got, errBuf.String())
+		}
 	}
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/rules"
 	"github.com/bard-works/hcl-linter/internal/termcolor"
 )
@@ -54,6 +55,15 @@ func (a *app) printExplainTable() {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", termcolor.Rule(r.Name()), sev, fixable, doc.Summary)
 	}
 	w.Flush()
+
+	var presets []string
+	for _, p := range config.PresetNames() {
+		presets = append(presets, `"builtin:`+p+`"`)
+	}
+	fmt.Fprintf(a.out, "\nPresets:  extends = %s\n", strings.Join(presets, " | "))
+	fmt.Fprintln(a.out, "Silence:  # hcl-linter:ignore <rule>  (next block or line)")
+	fmt.Fprintln(a.out, "          # hcl-linter:ignore-file <rule>")
+	fmt.Fprintln(a.out, "Details:  hcl-linter explain <rule>")
 }
 
 // printExplainDetail prints the full documentation for one rule.
