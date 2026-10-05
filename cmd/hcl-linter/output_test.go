@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"encoding/xml"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -66,7 +67,7 @@ func TestOutputSARIF(t *testing.T) {
 	}
 	if uri := run.Results[0].Locations[0].PhysicalLocation.ArtifactLocation.URI; !strings.HasPrefix(uri, "file:///") ||
 		strings.Contains(uri, `\`) {
-		t.Errorf("targets outside the working directory need a file:// URI with forward slashes, got %q", uri)
+		t.Errorf("SARIF needs an absolute file:// URI with forward slashes, got %q", uri)
 	}
 }
 
@@ -93,8 +94,17 @@ func TestOutputFormatValidation(t *testing.T) {
 	}
 }
 
-func TestSARIFURIRelative(t *testing.T) {
-	if got := sarifURI("live/prod/terragrunt.hcl"); got != "live/prod/terragrunt.hcl" {
-		t.Errorf("relative paths must stay relative, got %q", got)
+// SARIF URIs are absolute so GitHub code scanning maps them to the right file
+// even when hcl-linter runs in a subdirectory of the repository.
+func TestSARIFURIIsAbsolute(t *testing.T) {
+	t.Chdir(t.TempDir())
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.ToSlash(filepath.Join(cwd, "live", "prod", "terragrunt.hcl"))
+	got := sarifURI(filepath.Join("live", "prod", "terragrunt.hcl"))
+	if !strings.HasPrefix(got, "file:///") || !strings.HasSuffix(got, want) {
+		t.Errorf("got %q, want a file:// URI ending in %q", got, want)
 	}
 }

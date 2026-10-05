@@ -34,7 +34,11 @@ if [ "$version" = "latest" ]; then
   # The /releases/latest redirect avoids the rate-limited API.
   latest_url=$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/${repo}/releases/latest") ||
     fail "could not resolve the latest release"
-  version="${latest_url##*/}"
+  # With no published release, GitHub redirects to the /releases list.
+  case "$latest_url" in
+    */releases/tag/*) version="${latest_url##*/}" ;;
+    *) fail "no published release of ${repo} found; pass -v VERSION to pick one" ;;
+  esac
 fi
 version="${version#v}"
 
@@ -64,7 +68,9 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 echo "Downloading ${archive}..." >&2
-curl -fsSL -o "${tmp}/${archive}" "${base}/${archive}" || fail "download failed: ${base}/${archive}"
+curl -fsSL -o "${tmp}/${archive}" "${base}/${archive}" ||
+  fail "download failed: ${base}/${archive}
+  Release v${version} may not exist, or may predate this installer (archives in this layout start at v0.1.0)."
 curl -fsSL -o "${tmp}/checksums.txt" "${base}/checksums.txt" || fail "download failed: ${base}/checksums.txt"
 
 expected=$(awk -v f="$archive" '$2 == f { print $1 }' "${tmp}/checksums.txt")

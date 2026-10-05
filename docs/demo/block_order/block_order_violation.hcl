@@ -1,6 +1,6 @@
 # Demo: block_order rule - VIOLATION
 # Blocks appear in wrong order. Configured order is:
-#   include → locals → terraform → dependency → inputs
+#   include → locals → terraform → dependency
 # Here, terraform appears before include (wrong order).
 
 terraform {

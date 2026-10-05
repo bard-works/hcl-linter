@@ -8,6 +8,9 @@ FROM alpine:3.22
 ARG TARGETPLATFORM
 COPY $TARGETPLATFORM/hcl-linter /usr/local/bin/hcl-linter
 
+# Unprivileged by default. `check` only reads the mounted files; `fix` writes
+# them, so run it as the files' owner:
+#   docker run --rm -v "$PWD:/src" --user "$(id -u):$(id -g)" <image> fix .
 RUN adduser -D -u 10001 linter
 USER linter
 WORKDIR /src

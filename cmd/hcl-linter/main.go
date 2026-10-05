@@ -385,9 +385,9 @@ func (a *app) resolveFiles(path string) []string {
 	return []string{path}
 }
 
-// filterFilesByConfig keeps the files that have a matching config. Files that
-// fall back to default.hcl are reported once per filename, not once per file,
-// so a monorepo with hundreds of terragrunt.hcl files stays readable.
+// filterFilesByConfig keeps the files that have a matching config. Falling
+// back to default.hcl is normal, documented behavior, so it is only noted
+// with --verbose, once per filename rather than once per file.
 func (a *app) filterFilesByConfig(loader *config.Loader, files []string) []string {
 	var filesToProcess []string
 	warned := map[string]bool{}
@@ -395,12 +395,11 @@ func (a *app) filterFilesByConfig(loader *config.Loader, files []string) []strin
 		if !loader.HasConfigForFile(file) {
 			continue
 		}
-		if !loader.HasSpecificConfigForFile(file) {
+		if a.verbose && !loader.HasSpecificConfigForFile(file) {
 			base := filepath.Base(file)
 			if !warned[base] {
 				warned[base] = true
-				fmt.Fprintf(a.errOut, "%s No specific config for %s files, using default.hcl\n",
-					termcolor.Warning("Warning:"), base)
+				fmt.Fprintf(a.errOut, "No specific config for %s files, using default.hcl\n", base)
 			}
 		}
 		filesToProcess = append(filesToProcess, file)
@@ -731,6 +730,12 @@ func (a *app) finalizeFixRun(totalChanges int, wouldChange, dryRun bool) error {
 	return nil
 }
 
+// generatedFiles are written by tools, not people, so directory walks skip
+// them; naming one as an argument still lints it.
+var generatedFiles = map[string]bool{
+	".terraform.lock.hcl": true, // terraform init
+}
+
 func (a *app) findHCLFiles(root string) []string {
 	var files []string
 
@@ -748,6 +753,9 @@ func (a *app) findHCLFiles(root string) []string {
 			return nil
 		}
 
+		if generatedFiles[d.Name()] {
+			return nil
+		}
 		if strings.HasSuffix(path, ".hcl") || strings.HasSuffix(path, ".tf") {
 			files = append(files, path)
 		}

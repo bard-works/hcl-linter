@@ -92,3 +92,25 @@ dependency "other" {
 		t.Error("the next block must not be covered")
 	}
 }
+
+func TestLineSuppressed(t *testing.T) {
+	src := `# hcl-linter:ignore array_format
+inputs = {
+  azs = ["a", "b"]
+}
+other = ["c", "d"]
+`
+	d := Parse([]byte(src), "t.hcl")
+	if !d.LineSuppressed(3, "array_format") {
+		t.Error("line 3 is inside the annotated attribute")
+	}
+	if d.LineSuppressed(3, "blank_lines") {
+		t.Error("the directive names array_format only")
+	}
+	if d.LineSuppressed(5, "array_format") {
+		t.Error("line 5 follows the annotated attribute")
+	}
+	if !Parse([]byte("# hcl-linter:ignore-file\na = 1\n"), "t.hcl").LineSuppressed(2, "array_format") {
+		t.Error("ignore-file covers every line")
+	}
+}

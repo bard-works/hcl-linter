@@ -9,9 +9,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/zclconf/go-cty/cty"
 
-	"github.com/bard-works/hcl-linter/internal/ast"
 	"github.com/bard-works/hcl-linter/internal/config"
 	"github.com/bard-works/hcl-linter/internal/diag"
 )
@@ -54,27 +52,39 @@ func (r ArrayFormatRule) Enabled(cfg *config.Rules) bool {
 	return cfg != nil && cfg.ArrayFormat != nil && cfg.ArrayFormat.Enabled
 }
 
+// Check reports exactly the arrays Fix rewrites, found by running the fixer:
+// a file `check` passes is one `fix` leaves alone, and the reverse.
 func (r ArrayFormatRule) Check(ctx *Context) []diag.Issue {
-	threshold := arrayThreshold(ctx.Config.ArrayFormat)
-	var issues []diag.Issue
-	for _, attr := range ctx.Attrs {
-		if e, ok := attr.Expr.(hclsyntax.Expression); ok {
-			checkExprArrayFormat(&issues, e, threshold)
-		}
+	_, edits := r.fix(ctx)
+	issues := make([]diag.Issue, 0, len(edits))
+	for _, e := range edits {
+		issues = append(issues, diag.Issue{
+			Severity: diag.SeverityWarning,
+			Rule:     "array_format",
+			Message:  e.message,
+			Location: hcl.Range{
+				Filename: ctx.FilePath,
+				Start:    hcl.Pos{Line: e.line, Column: e.column},
+				End:      hcl.Pos{Line: e.endLine, Column: e.endColumn},
+			},
+		})
 	}
-	checkArrayFormatBlocks(&issues, ctx.Blocks, threshold)
 	return issues
 }
 
 func (r ArrayFormatRule) Fix(ctx *Context) (int, error) {
-	cfg := ctx.Config.ArrayFormat
-	sortItems := cfg != nil && cfg.Sort
-	newContent, changes := fixArrays(string(ctx.Content), sortItems, arrayThreshold(cfg))
-	if changes == 0 {
+	newContent, edits := r.fix(ctx)
+	if len(edits) == 0 {
 		return 0, nil
 	}
 	ctx.Content = []byte(newContent)
-	return changes, nil
+	return len(edits), nil
+}
+
+func (r ArrayFormatRule) fix(ctx *Context) (string, []arrayEdit) {
+	cfg := ctx.Config.ArrayFormat
+	suppressed := func(line int) bool { return ctx.Directives.LineSuppressed(line, r.Name()) }
+	return fixArrays(string(ctx.Content), cfg != nil && cfg.Sort, arrayThreshold(cfg), suppressed)
 }
 
 // arrayThreshold is the item count from which arrays go one item per line.
@@ -104,28 +114,42 @@ var (
 // literals. Arrays of objects, function calls, interpolations, trailing
 // comments, and anything inside heredocs are left alone.
 func FixArrays(content string, sortItems bool) (string, int) {
-	return fixArrays(content, sortItems, 2)
+	out, edits := fixArrays(content, sortItems, 2, nil)
+	return out, len(edits)
 }
 
-func fixArrays(content string, sortItems bool, threshold int) (string, int) {
+// arrayEdit is one array fixArrays rewrites: where it was and why.
+type arrayEdit struct {
+	line, column, endLine, endColumn int
+	message                          string
+}
+
+// fixArrays rewrites arrays and returns one edit per array changed. Lines
+// for which suppressed (may be nil) returns true are left alone.
+func fixArrays(content string, sortItems bool, threshold int, suppressed func(line int) bool) (string, []arrayEdit) {
 	skip, ok := nonCodeLines(content)
 	if !ok {
-		return content, 0
+		return content, nil
 	}
 	lines := strings.Split(content, "\n")
 	out := make([]string, 0, len(lines))
-	changes := 0
+	var edits []arrayEdit
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
-		if skip[i+1] {
+		if skip[i+1] || (suppressed != nil && suppressed(i+1)) {
 			out = append(out, line)
 			continue
 		}
-		if m := inlineArrayRe.FindStringSubmatch(line); m != nil {
-			if items, ok := splitStringItems(m[3]); ok && len(items) >= threshold {
-				out = append(out, renderArray(m[1], m[2], items, strings.TrimSpace(m[4]), sortItems)...)
-				changes++
+		if m := inlineArrayRe.FindStringSubmatchIndex(line); m != nil {
+			indent, key, inner, suffix := line[m[2]:m[3]], line[m[4]:m[5]], line[m[6]:m[7]], line[m[8]:m[9]]
+			if items, ok := splitStringItems(inner); ok && len(items) >= threshold {
+				out = append(out, renderArray(indent, key, items, strings.TrimSpace(suffix), sortItems)...)
+				edits = append(edits, arrayEdit{
+					line: i + 1, column: m[6], // the "[" just before the items
+					endLine: i + 1, endColumn: m[7] + 2, // just past the "]"
+					message: fmt.Sprintf("array with %d items should list one item per line", len(items)),
+				})
 				continue
 			}
 		}
@@ -133,8 +157,16 @@ func fixArrays(content string, sortItems bool, threshold int) (string, int) {
 			if end, items, suffix, ok := collectMultilineArray(lines, i, skip); ok && len(items) >= 2 {
 				rendered := renderArray(m[1], m[2], items, suffix, sortItems)
 				if !slices.Equal(rendered, lines[i:end+1]) {
+					message := "multiline array should list one item per line, each followed by a comma"
+					if sortItems && !slices.IsSorted(items) {
+						message = "array items should be sorted"
+					}
 					out = append(out, rendered...)
-					changes++
+					edits = append(edits, arrayEdit{
+						line: i + 1, column: strings.LastIndex(line, "[") + 1,
+						endLine: end + 1, endColumn: strings.LastIndex(lines[end], "]") + 2,
+						message: message,
+					})
 					i = end
 					continue
 				}
@@ -142,7 +174,7 @@ func fixArrays(content string, sortItems bool, threshold int) (string, int) {
 		}
 		out = append(out, line)
 	}
-	return strings.Join(out, "\n"), changes
+	return strings.Join(out, "\n"), edits
 }
 
 // nonCodeLines returns the 1-based lines that belong to heredoc bodies or
@@ -262,64 +294,4 @@ func renderArray(indent, key string, items []string, suffix string, sortItems bo
 		out = append(out, indent+"  "+item+",")
 	}
 	return append(out, indent+"]"+suffix)
-}
-
-// --- Check helpers ---
-
-// The check reports exactly what the fixer rewrites: a single-line array of
-// plain string literals with at least threshold items.
-
-func checkArrayFormatBlocks(issues *[]diag.Issue, blocks []ast.BlockInfo, threshold int) {
-	for _, block := range blocks {
-		for _, attr := range block.Block.Body.Attributes {
-			checkExprArrayFormat(issues, attr.Expr, threshold)
-		}
-		if len(block.Block.Body.Blocks) > 0 {
-			checkArrayFormatBlocks(issues, ast.GetBlockInfoFromBlocks(block.Block.Body.Blocks), threshold)
-		}
-	}
-}
-
-func checkExprArrayFormat(issues *[]diag.Issue, expr hclsyntax.Expression, threshold int) {
-	switch e := expr.(type) {
-	case *hclsyntax.TupleConsExpr:
-		rng := e.Range()
-		if len(e.Exprs) < threshold || rng.Start.Line != rng.End.Line {
-			return
-		}
-		for _, ex := range e.Exprs {
-			if !isStringLiteralExpr(ex) {
-				return
-			}
-		}
-		*issues = append(*issues, diag.Issue{
-			Severity: diag.SeverityWarning,
-			Rule:     "array_format",
-			Message:  fmt.Sprintf("array with %d items should list one item per line", len(e.Exprs)),
-			Location: rng,
-		})
-	case *hclsyntax.ObjectConsExpr:
-		for _, item := range e.Items {
-			checkExprArrayFormat(issues, item.ValueExpr, threshold)
-		}
-	}
-}
-
-// isStringLiteralExpr reports whether expr is a plain quoted string with no
-// interpolation or template directives.
-func isStringLiteralExpr(expr hclsyntax.Expression) bool {
-	switch e := expr.(type) {
-	case *hclsyntax.LiteralValueExpr:
-		return e.Val.Type() == cty.String
-	case *hclsyntax.TemplateExpr:
-		for _, part := range e.Parts {
-			lit, ok := part.(*hclsyntax.LiteralValueExpr)
-			if !ok || lit.Val.Type() != cty.String {
-				return false
-			}
-		}
-		return true
-	default:
-		return false
-	}
 }

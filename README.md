@@ -36,9 +36,10 @@ No config needed. See what the formatter would change (nothing is written):
 hcl-linter fix --format --dry-run .
 ```
 
-`fix --format` orders Terragrunt blocks (`include → locals → terraform →
-dependency → inputs`), puts arrays of two or more strings one item per line,
-removes stray blank lines inside blocks, then applies the same canonical
+`fix --format` orders Terragrunt blocks the way the `builtin:terragrunt`
+preset does (`include → locals → terraform → remote_state → generate →
+dependencies → dependency`), puts arrays of two or more strings one item per
+line, removes stray blank lines inside blocks, then applies the same canonical
 formatting as `terraform fmt`. It never reorders list items or touches
 heredocs, and a second run changes nothing.
 
@@ -71,8 +72,10 @@ curl -fsSL https://raw.githubusercontent.com/bard-works/hcl-linter/main/scripts/
 # Go
 go install github.com/bard-works/hcl-linter/cmd/hcl-linter@latest
 
-# Docker
+# Docker. The image runs as an unprivileged user, so give `fix` your own
+# uid to let it write your files.
 docker run --rm -v "$PWD:/src" ghcr.io/bard-works/hcl-linter check .
+docker run --rm -v "$PWD:/src" --user "$(id -u):$(id -g)" ghcr.io/bard-works/hcl-linter fix .
 ```
 
 Or download an archive from the [latest release](https://github.com/bard-works/hcl-linter/releases/latest).
@@ -119,6 +122,8 @@ jobs:
 
 Or keep it simple with `- uses: bard-works/hcl-linter@v0.1.0` (runs
 `check .`), and add `args: fix . --dry-run` to fail on formatting drift.
+The action installs the hcl-linter release matching its tag, so pinning the
+action pins the linter; set `version: latest` to track new releases instead.
 
 **pre-commit** (`.pre-commit-config.yaml`):
 

@@ -205,3 +205,62 @@ func TestArrayFormatThreshold(t *testing.T) {
 		t.Errorf("fix should honor the threshold (n=%d):\n%s", n, ctx.Content)
 	}
 }
+
+// Check is derived from the fixer, so shapes the fixer leaves alone are not
+// reported and every rewrite it would make is.
+func TestArrayFormatCheckFollowsFixer(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     string
+		sort    bool
+		message string // "" means no issue
+		line    int
+		column  int
+	}{
+		{name: "trailing comment", src: "a = [\"x\", \"y\"] # keep\n"},
+		{name: "one-line object", src: "inputs = { azs = [\"a\", \"b\"] }\n"},
+		{
+			name:    "inline",
+			src:     "locals {\n  azs = [\"a\", \"b\"]\n}\n",
+			message: "array with 2 items should list one item per line",
+			line:    2, column: 9,
+		},
+		{
+			name:    "multiline missing comma",
+			src:     "b = [\n  \"x\",\n  \"y\"\n]\n",
+			message: "multiline array should list one item per line, each followed by a comma",
+			line:    1, column: 5,
+		},
+		{
+			name:    "multiline unsorted with sort",
+			src:     "b = [\n  \"y\",\n  \"x\",\n]\n",
+			sort:    true,
+			message: "array items should be sorted",
+			line:    1, column: 5,
+		},
+		{name: "multiline unsorted without sort", src: "b = [\n  \"y\",\n  \"x\",\n]\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Rules{ArrayFormat: &config.ArrayFormatConfig{Enabled: true, Sort: tt.sort}}
+			ctx := buildContext(t, tt.src, cfg)
+			issues := rules.ArrayFormatRule{}.Check(ctx)
+			n, err := rules.ArrayFormatRule{}.Fix(buildContext(t, tt.src, cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(issues) != n {
+				t.Fatalf("check reports %d issue(s) but fix makes %d change(s): %+v", len(issues), n, issues)
+			}
+			if tt.message == "" {
+				return
+			}
+			got := issues[0]
+			if got.Message != tt.message || got.Location.Start.Line != tt.line ||
+				got.Location.Start.Column != tt.column {
+				t.Errorf("got %q at %d:%d, want %q at %d:%d", got.Message,
+					got.Location.Start.Line, got.Location.Start.Column, tt.message, tt.line, tt.column)
+			}
+		})
+	}
+}

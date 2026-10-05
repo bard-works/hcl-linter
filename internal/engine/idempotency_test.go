@@ -108,12 +108,7 @@ func assertSecondRunIsNoop(t *testing.T, target string, fix func(string) (*engin
 // After fix, check must not report anything an auto-fixable rule is
 // responsible for; otherwise users are told to fix what fix cannot.
 func TestCheckIsCleanForFixableRulesAfterFix(t *testing.T) {
-	fixable := map[string]bool{}
-	for _, r := range rules.DefaultRegistry().All() {
-		if _, ok := r.(rules.Fixer); ok {
-			fixable[r.Name()] = true
-		}
-	}
+	fixable := fixableRules()
 	// name_validation only fixes separators (my-vpc -> my_vpc); renaming
 	// camelCase labels would break every reference to them, so it is
 	// deliberately partial.
@@ -141,6 +136,116 @@ func TestCheckIsCleanForFixableRulesAfterFix(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The reverse of the test above: when fix would change a file, check must
+// say why. Otherwise `check` passes in CI while `fix --dry-run` fails.
+func TestFixChangesOnlyWhatCheckReports(t *testing.T) {
+	fixable := fixableRules()
+	for src, cfgDir := range demoTargets(t) {
+		t.Run(filepath.ToSlash(src), func(t *testing.T) {
+			loader := config.NewLoader(cfgDir)
+			if _, err := os.Stat(cfgDir); err != nil || !loader.HasConfigForFile(src) {
+				t.Skip("no config for this demo")
+			}
+			assertFixImpliesFinding(t, engine.New(loader), copyToTemp(t, src), fixable)
+		})
+	}
+}
+
+// Shapes the array and blank-line fixers handle specially; check and fix must
+// agree on each in both directions.
+func TestCheckAndFixAgreeOnEdgeShapes(t *testing.T) {
+	dir := t.TempDir()
+	cfgDir := filepath.Join(dir, ".hcl-linter")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `rules {
+  array_format {
+    enabled = true
+  }
+  blank_lines {
+    enabled       = true
+    within_blocks = true
+  }
+}
+`
+	if err := os.WriteFile(filepath.Join(cfgDir, "default.hcl"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]string{
+		"trailing comment":       "a = [\"x\", \"y\"] # keep\n",
+		"one-line object":        "inputs = { azs = [\"a\", \"b\"] }\n",
+		"multiline no comma":     "b = [\n  \"x\",\n  \"y\"\n]\n",
+		"multiline two per line": "b = [\n  \"x\", \"y\",\n  \"z\",\n]\n",
+		"inline in object":       "inputs = {\n  azs = [\"a\", \"b\"]\n}\n",
+		"suppressed inline":      "# hcl-linter:ignore array_format\na = [\"x\", \"y\"]\n",
+		"suppressed block":       "# hcl-linter:ignore blank_lines\nlocals {\n\n  a = 1\n}\n",
+		"clean":                  "a = [\n  \"x\",\n  \"y\",\n]\n",
+	}
+	loader := config.NewLoader(cfgDir)
+	fixable := fixableRules()
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			target := filepath.Join(t.TempDir(), "terragrunt.hcl")
+			if err := os.WriteFile(target, []byte(src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			eng := engine.New(loader)
+			assertFixImpliesFinding(t, eng, target, fixable)
+			if _, err := eng.FixFile(target); err != nil {
+				t.Fatalf("fix: %v", err)
+			}
+			res, err := eng.LintFile(target)
+			if err != nil {
+				t.Fatalf("lint: %v", err)
+			}
+			for _, is := range res.Issues {
+				if fixable[is.Source] {
+					fixed, _ := os.ReadFile(target)
+					t.Errorf("%s still reported after fix: %s\n%s", is.Source, is.Message, fixed)
+				}
+			}
+		})
+	}
+}
+
+func fixableRules() map[string]bool {
+	fixable := map[string]bool{}
+	for _, r := range rules.DefaultRegistry().All() {
+		if _, ok := r.(rules.Fixer); ok {
+			fixable[r.Name()] = true
+		}
+	}
+	return fixable
+}
+
+// assertFixImpliesFinding fails when a dry-run fix would change target but
+// check reports nothing from a fixable rule.
+func assertFixImpliesFinding(t *testing.T, eng *engine.Engine, target string, fixable map[string]bool) {
+	t.Helper()
+	eng.DryRun = true
+	defer func() { eng.DryRun = false }()
+	fix, err := eng.FixFile(target)
+	if err != nil {
+		t.Fatalf("fix: %v", err)
+	}
+	if fix.Changes == 0 {
+		return
+	}
+	res, err := eng.LintFile(target)
+	if err != nil {
+		t.Fatalf("lint: %v", err)
+	}
+	for _, is := range res.Issues {
+		if fixable[is.Source] {
+			return
+		}
+	}
+	original, _ := os.ReadFile(target)
+	t.Errorf("fix would change the file but check reports nothing fixable\n--- file ---\n%s\n--- fix ---\n%s",
+		original, fix.Content)
 }
 
 // The demo corpus is documentation: every *_valid file must lint clean and

@@ -17,14 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of printing "No changes needed" and exiting `0`.
 - `fix --format` no longer sorts array items; list order is meaningful in
   Terraform. Opt in with `array_format { sort = true }`.
+- `fix --format` orders blocks like the `builtin:terragrunt` preset
+  (`include → locals → terraform → remote_state → generate → dependencies →
+  dependency`), so it no longer moves `dependency` above `remote_state` and
+  then fails `check`. `inputs` was dropped from the order: it is an
+  attribute, and `block_order` only moves blocks.
 - `init` names per-file configs after the target without its extension
   (`main.tf` → `.hcl-linter/main.hcl`, which is what the loader reads) and
   `default.hcl` now extends a built-in preset.
 - `check` findings changed so they match what `fix` rewrites:
   `blank_lines` now reports a warning when `fix` would change the file,
-  `array_format` only reports single-line arrays, and `block_order`
-  reports a listed block placed after an unlisted one (which `fix`
-  already moved).
+  `array_format` reports exactly the arrays `fix` rewrites (including a
+  multiline array missing a trailing comma, and nothing `fix` leaves alone,
+  such as an array followed by a comment), and `block_order` reports a
+  listed block placed after an unlisted one (which `fix` already moved).
 - Removed the executable-directory config source (`.hcl-linter/` next to the
   binary). A binary in a shared or group-writable directory let anyone with
   write access there silently control lint policy for every user of that
@@ -41,14 +47,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Inline suppression: `# hcl-linter:ignore [rules]` (covers the next block
   or line, or its own line when trailing) and
   `# hcl-linter:ignore-file [rules]`. `fix` skips fixers disabled with
-  `ignore-file`.
+  `ignore-file`, and `array_format` and `blank_lines` leave lines covered by
+  `ignore` alone.
 - `lint`/`check --output json|sarif|checkstyle` for scripts, GitHub code
   scanning and reviewdog. JSON and SARIF include the config rule that
-  produced each finding.
+  produced each finding. SARIF uses absolute `file://` URIs so code scanning
+  finds the file even when hcl-linter runs in a subdirectory.
 - `lint`, `check` and `fix` accept several paths.
 - GitHub Action (`uses: bard-works/hcl-linter@v0.1.0`), pre-commit hooks
   (`hcl-linter-check`, `hcl-linter-fix`, `hcl-linter-format`), a Docker
-  image (`ghcr.io/bard-works/hcl-linter`), and `scripts/install.sh`.
+  image (`ghcr.io/bard-works/hcl-linter`), and `scripts/install.sh`. The
+  action installs the release matching its own tag, so pinning the action
+  pins the linter (`version: latest` opts out).
+- Directory walks skip `.terraform.lock.hcl`, which `terraform init`
+  generates; `init` no longer writes a config for it.
 - Releases via GoReleaser: linux/darwin/windows × amd64/arm64 archives,
   checksums, provenance attestations, and a Homebrew cask
   (`brew install --cask bard-works/tap/hcl-linter`).
@@ -79,6 +91,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stderr. Previously warnings were split across both streams.
 - `--color=auto` enables colour only when both stdout and stderr are TTYs,
   since both streams carry coloured text.
+- Files that fall back to `.hcl-linter/default.hcl` are no longer warned
+  about on every run (it is the documented setup); `--verbose` notes it
+  once per filename.
 - Fixed files are written atomically (temp file + fsync + rename), so an
   interrupted `fix` can no longer truncate a file. Existing permission bits
   are preserved and read-only targets are still refused.

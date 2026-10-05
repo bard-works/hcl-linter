@@ -55,8 +55,8 @@ For each target HCL file, the linter:
 1. Tries the filename without its extension plus `.hcl`:
    `terragrunt.hcl` → `.hcl-linter/terragrunt.hcl`,
    `main.tf` → `.hcl-linter/main.hcl`
-2. Falls back to `.hcl-linter/default.hcl` if present (warning once per
-   filename)
+2. Falls back to `.hcl-linter/default.hcl` if present (`--verbose` notes
+   this once per filename)
 3. Skips the file if neither exists
 
 `foo.hcl` and `foo.tf` therefore share `.hcl-linter/foo.hcl`.
@@ -198,9 +198,11 @@ include "root" { path = find_in_parent_folders("root.hcl") } # hcl-linter:ignore
   rules listed, every rule is suppressed.
 - `#`, `//` and `/* */` comments all work. Text after ` -- ` is a free-form
   reason.
-- `fix` skips a fixer for files that `ignore-file` it. Line-level `ignore`
-  only silences findings; fixers rewrite whole files, so use `ignore-file`
-  to keep a fixer away.
+- `fix` skips a fixer for files that `ignore-file` it. The line-based
+  fixers (`array_format`, `blank_lines`) also leave lines covered by a
+  line-level `ignore` alone, so an annotated one-line list stays one line.
+  Structural fixers (`block_order`, `required_fields`, `name_validation`)
+  rewrite the whole file; use `ignore-file` to keep them away.
 - Internal errors (`linter_error`, e.g. a file that doesn't parse) can't be
   suppressed.
 
@@ -214,7 +216,7 @@ details.
 rules {
   block_order {
     enabled = true
-    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+    order   = ["include", "locals", "terraform", "dependency"]
   }
 
   array_format {

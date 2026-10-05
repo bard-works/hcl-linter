@@ -37,3 +37,13 @@ func presetSource(name string) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// PresetRules parses a built-in preset (without the "builtin:" prefix).
+func PresetRules(name string) (*Rules, error) {
+	data, err := presetSource(name)
+	if err != nil {
+		return nil, err
+	}
+	key := builtinPrefix + name
+	return parseHCLConfig(data, key, map[string]bool{key: true})
+}

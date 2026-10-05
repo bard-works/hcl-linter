@@ -7,9 +7,12 @@ branding:
 
 inputs:
   version:
-    description: hcl-linter version to install (e.g. 0.1.0), or "latest"
+    description: >-
+      hcl-linter version to install (e.g. 0.1.0), or "latest". Defaults to
+      the version in the action's VERSION file, so
+      `uses: bard-works/hcl-linter@v0.1.0` installs hcl-linter 0.1.0.
     required: false
-    default: latest
+    default: ""
   args:
     description: Arguments passed to hcl-linter
     required: false
@@ -21,7 +24,9 @@ inputs:
   output-file:
     description: >-
       Write hcl-linter's stdout to this file instead of the log, e.g. with
-      args "check . --output sarif" for github/codeql-action/upload-sarif
+      args "check . --output sarif" for github/codeql-action/upload-sarif.
+      A relative path is relative to the repository root, not
+      working-directory, so later steps can use it as is.
     required: false
     default: ""
 
@@ -34,7 +39,13 @@ runs:
         HCL_LINTER_VERSION: ${{ inputs.version }}
         INSTALL_DIR: ${{ runner.temp }}/hcl-linter-bin
       run: |
-        sh "${GITHUB_ACTION_PATH}/scripts/install.sh" -v "$HCL_LINTER_VERSION" -b "$INSTALL_DIR"
+        # Pinning the action ref pins the binary: the release workflow fails
+        # unless VERSION matches the tag being released.
+        version="$HCL_LINTER_VERSION"
+        if [ -z "$version" ]; then
+          version=$(tr -d '[:space:]' < "${GITHUB_ACTION_PATH}/VERSION")
+        fi
+        sh "${GITHUB_ACTION_PATH}/scripts/install.sh" -v "$version" -b "$INSTALL_DIR"
         echo "$INSTALL_DIR" >> "$GITHUB_PATH"
 
     - name: Run hcl-linter
@@ -47,7 +58,12 @@ runs:
         # args is written by the workflow author, so shell word splitting and
         # quoting apply as they would on the command line.
         if [ -n "$HCL_LINTER_OUTPUT_FILE" ]; then
-          eval "hcl-linter $HCL_LINTER_ARGS" > "$HCL_LINTER_OUTPUT_FILE"
+          case "$HCL_LINTER_OUTPUT_FILE" in
+            /* | [A-Za-z]:[\\/]*) out="$HCL_LINTER_OUTPUT_FILE" ;;
+            *) out="${GITHUB_WORKSPACE}/${HCL_LINTER_OUTPUT_FILE}" ;;
+          esac
+          mkdir -p "$(dirname "$out")"
+          eval "hcl-linter $HCL_LINTER_ARGS" > "$out"
         else
           eval "hcl-linter --color=always $HCL_LINTER_ARGS"
         fi

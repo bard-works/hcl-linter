@@ -113,13 +113,14 @@ func (e *Engine) buildContext(path string) (*rules.Context, error) {
 	}
 
 	return &rules.Context{
-		FilePath: path,
-		Content:  content,
-		File:     file,
-		Blocks:   ast.GetTopLevelBlocks(file),
-		Attrs:    ast.GetTopLevelAttributes(file),
-		Config:   cfg,
-		Breaker:  e.breaker,
+		FilePath:   path,
+		Content:    content,
+		File:       file,
+		Blocks:     ast.GetTopLevelBlocks(file),
+		Attrs:      ast.GetTopLevelAttributes(file),
+		Config:     cfg,
+		Directives: suppress.Parse(content, path),
+		Breaker:    e.breaker,
 	}, nil
 }
 
@@ -133,9 +134,8 @@ func (e *Engine) LintFile(path string) (*diag.Result, error) {
 
 	result := &diag.Result{File: path, Issues: []diag.Issue{}}
 
-	directives := suppress.Parse(ctx.Content, path)
 	for _, rule := range e.registry.Enabled(ctx.Config) {
-		for _, is := range directives.Filter(rule.Name(), rule.Check(ctx)) {
+		for _, is := range ctx.Directives.Filter(rule.Name(), rule.Check(ctx)) {
 			is.Source = rule.Name()
 			result.Issues = append(result.Issues, is)
 		}
@@ -233,13 +233,13 @@ func (e *Engine) LintFiles(ctx context.Context, paths []string, maxConcurrency i
 // parsed AST in ctx after each rule that makes changes.
 //
 // A rule disabled for the file with `# hcl-linter:ignore-file <rule>` is not
-// run. Line-level ignores only silence lint findings: fixers rewrite whole
-// files, so use ignore-file to keep a fixer away from a file.
+// run. Line-level ignores are honored by the line-based fixers (array_format,
+// blank_lines) through ctx.Directives; structural fixers such as block_order
+// rewrite the whole file, so keep them away with ignore-file.
 func (e *Engine) runFixPipeline(ctx *rules.Context) (int, error) {
 	total := 0
-	directives := suppress.Parse(ctx.Content, ctx.FilePath)
 	for _, rule := range e.registry.Sorted() {
-		if !rule.Enabled(ctx.Config) || directives.FileSuppressed(rule.Name()) {
+		if !rule.Enabled(ctx.Config) || ctx.Directives.FileSuppressed(rule.Name()) {
 			continue
 		}
 		fixer, ok := rule.(rules.Fixer)
@@ -269,6 +269,7 @@ func (e *Engine) refreshContext(ctx *rules.Context) error {
 	ctx.File = file
 	ctx.Blocks = ast.GetTopLevelBlocks(file)
 	ctx.Attrs = ast.GetTopLevelAttributes(file)
+	ctx.Directives = suppress.Parse(ctx.Content, ctx.FilePath)
 	return nil
 }
 
@@ -334,10 +335,16 @@ func (e *Engine) fixConcurrent(
 
 // --- Format fix (opinionated defaults, no config required) ---
 
-var defaultFormatBlockOrder = &config.BlockOrderConfig{
-	Enabled: true,
-	Order:   []string{"include", "locals", "terraform", "dependency", "inputs"},
-}
+// defaultFormatBlockOrder is builtin:terragrunt's block order, so `fix
+// --format` and a config extending the preset never move blocks against each
+// other.
+var defaultFormatBlockOrder = func() *config.BlockOrderConfig {
+	preset, err := config.PresetRules("terragrunt")
+	if err != nil || preset.BlockOrder == nil {
+		panic(fmt.Sprintf("builtin:terragrunt preset has no block_order: %v", err))
+	}
+	return preset.BlockOrder
+}()
 
 func defaultFormatConfig() *config.Rules {
 	return &config.Rules{
@@ -362,13 +369,14 @@ func (e *Engine) FormatFixFile(path string) (*FixResult, error) {
 	}
 
 	ctx := &rules.Context{
-		FilePath: path,
-		Content:  content,
-		File:     file,
-		Blocks:   ast.GetTopLevelBlocks(file),
-		Attrs:    ast.GetTopLevelAttributes(file),
-		Config:   defaultFormatConfig(),
-		Breaker:  e.breaker,
+		FilePath:   path,
+		Content:    content,
+		File:       file,
+		Blocks:     ast.GetTopLevelBlocks(file),
+		Attrs:      ast.GetTopLevelAttributes(file),
+		Config:     defaultFormatConfig(),
+		Directives: suppress.Parse(content, path),
+		Breaker:    e.breaker,
 	}
 
 	changes, err := e.runFixPipeline(ctx)

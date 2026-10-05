@@ -1,7 +1,7 @@
 rules {
   block_order {
     enabled = true
-    order   = ["include", "locals", "terraform", "dependency", "inputs"]
+    order   = ["include", "locals", "terraform", "dependency"]
   }
 
   name_validation {

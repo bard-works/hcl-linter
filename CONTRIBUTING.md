@@ -180,6 +180,8 @@ rules {
 
 ## Release process
 
-Maintainers only. Tag and push (`make tag VERSION=0.1.0 && git push origin
-v0.1.0`); the Release workflow publishes everything via GoReleaser. See
+Maintainers only. Set `VERSION` to the release and commit it, then tag and
+push (`make tag VERSION=0.1.0 && git push origin v0.1.0`); the Release
+workflow publishes everything via GoReleaser. The tag must match `VERSION`,
+which is what the GitHub Action installs. See
 [docs/architecture.md](docs/architecture.md#build--release).

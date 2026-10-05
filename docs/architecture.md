@@ -244,10 +244,16 @@ version and commit.
 
 ### Release workflow
 
+Set `VERSION` to the release (e.g. `0.1.0`), commit it, then:
+
 ```bash
 make tag VERSION=0.1.0
 git push origin v0.1.0
 ```
+
+`make tag` and the Release workflow both refuse a tag that differs from
+`VERSION`, because the GitHub Action installs the release named there:
+`uses: bard-works/hcl-linter@v0.1.0` runs hcl-linter 0.1.0.
 
 Pushing the tag runs `.github/workflows/release.yml`, which runs the tests
 and then [GoReleaser](https://goreleaser.com) (`.goreleaser.yaml`) to

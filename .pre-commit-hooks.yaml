@@ -12,7 +12,7 @@
   entry: hcl-linter check
   language: golang
   files: \.(hcl|tf)$
-  exclude: (^|/)\.hcl-linter/
+  exclude: (^|/)(\.hcl-linter/|\.terraform\.lock\.hcl$)
   require_serial: true
 
 - id: hcl-linter-fix
@@ -21,7 +21,7 @@
   entry: hcl-linter fix
   language: golang
   files: \.(hcl|tf)$
-  exclude: (^|/)\.hcl-linter/
+  exclude: (^|/)(\.hcl-linter/|\.terraform\.lock\.hcl$)
   require_serial: true
 
 - id: hcl-linter-format
@@ -30,5 +30,5 @@
   entry: hcl-linter fix --format
   language: golang
   files: \.(hcl|tf)$
-  exclude: (^|/)\.hcl-linter/
+  exclude: (^|/)(\.hcl-linter/|\.terraform\.lock\.hcl$)
   require_serial: true

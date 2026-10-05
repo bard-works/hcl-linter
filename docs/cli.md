@@ -91,6 +91,10 @@ Files that fall back to `default.hcl` trigger one warning per filename.
 --version             Print version information
 ```
 
+Directory targets skip hidden directories (unless `--include-hidden`) and
+`.terraform.lock.hcl`, which `terraform init` generates. Pass a file
+explicitly to lint it anyway.
+
 ## `lint`
 
 Lints every matching file under the given paths and prints all issues.
@@ -120,7 +124,10 @@ Findings can be silenced in the file itself with
 Only the report goes to stdout, so `hcl-linter check . -o sarif > hcl.sarif`
 is safe; the config banner and warnings stay on stderr. Exit codes are the
 same for every format. Paths are relative to the working directory when the
-target is beneath it.
+target is beneath it, except in SARIF, which uses absolute `file://` URIs:
+GitHub code scanning reads relative URIs from the repository root, so they
+would point at the wrong file when hcl-linter runs in a subdirectory, and
+`upload-sarif` turns absolute ones into repository-relative paths.
 
 ## `fix`
 
@@ -139,7 +146,8 @@ Rules are only applied when enabled in the matched config, unless
 The `--format` flag applies opinionated default formatting to all HCL
 files without requiring any config to be present:
 
-- **Block order:** `include → locals → terraform → dependency → inputs`
+- **Block order:** `include → locals → terraform → remote_state → generate → dependencies → dependency`,
+  the same as the `builtin:terragrunt` preset, so `fix --format` and `check` never disagree
 - **Array format:** converts inline arrays with 2+ items to multiline
 - **Blank lines:** removes blank lines at block boundaries, collapses consecutive blank lines
 
@@ -218,7 +226,8 @@ hcl-linter init . --dry-run        # preview without writing
 hcl-linter init . --force          # overwrite existing .hcl-linter/
 ```
 
-Walks the target directory for `.hcl` / `.tf` files (skipping hidden dirs),
+Walks the target directory for `.hcl` / `.tf` files (skipping hidden dirs
+and `.terraform.lock.hcl`),
 groups them by unique basename, then writes:
 
 - `.hcl-linter/default.hcl` - extends the recommended preset:

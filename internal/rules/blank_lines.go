@@ -52,7 +52,7 @@ func (r BlankLinesRule) Enabled(cfg *config.Rules) bool {
 // Check reports what Fix would change, so `check` in CI catches the same
 // drift as `fix --dry-run`: one warning at the first line Fix would remove.
 func (r BlankLinesRule) Check(ctx *Context) []diag.Issue {
-	fixed, changes := FixBlankLines(string(ctx.Content), ctx.Blocks, ctx.Attrs)
+	fixed, changes := r.fix(ctx)
 	if changes == 0 || fixed == string(ctx.Content) {
 		return nil
 	}
@@ -73,12 +73,17 @@ func (r BlankLinesRule) Check(ctx *Context) []diag.Issue {
 }
 
 func (r BlankLinesRule) Fix(ctx *Context) (int, error) {
-	newContent, changes := FixBlankLines(string(ctx.Content), ctx.Blocks, ctx.Attrs)
+	newContent, changes := r.fix(ctx)
 	if changes == 0 {
 		return 0, nil
 	}
 	ctx.Content = []byte(newContent)
 	return changes, nil
+}
+
+func (r BlankLinesRule) fix(ctx *Context) (string, int) {
+	suppressed := func(line int) bool { return ctx.Directives.LineSuppressed(line, r.Name()) }
+	return fixBlankLines(string(ctx.Content), ctx.Blocks, ctx.Attrs, suppressed)
 }
 
 type objectAttr struct {
@@ -143,6 +148,17 @@ func processBlockContent(lines []string, lineIdx int, block ast.BlockInfo) ([]st
 
 // FixBlankLines removes unnecessary blank lines within blocks and object attributes.
 func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.AttributeInfo) (string, int) {
+	return fixBlankLines(content, blocks, attrs, nil)
+}
+
+// fixBlankLines is FixBlankLines leaving alone every block or object
+// attribute whose first line suppressed (may be nil) reports as covered.
+func fixBlankLines(
+	content string,
+	blocks []ast.BlockInfo,
+	attrs []ast.AttributeInfo,
+	suppressed func(line int) bool,
+) (string, int) {
 	lines := strings.Split(content, "\n")
 	usedLines, objectAttrs := buildUsedLines(blocks, attrs)
 
@@ -160,6 +176,11 @@ func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.Attribute
 				for j := i; j <= endLine; j++ {
 					processedLines[j] = true
 				}
+				if suppressed != nil && suppressed(i+1) {
+					result = append(result, lines[i:endLine+1]...)
+					i = endLine + 1
+					goto nextLine
+				}
 				fixed, c := processObjectAttrBlock(lines, i, endLine)
 				changes += c
 				result = append(result, fixed...)
@@ -172,6 +193,11 @@ func FixBlankLines(content string, blocks []ast.BlockInfo, attrs []ast.Attribute
 				}
 				for j := i; j <= block.EndLine; j++ {
 					processedLines[j] = true
+				}
+				if suppressed != nil && suppressed(i+1) {
+					result = append(result, lines[i:block.EndLine+1]...)
+					i = block.EndLine + 1
+					goto nextLine
 				}
 				cs := blankLinesBlockContentStart(lines, i)
 				if cs < block.EndLine && !hasNestedBlockAt(blocks, cs, block.EndLine) {

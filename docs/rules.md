@@ -43,7 +43,7 @@ rules {
   # Replaces the preset's block_order block; other preset rules stay on.
   block_order {
     enabled = true
-    order   = ["include", "locals", "dependency", "terraform", "inputs"]
+    order   = ["include", "locals", "dependency", "terraform"]
   }
 }
 ```
@@ -91,6 +91,7 @@ Enforces the order of top-level (and optionally nested) blocks.
 
 - Order of listed blocks is enforced
 - Unlisted blocks (e.g. `outputs`, custom blocks) are placed after the last listed block
+- Only blocks are ordered; attributes such as `inputs = { ... }` are never moved
 - Supports nested block ordering via `nested_order`
 
 **Configuration:**
@@ -99,7 +100,7 @@ Enforces the order of top-level (and optionally nested) blocks.
 rules {
   block_order {
     enabled      = true
-    order        = ["include", "locals", "terraform", "dependency", "inputs"]
+    order        = ["include", "locals", "terraform", "dependency"]
     nested_order = {
       terraform = ["before_hooks", "after_hooks"]
     }
@@ -190,15 +191,23 @@ Leave `sort` off unless order really doesn't matter: list order is
 meaningful in Terraform (availability zones, command arguments).
 `fix --format` never sorts.
 
-**Edge cases - the fixer leaves these unchanged:**
+`lint`/`check` report exactly the arrays `fix` would rewrite: a one-line
+array at or above `multiline_threshold`, a multiline array missing a
+trailing comma or holding two items on one line, and (with `sort = true`)
+a multiline array out of order. A file `check` passes is one `fix` leaves
+alone.
+
+**Edge cases - neither reported nor rewritten:**
 
 - Arrays with any item that is not a plain string literal: references
   (`dependency.x.outputs.y`), function calls, interpolations (`"${var.x}"`),
   objects (`[{ ... }]`)
-- Arrays that are part of a larger expression (`merge(local.tags, ["a", "b"])`)
-  or followed by a comment on the same line
+- Arrays that are part of a larger expression (`merge(local.tags, ["a", "b"])`),
+  sit inside a one-line object (`inputs = { azs = ["a", "b"] }`), or are
+  followed by a comment on the same line
 - Anything inside a heredoc or `/* */` comment
 - Empty arrays
+- Lines covered by `# hcl-linter:ignore array_format`
 
 ### 3. Blank Lines (`blank_lines`)
 

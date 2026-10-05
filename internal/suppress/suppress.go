@@ -162,6 +162,12 @@ func (d Directives) FileSuppressed(ruleName string) bool {
 	return matches(d.file, ruleName)
 }
 
+// LineSuppressed reports whether line (1-based) is covered for any of
+// ruleNames, by a line directive or an ignore-file directive.
+func (d Directives) LineSuppressed(line int, ruleNames ...string) bool {
+	return matches(d.file, ruleNames...) || (line > 0 && matches(d.lines[line], ruleNames...))
+}
+
 // Suppressed reports whether issue, produced by the rule ruleName, is covered
 // by a directive. Directives match the rule's config name (block_order) or
 // the emitted rule ID (dependency_path_exists). Internal linter errors are

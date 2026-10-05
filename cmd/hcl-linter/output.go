@@ -58,14 +58,18 @@ func (a *app) reportLintResults(results []*diag.Result) (hasErrors bool, execFai
 	return hasErrors, execFailures, err
 }
 
+// issueFile returns the file an issue points at, as the engine saw it.
+func issueFile(file string, issue diag.Issue) string {
+	if issue.Location.Filename != "" {
+		return issue.Location.Filename
+	}
+	return file
+}
+
 // issuePath returns the file an issue points at, relative and slash-separated
 // so reports are stable across machines and operating systems.
 func issuePath(file string, issue diag.Issue) string {
-	p := file
-	if issue.Location.Filename != "" {
-		p = issue.Location.Filename
-	}
-	return filepath.ToSlash(relPath(p))
+	return filepath.ToSlash(relPath(issueFile(file, issue)))
 }
 
 type jsonIssue struct {
@@ -193,17 +197,20 @@ func sarifLevel(s diag.Severity) string {
 	}
 }
 
-// sarifURI keeps repo-relative paths as relative references (what GitHub code
-// scanning expects) and turns absolute paths into file:// URIs.
-func sarifURI(p string) string {
-	if !filepath.IsAbs(filepath.FromSlash(p)) {
-		return p
+// sarifURI returns an absolute file:// URI for path. GitHub code scanning
+// reads a relative URI from the repository root, which points at the wrong
+// file whenever hcl-linter runs in a subdirectory; absolute URIs are made
+// repository-relative by upload-sarif using the checkout path.
+func sarifURI(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return filepath.ToSlash(path)
 	}
-	u := url.URL{Scheme: "file", Path: p}
+	p := filepath.ToSlash(abs)
 	if !strings.HasPrefix(p, "/") {
-		u.Path = "/" + p // Windows drive paths: file:///C:/...
+		p = "/" + p // Windows drive paths: file:///C:/...
 	}
-	return u.String()
+	return (&url.URL{Scheme: "file", Path: p}).String()
 }
 
 func writeSARIF(a *app, results []*diag.Result) error {
@@ -223,7 +230,7 @@ func writeSARIF(a *app, results []*diag.Result) error {
 				ruleIDs = append(ruleIDs, is.Rule)
 				sourceOf[is.Rule] = is.Source
 			}
-			phys := sarifPhysical{ArtifactLocation: sarifArtifact{URI: sarifURI(issuePath(r.File, is))}}
+			phys := sarifPhysical{ArtifactLocation: sarifArtifact{URI: sarifURI(issueFile(r.File, is))}}
 			if is.Location.Start.Line > 0 {
 				phys.Region = &sarifRegion{
 					StartLine:   is.Location.Start.Line,

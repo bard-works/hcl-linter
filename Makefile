@@ -105,6 +105,11 @@ tag:
 		echo "Usage: make tag VERSION=x.x.x"; \
 		exit 1; \
 	fi
+	@if [ "$(VERSION)" != "$$(tr -d '[:space:]' < VERSION)" ]; then \
+		echo "VERSION file says $$(cat VERSION); set it to $(VERSION) and commit first"; \
+		echo "(the GitHub Action installs the release named in VERSION)"; \
+		exit 1; \
+	fi
 	@echo "Tagging v$(VERSION)..."
 	git tag -a v$(VERSION) -m "Release v$(VERSION)"
 	@echo "Tagged v$(VERSION). Push with: git push origin v$(VERSION)"
